@@ -1,0 +1,10 @@
+repos:
+  # Adding pytest to run tests with verbose output
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Run Pytest with Verbose Output
+        entry: pytest
+        language: system
+        pass_filenames: false
+        args: ['-v', '--maxfail=5', '--durations=3', '--color=yes']
