@@ -1,19 +1,414 @@
-from typing import Dict, List, Optional, Tuple
-
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Rectangle
+import pandas as pd
+from lets_plot import *
 
 
-def plot_sample(
-    X: np.ndarray,
-    y: Optional[np.ndarray] = None,
-    feature_masks: Optional[Dict[str, np.ndarray]] = None,
-    components: Optional[List] = None,
-    sample_idx: int = 0,
-    figsize: Tuple[int, int] = (12, 8),
-) -> plt.Figure:
-    """Plot a time series sample with its components and feature masks.
+def create_visualization_data(dataset, sample_indices=None, components_to_include=None):
+    """Create data for visualization with lets_plot.
+
+    Args:
+        dataset: Dataset containing time series data and components.
+        sample_indices: Dictionary mapping class labels to sample indices.
+            If None, use first sample of each class.
+        components_to_include: List of components to include. If None, include all.
+
+    Returns:
+        Prepared DataFrame for visualization.
+    """
+    # Determine sample indices if not provided
+    if sample_indices is None:
+        sample_indices = {}
+        for class_label in np.unique(dataset["y"]):
+            sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
+
+    # Create main time series data
+    data_rows = []
+
+    # Define default components and their order
+    default_components = ["Complete Series", "Features", "Foundation", "Noise"]
+
+    # Use specified components if provided, otherwise use defaults
+    components = (
+        components_to_include
+        if components_to_include is not None
+        else default_components
+    )
+
+    # Process each class
+    for class_label, idx in sample_indices.items():
+        # Get component for this sample
+        comp = dataset["components"][idx]
+
+        # Get time series length
+        n_timesteps = len(dataset["X"][idx])
+
+        # Add data for each component in the specified order
+        for component_name in components:
+            if component_name == "Complete Series" and idx < len(dataset["X"]):
+                for t, val in enumerate(dataset["X"][idx]):
+                    data_rows.append(
+                        {
+                            "time": float(t),
+                            "value": float(val),
+                            "class": f"Class {class_label}",
+                            "component": component_name,
+                        }
+                    )
+
+            elif component_name == "Features" and hasattr(comp, "features"):
+                if not comp.features:
+                    # Empty features
+                    for t in range(n_timesteps):
+                        data_rows.append(
+                            {
+                                "time": float(t),
+                                "value": 0.0,
+                                "class": f"Class {class_label}",
+                                "component": component_name,
+                            }
+                        )
+                else:
+                    # Combine all features
+                    combined_features = np.zeros(n_timesteps)
+                    for name, feature in comp.features.items():
+                        combined_features += feature
+
+                    for t, val in enumerate(combined_features):
+                        data_rows.append(
+                            {
+                                "time": float(t),
+                                "value": float(val),
+                                "class": f"Class {class_label}",
+                                "component": component_name,
+                            }
+                        )
+
+            elif component_name == "Foundation" and hasattr(comp, "foundation"):
+                for t, val in enumerate(comp.foundation):
+                    data_rows.append(
+                        {
+                            "time": float(t),
+                            "value": float(val),
+                            "class": f"Class {class_label}",
+                            "component": component_name,
+                        }
+                    )
+
+            elif (
+                component_name == "Noise"
+                and hasattr(comp, "noise")
+                and comp.noise is not None
+            ):
+                for t, val in enumerate(comp.noise):
+                    data_rows.append(
+                        {
+                            "time": float(t),
+                            "value": float(val),
+                            "class": f"Class {class_label}",
+                            "component": component_name,
+                        }
+                    )
+
+    # Create DataFrame
+    df = pd.DataFrame(data_rows)
+
+    # No data after filtering
+    if len(df) == 0:
+        return df
+
+    # Ensure component order matches the input order
+    # Only include components that actually exist in the data
+    available_components = [c for c in components if c in df["component"].unique()]
+    df["component"] = pd.Categorical(
+        df["component"], categories=available_components, ordered=True
+    )
+
+    # Ensure class order is numeric
+    class_labels = sorted(df["class"].unique(), key=lambda x: int(x.split()[-1]))
+    df["class"] = pd.Categorical(df["class"], categories=class_labels, ordered=True)
+
+    return df
+
+
+def create_feature_rectangles(dataset, sample_indices=None, components_to_include=None):
+    """Create rectangle data for feature visualization.
+
+    Args:
+        dataset: Dataset containing time series data and components.
+        sample_indices: Dictionary mapping class labels to sample indices.
+            If None, use first sample of each class.
+        components_to_include: List of components to include. If None, include all.
+
+    Returns:
+        DataFrame with rectangle coordinates for feature regions.
+    """
+    # If components_to_include doesn't have Complete Series, no need for rectangles
+    if (
+        components_to_include is not None
+        and "Complete Series" not in components_to_include
+    ):
+        return None
+
+    # Determine sample indices if not provided
+    if sample_indices is None:
+        sample_indices = {}
+        for class_label in np.unique(dataset["y"]):
+            sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
+
+    rectangles = []
+
+    # Process each class and sample
+    for class_label, idx in sample_indices.items():
+        # Extract feature masks for this sample
+        if "feature_masks" in dataset:
+            for key, mask in dataset["feature_masks"].items():
+                # Check if mask is for this class
+                if f"class_{class_label}_" in key:
+                    sample_mask = mask[idx]
+
+                    # Find contiguous regions in the mask
+                    if np.any(sample_mask):
+                        changes = np.diff(
+                            np.concatenate([[False], sample_mask, [False]]).astype(int)
+                        )
+                        start_indices = np.where(changes == 1)[0]
+                        end_indices = np.where(changes == -1)[0]
+
+                        # Extract feature name from key
+                        feature_name = key.replace(f"class_{class_label}_", "")
+
+                        # Create rectangle for each region
+                        for start, end in zip(start_indices, end_indices):
+                            rectangles.append(
+                                {
+                                    "class": f"Class {class_label}",
+                                    "component": "Complete Series",
+                                    "feature": feature_name,
+                                    "xmin": float(start),
+                                    "xmax": float(end),
+                                }
+                            )
+
+        # If no rectangles found, try to extract from components
+        if not any(r["class"] == f"Class {class_label}" for r in rectangles):
+            if "components" in dataset:
+                comp = dataset["components"][idx]
+
+                # Try feature masks first
+                if hasattr(comp, "feature_masks") and comp.feature_masks:
+                    for feature_name, feature_mask in comp.feature_masks.items():
+                        if np.any(feature_mask):
+                            changes = np.diff(
+                                np.concatenate([[False], feature_mask, [False]]).astype(
+                                    int
+                                )
+                            )
+                            start_indices = np.where(changes == 1)[0]
+                            end_indices = np.where(changes == -1)[0]
+
+                            for start, end in zip(start_indices, end_indices):
+                                rectangles.append(
+                                    {
+                                        "class": f"Class {class_label}",
+                                        "component": "Complete Series",
+                                        "feature": feature_name,
+                                        "xmin": float(start),
+                                        "xmax": float(end),
+                                    }
+                                )
+
+                # If still no rectangles, try feature values
+                if not any(r["class"] == f"Class {class_label}" for r in rectangles):
+                    if hasattr(comp, "features") and comp.features:
+                        for feature_name, feature_values in comp.features.items():
+                            # Find where the feature has non-zero values
+                            non_zero = np.abs(feature_values) > 1e-6
+                            if np.any(non_zero):
+                                changes = np.diff(
+                                    np.concatenate([[False], non_zero, [False]]).astype(
+                                        int
+                                    )
+                                )
+                                start_indices = np.where(changes == 1)[0]
+                                end_indices = np.where(changes == -1)[0]
+
+                                for start, end in zip(start_indices, end_indices):
+                                    rectangles.append(
+                                        {
+                                            "class": f"Class {class_label}",
+                                            "component": "Complete Series",
+                                            "feature": feature_name,
+                                            "xmin": float(start),
+                                            "xmax": float(end),
+                                        }
+                                    )
+
+    if not rectangles:
+        return None
+
+    rect_df = pd.DataFrame(rectangles)
+
+    # Ensure correct class ordering
+    class_labels = sorted(rect_df["class"].unique(), key=lambda x: int(x.split()[-1]))
+    rect_df["class"] = pd.Categorical(
+        rect_df["class"], categories=class_labels, ordered=True
+    )
+
+    return rect_df
+
+
+def create_ts_visualization(
+    dataset,
+    sample_indices=None,
+    components=None,
+    show_indicators=True,
+    line_color="black",
+    line_size=1.5,
+    rect_fill="red",
+    rect_alpha=0.25,
+    facet_order={"y": "class", "x": "component"},
+    free_y=False,
+    x_order=1,
+    y_order=1,
+    panel_width=225,
+    panel_height=175,
+):
+    """Create time series visualization with feature indicators as rectangles.
+
+    Args:
+        dataset: Dataset containing time series data and components.
+        sample_indices: Dictionary mapping class labels to sample indices.
+            If None, use first sample of each class.
+        components: List of components to include. Can be used to exclude certain components.
+            Default: ["Complete Series", "Features", "Foundation", "Noise"]
+        show_indicators: Whether to show feature indicators.
+        line_color: Color of the time series lines ("black" or "auto" for colored by class).
+        line_size: Size of the time series lines.
+        rect_fill: Fill color for feature rectangles.
+        rect_alpha: Alpha transparency for feature rectangles.
+        facet_order: Order of facets, dict with "x" and "y" keys.
+            x corresponds to columns, y to rows.
+        free_y: Whether to use free y scales in facets (default=False).
+        x_order: Order of x-axis facets. 1=ascending, -1=descending, 0=no order.
+            Uses names of the column facet variable.
+        y_order: Order of y-axis facets. 1=ascending, -1=descending, 0=no order.
+            Uses names of the row facet variable.
+        panel_width: Width of each panel in pixels.
+        panel_height: Height of each panel in pixels.
+
+    Returns:
+        lets_plot visualization.
+    """
+    # Default component order
+    default_components = ["Complete Series", "Features", "Foundation", "Noise"]
+    components_to_use = components if components is not None else default_components
+
+    # Prepare data for visualization
+    df = create_visualization_data(dataset, sample_indices, components_to_use)
+
+    # If no data, return empty plot
+    assert len(df) > 0, "No data to display"
+
+    # Create feature rectangles if needed
+    rectangles = None
+    if show_indicators:
+        rectangles = create_feature_rectangles(
+            dataset, sample_indices, components_to_use
+        )
+
+    # Calculate global y-limits
+    y_min = df["value"].min()
+    y_max = df["value"].max()
+    padding = (y_max - y_min) * 0.15
+    y_min = float(y_min - padding)
+    y_max = float(y_max + padding)
+
+    # Calculate plot dimensions based on the number of panels
+    n_components = len(df["component"].unique())
+    n_classes = len(df["class"].unique())
+    total_width = panel_width * (
+        n_components
+        if "x" in facet_order and facet_order["x"] == "component"
+        else n_classes
+    )
+    total_height = panel_height * (
+        n_classes
+        if "y" in facet_order and facet_order["y"] == "class"
+        else n_components
+    )
+
+    # Start building the plot
+    if line_color == "auto":
+        # Use colors by class
+        p = ggplot(df, aes(x="time", y="value", color=as_discrete("class")))
+    else:
+        # Use specified line color
+        p = ggplot(df, aes(x="time", y="value"))
+    p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
+
+    # Add the rectangles for feature regions
+    if show_indicators and rectangles is not None:
+        # Set rectangle height to full panel height
+        rectangles = rectangles.copy()
+        rectangles["ymin"] = y_min
+        rectangles["ymax"] = y_max
+
+        # Add rectangles to the plot
+        if line_color == "auto":
+            # Color rectangles by feature
+            p = p + geom_rect(
+                data=rectangles,
+                mapping=aes(
+                    xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax", fill="feature"
+                ),
+                alpha=rect_alpha,
+            )
+        else:
+            # Use specified rectangle color
+            p = p + geom_rect(
+                data=rectangles,
+                mapping=aes(xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax"),
+                fill=rect_fill,
+                alpha=rect_alpha,
+            )
+
+    # Complete the plot
+    if line_color == "auto":
+        p = p + geom_line(size=line_size)
+    else:
+        p = p + geom_line(size=line_size, color=line_color)
+
+    # Use regular facet grid with proper ordering
+    scales = "free_y" if free_y else "fixed"
+
+    # Ensure we use proper ordering for components and classes
+    # The x_order and y_order parameters force the order of factors
+    p = p + facet_grid(**facet_order, scales=scales, x_order=x_order, y_order=y_order)
+
+    if not free_y:
+        p = p + scale_y_continuous(limits=[y_min, y_max])
+
+    p = p + labs(x="Time", y="Value")
+    p = p + theme_bw()
+    p = p + ggsize(total_width, total_height)
+
+    return p
+
+
+def plot_sample_lets_plot(
+    X,
+    y=None,
+    feature_masks=None,
+    components=None,
+    sample_idx=0,
+    components_to_include=None,
+    line_color="black",
+    rect_fill="red",
+    free_y=False,
+    panel_width=225,
+    panel_height=175,
+):
+    """Plot a time series sample with its components and feature masks using lets_plot.
 
     Args:
         X: Time series data.
@@ -21,98 +416,86 @@ def plot_sample(
         feature_masks: Dictionary of feature masks.
         components: List of TimeSeriesComponents objects.
         sample_idx: Index of the sample to plot.
-        figsize: Figure size.
+        components_to_include: List of components to include.
+        line_color: Color of the time series lines ("black" or "auto" for colored by class).
+        rect_fill: Fill color for feature rectangles.
+        free_y: Whether to use free y scales in facets.
+        panel_width: Width of each panel in pixels.
+        panel_height: Height of each panel in pixels.
 
     Returns:
-        The created figure.
+        lets_plot visualization.
     """
-    fig = plt.figure(figsize=figsize)
+    # Prepare dataset in the expected format
+    dataset = {"X": X, "components": components}
 
-    n_plots = 1
-    if components is not None:
-        n_plots += 2 + len(components[sample_idx].features or {})
+    if y is not None:
+        dataset["y"] = y
+    else:
+        # Create dummy labels if not provided
+        dataset["y"] = np.zeros(len(X))
 
-    # Plot the full time series
-    ax1 = plt.subplot(n_plots, 1, 1)
-    ax1.plot(X[sample_idx], "b-", label="Time Series")
-    ax1.set_title(
-        f"Sample {sample_idx}" + (f" (Class {y[sample_idx]})" if y is not None else "")
-    )
-    ax1.legend()
-
-    # Highlight feature regions if masks are provided
     if feature_masks is not None:
-        for key, mask in feature_masks.items():
-            if not key.startswith("class_"):
-                continue
+        dataset["feature_masks"] = feature_masks
 
-            # Check if this feature belongs to the sample's class
-            class_str = f"class_{y[sample_idx]}_" if y is not None else ""
-            if not class_str or key.startswith(class_str):
-                # Find contiguous feature regions
-                sample_mask = mask[sample_idx]
-                idx_ranges = []
-                start_idx = None
+    # Set up sample indices
+    class_label = dataset["y"][sample_idx]
+    sample_indices = {class_label: sample_idx}
 
-                for i, val in enumerate(sample_mask):
-                    if val and start_idx is None:
-                        start_idx = i
-                    elif not val and start_idx is not None:
-                        idx_ranges.append((start_idx, i))
-                        start_idx = None
+    # Create and return plot
+    return create_ts_visualization(
+        dataset,
+        sample_indices=sample_indices,
+        components=components_to_include,
+        line_color=line_color,
+        rect_fill=rect_fill,
+        free_y=free_y,
+        panel_width=panel_width,
+        panel_height=panel_height,
+    )
 
-                # Add last range if mask ends with True
-                if start_idx is not None:
-                    idx_ranges.append((start_idx, len(sample_mask)))
 
-                # Highlight each range
-                feature_name = key.replace(class_str, "")
-                for start, end in idx_ranges:
-                    ax1.add_patch(
-                        Rectangle(
-                            (start, ax1.get_ylim()[0]),
-                            end - start,
-                            ax1.get_ylim()[1] - ax1.get_ylim()[0],
-                            alpha=0.2,
-                            color="r",
-                            label=feature_name
-                            if (start, end) == idx_ranges[0]
-                            else None,
-                        )
-                    )
+def plot_class_comparison(
+    dataset,
+    components_to_include=None,
+    line_color="auto",
+    rect_fill="red",
+    free_y=False,
+    panel_width=225,
+    panel_height=175,
+):
+    """Plot comparison of classes with feature indicators using lets_plot.
 
-    # Plot individual components if available
-    if components is not None:
-        comp = components[sample_idx]
+    Args:
+        dataset: Dataset containing time series data and components.
+        components_to_include: List of components to include.
+        line_color: Color of the time series lines ("black" or "auto" for colored by class).
+        rect_fill: Fill color for feature rectangles.
+        free_y: Whether to use free y scales in facets.
+        panel_width: Width of each panel in pixels.
+        panel_height: Height of each panel in pixels.
 
-        # Plot base structure
-        ax2 = plt.subplot(n_plots, 1, 2, sharex=ax1)
-        ax2.plot(comp.base_structure, "g-")
-        ax2.set_title("Base Structure")
+    Returns:
+        lets_plot visualization of class comparison.
+    """
+    # Get first sample from each class
+    sample_indices = {}
+    for class_label in np.unique(dataset["y"]):
+        sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
 
-        # Plot noise if available
-        if comp.noise is not None:
-            ax3 = plt.subplot(n_plots, 1, 3, sharex=ax1)
-            ax3.plot(comp.noise, "r-")
-            ax3.set_title("Noise")
+    # Default to only showing "Complete Series" for class comparison
+    if components_to_include is None:
+        components_to_include = ["Complete Series"]
 
-        # Plot each feature if available
-        if comp.features:
-            for i, (name, feature) in enumerate(comp.features.items()):
-                ax = plt.subplot(n_plots, 1, 4 + i, sharex=ax1)
-                ax.plot(feature, "c-")
-                ax.set_title(f"Feature: {name}")
-
-                # Highlight the feature region if masks are available
-                if comp.feature_masks and name in comp.feature_masks:
-                    mask = comp.feature_masks[name]
-                    # Find contiguous regions in the mask
-                    changes = np.diff(np.concatenate([[0], mask.astype(int), [0]]))
-                    starts = np.where(changes == 1)[0]
-                    ends = np.where(changes == -1)[0]
-
-                    for start, end in zip(starts, ends):
-                        ax.axvspan(start, end, alpha=0.2, color="y")
-
-    plt.tight_layout()
-    return fig
+    # Create and return visualization
+    return create_ts_visualization(
+        dataset,
+        sample_indices=sample_indices,
+        components=components_to_include,
+        show_indicators=True,
+        line_color=line_color,
+        rect_fill=rect_fill,
+        free_y=free_y,
+        panel_width=panel_width,
+        panel_height=panel_height,
+    )

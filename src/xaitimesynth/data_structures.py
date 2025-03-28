@@ -13,14 +13,14 @@ class TimeSeriesComponents:
     feature attribution methods.
 
     Attributes:
-        base_structure: Base structure component (e.g., constant, random walk).
+        foundation: Foundational signal, or base structure component (e.g., constant, random walk).
         noise: Noise component added to the series.
         features: Dictionary mapping feature names to their vector representations.
         feature_masks: Dictionary of boolean masks indicating feature locations.
         aggregated: The final aggregated time series after combining components.
     """
 
-    base_structure: np.ndarray
+    foundation: np.ndarray
     noise: Optional[np.ndarray] = None
     features: Optional[Dict[str, np.ndarray]] = None
     feature_masks: Optional[Dict[str, np.ndarray]] = None

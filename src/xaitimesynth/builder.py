@@ -61,7 +61,7 @@ class TimeSeriesBuilder:
         class_def = {
             "label": class_label,
             "weight": weight,
-            "components": {"base_structure": [], "noise": [], "features": []},
+            "components": {"foundation": [], "noise": [], "features": []},
         }
 
         self.class_definitions.append(class_def)
@@ -70,13 +70,13 @@ class TimeSeriesBuilder:
         return self
 
     def add_signal(
-        self, component: Dict[str, Any], role: str = "base_structure"
+        self, component: Dict[str, Any], role: str = "foundation"
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
 
         Args:
             component: Component definition dictionary.
-            role: Role of the component (base_structure, noise).
+            role: Role of the component (foundation, noise).
 
         Returns:
             self for method chaining.
@@ -84,10 +84,8 @@ class TimeSeriesBuilder:
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
 
-        if role not in ("base_structure", "noise"):
-            raise ValueError(
-                f"Invalid role: {role}. Must be 'base_structure' or 'noise'."
-            )
+        if role not in ("foundation", "noise"):
+            raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
         self.current_class["components"][role].append(component)
 
@@ -274,15 +272,15 @@ class TimeSeriesBuilder:
 
             for _ in range(count):
                 # Initialize arrays for this sample
-                base_structure = np.zeros(self.n_timesteps)
+                foundation = np.zeros(self.n_timesteps)
                 noise = np.zeros(self.n_timesteps)
                 features_dict = {}
                 feature_masks_dict = {}
 
                 # Add base structure components
-                for base_def in class_def["components"]["base_structure"]:
+                for base_def in class_def["components"]["foundation"]:
                     base_vector = self._generate_component_vector(base_def)
-                    base_structure += base_vector
+                    foundation += base_vector
 
                 # Add noise components
                 for noise_def in class_def["components"]["noise"]:
@@ -290,7 +288,7 @@ class TimeSeriesBuilder:
                     noise += noise_vector
 
                 # Initialize aggregated time series
-                aggregated = base_structure.copy()
+                aggregated = foundation.copy()
 
                 # Add features
                 for feature_idx, feature_def in enumerate(
@@ -332,7 +330,7 @@ class TimeSeriesBuilder:
                 if return_components:
                     all_components.append(
                         TimeSeriesComponents(
-                            base_structure=base_structure,
+                            foundation=foundation,
                             noise=noise,
                             features=features_dict,
                             feature_masks=feature_masks_dict,

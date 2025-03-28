@@ -4,12 +4,12 @@ from typing import Any, Dict, Optional
 class SignalAdder:
     """Helper class for adding signal components."""
 
-    def __init__(self, component: Dict[str, Any], role: str = "base_structure"):
+    def __init__(self, component: Dict[str, Any], role: str = "foundation"):
         """Initialize the signal adder.
 
         Args:
             component: Component definition dictionary.
-            role: Role of the component (base_structure, noise).
+            role: Role of the component (foundation, noise).
         """
         self.component = component
         self.role = role
@@ -70,12 +70,12 @@ class FeatureAdder:
         )
 
 
-def add_signal(component: Dict[str, Any], role: str = "base_structure") -> SignalAdder:
+def add_signal(component: Dict[str, Any], role: str = "foundation") -> SignalAdder:
     """Add a component as a global signal.
 
     Args:
         component: Component definition dictionary.
-        role: Role of the component (base_structure, noise).
+        role: Role of the component (foundation, noise).
 
     Returns:
         SignalAdder instance.
