@@ -46,6 +46,7 @@ from .components import (
     uniform,
 )
 from .data_structures import TimeSeriesComponents
+from .functions import normalize
 from .registry import (
     get_component_parameters,
     list_components,

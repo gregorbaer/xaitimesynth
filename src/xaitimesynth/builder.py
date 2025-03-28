@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 
 from .data_structures import TimeSeriesComponents
+from .functions import normalize
 from .generators import generate_component
 
 
@@ -15,7 +16,7 @@ class TimeSeriesBuilder:
     Attributes:
         n_timesteps: Length of each time series.
         n_samples: Total number of samples to generate.
-        normalize: Whether to z-normalize the final time series.
+        normalization: Normalization method for the final time series.
         random_state: Random seed for reproducibility.
         rng: Random number generator.
         class_definitions: List of class definitions.
@@ -26,20 +27,24 @@ class TimeSeriesBuilder:
         self,
         n_timesteps: int = 100,
         n_samples: int = 1000,
-        normalize: bool = True,
+        normalization: str = "zscore",
         random_state: Optional[int] = None,
+        normalization_kwargs: Optional[Dict[str, Any]] = {},
     ):
         """Initialize the time series builder.
 
         Args:
             n_timesteps: Length of each time series.
             n_samples: Total number of samples to generate.
-            normalize: Whether to z-normalize the final time series.
+            normalization: Normalization method for the final time series.
+                Options: "zscore", "minmax", or "none". Default is "zscore".
             random_state: Random seed for reproducibility.
+            normalization_kwargs: Additional parameters for normalization.
         """
         self.n_timesteps = n_timesteps
         self.n_samples = n_samples
-        self.normalize = normalize
+        self.normalization = normalization
+        self.normalization_kwargs = normalization_kwargs or {}
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
 
@@ -317,10 +322,9 @@ class TimeSeriesBuilder:
                 aggregated += noise
 
                 # Normalize if required
-                if self.normalize:
-                    std = np.std(aggregated)
-                    if std > 0:
-                        aggregated = (aggregated - np.mean(aggregated)) / std
+                aggregated = normalize(
+                    aggregated, method=self.normalization, **self.normalization_kwargs
+                )
 
                 # Store the result
                 X[sample_idx] = aggregated
@@ -349,7 +353,8 @@ class TimeSeriesBuilder:
                 "n_samples": self.n_samples,
                 "n_timesteps": self.n_timesteps,
                 "class_definitions": self.class_definitions,
-                "normalize": self.normalize,
+                "normalize": self.normalization,
+                "normalization_kwargs": self.normalization_kwargs,
                 "random_state": self.random_state,
             },
         }

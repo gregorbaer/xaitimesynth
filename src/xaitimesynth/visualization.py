@@ -1,3 +1,5 @@
+from typing import Any, Dict, Optional
+
 import numpy as np
 import pandas as pd
 from lets_plot import (
@@ -16,6 +18,7 @@ from lets_plot import (
     theme_light,
 )
 
+from .functions import normalize
 from .generators import GENERATOR_FUNCS, generate_component
 
 LetsPlot.set_theme(theme_light())
@@ -31,7 +34,8 @@ def plot_signal(
     line_color="black",
     line_size=1.5,
     hline_intercept=None,
-    normalize=False,
+    normalization: str = "none",
+    normalization_kwargs: Optional[Dict[str, Any]] = {},
     title=None,
     **kwargs,
 ):
@@ -52,7 +56,10 @@ def plot_signal(
         line_size: Size of the signal line
         hline_intercept: Y-intercept for horizontal line at y=hline_intercept.
             If None, no line is shown.
-        normalize: Whether to normalize the signal to mean=0, std=1
+        normalization: Normalization method. Options: "none", "minmax", "zscore".
+            "none" means no normalization, "minmax" scales to [0, 1], "zscore" standardizes.
+        normalization_kwargs: Additional parameters for normalization methods.
+            For "minmax", you can pass feature_range (tuple of min and max).
         title: Title for the plot. If None, uses name of component type or "Precomputed Signal".
             If you dont want a title, pass an empty string.
         **kwargs: Additional parameters for the generator function
@@ -77,16 +84,12 @@ def plot_signal(
 
         signal = generate_component(component_type, n_timesteps, rng, **kwargs)
 
-    # Ensure signal is a numpy array
+    # Ensure signal is numpy array & normalize signal
     signal = np.asarray(signal)
-
-    # Normalize signal if requested
-    if normalize:
-        signal = (signal - np.mean(signal)) / np.std(signal)
-
-    n_points = len(signal)
+    signal = normalize(signal, method=normalization, **normalization_kwargs)
 
     # Create dataframe for plotting - using pandas DataFrame to ensure proper types
+    n_points = len(signal)
     data = pd.DataFrame({"time": np.arange(n_points), "value": signal})
 
     # Create the plot
@@ -100,7 +103,7 @@ def plot_signal(
     # Get title
     if title is None:
         title = f"{component_type.replace('_', ' ').capitalize() if component_type else 'Precomputed Signal'}"
-        title += " (Normalized)" if normalize else ""
+        title += f" ({normalization} normalized)" if normalization != "none" else ""
     if title and len(title) == 0:
         title = element_blank()
 
@@ -371,6 +374,7 @@ def create_ts_visualization(
     show_indicators=True,
     line_color="black",
     line_size=1.5,
+    hline_intercept=0,
     rect_fill="red",
     rect_alpha=0.25,
     facet_order={"y": "class", "x": "component"},
@@ -391,6 +395,8 @@ def create_ts_visualization(
         show_indicators: Whether to show feature indicators.
         line_color: Color of the time series lines ("black" or "auto" for colored by class).
         line_size: Size of the time series lines.
+        hline_intercept: Y-intercept for horizontal line at y=hline_intercept.
+            If None, no line is shown.
         rect_fill: Fill color for feature rectangles.
         rect_alpha: Alpha transparency for feature rectangles.
         facet_order: Order of facets, dict with "x" and "y" keys.
@@ -451,7 +457,9 @@ def create_ts_visualization(
     else:
         # Use specified line color
         p = ggplot(df, aes(x="time", y="value"))
-    p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
+
+    if hline_intercept is not None:
+        p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
 
     # Add the rectangles for feature regions
     if show_indicators and rectangles is not None:
