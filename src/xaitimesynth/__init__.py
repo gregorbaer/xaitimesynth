@@ -53,7 +53,12 @@ from .registry import (
     register_component,
     register_component_generator,
 )
-from .visualization import create_ts_visualization, plot_class_comparison, plot_sample
+from .visualization import (
+    create_ts_visualization,
+    plot_class_comparison,
+    plot_sample,
+    plot_signal,
+)
 
 # Register standard components
 register_component(constant, "signal")
