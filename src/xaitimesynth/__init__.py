@@ -32,6 +32,7 @@ from .builder import TimeSeriesBuilder
 from .components import (
     autoregressive,
     constant,
+    ecg_like,
     gaussian,
     level_change,
     manual,
@@ -67,6 +68,7 @@ register_component(autoregressive, "signal")
 register_component(gaussian, "signal")
 register_component(uniform, "signal")
 register_component(seasonal, "signal")
+register_component(ecg_like, "signal")
 
 register_component(shapelet, "feature")
 register_component(level_change, "feature")
@@ -74,6 +76,7 @@ register_component(trend, "feature")
 register_component(peak, "feature")
 register_component(trough, "feature")
 register_component(time_frequency, "feature")
+
 register_component(manual, "both")
 
 # Version
