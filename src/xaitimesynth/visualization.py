@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from lets_plot import (
+    LetsPlot,
     aes,
     as_discrete,
     facet_grid,
@@ -11,10 +12,12 @@ from lets_plot import (
     ggsize,
     labs,
     scale_y_continuous,
-    theme_bw,
+    theme_light,
 )
 
-from xaitimesynth.generators import GENERATOR_FUNCS, generate_component
+from .generators import GENERATOR_FUNCS, generate_component
+
+LetsPlot.set_theme(theme_light())
 
 
 def plot_signal(
@@ -23,10 +26,10 @@ def plot_signal(
     n_timesteps=100,
     rng=None,
     width=500,
-    height=300,
+    height=250,
     line_color="black",
     line_size=1.5,
-    show_zero_line=False,
+    hline_intercept=None,
     normalize=False,
     **kwargs,
 ):
@@ -45,7 +48,8 @@ def plot_signal(
         height: Plot height in pixels
         line_color: Color of the signal line
         line_size: Size of the signal line
-        show_zero_line: Whether to show a horizontal line at y=0
+        hline_intercept: Y-intercept for horizontal line at y=hline_intercept.
+            If None, no line is shown.
         normalize: Whether to normalize the signal to mean=0, std=1
         **kwargs: Additional parameters for the generator function
 
@@ -86,19 +90,15 @@ def plot_signal(
         color=line_color, size=line_size
     )
 
-    # Add zero line if requested - only if normalize=True
-    if show_zero_line:
-        p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
+    if hline_intercept is not None:
+        p = p + geom_hline(yintercept=hline_intercept, linetype="dashed", color="gray")
 
     # Get title
-    title = f"{component_type.capitalize() if component_type else 'Signal'} Time Series"
-    if normalize:
-        title += " (Normalized)"
+    title = f"{component_type.replace('_', ' ').capitalize() if component_type else 'Precomputed Signal'}"
+    title += " (Normalized)" if normalize else ""
 
     # Add labels and theme
-    p = p + labs(title=title, x="Time", y="Value")
-    p = p + theme_bw()
-    p = p + ggsize(width, height)
+    p = p + labs(title=title, x="Time Steps", y="Value") + ggsize(width, height)
 
     return p
 
@@ -492,8 +492,7 @@ def create_ts_visualization(
     if not free_y:
         p = p + scale_y_continuous(limits=[y_min, y_max])
 
-    p = p + labs(x="Time", y="Value")
-    p = p + theme_bw()
+    p = p + labs(x="Time Steps", y="Value")
     p = p + ggsize(total_width, total_height)
 
     return p
