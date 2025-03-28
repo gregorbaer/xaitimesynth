@@ -1,6 +1,18 @@
 import numpy as np
 import pandas as pd
-from lets_plot import *
+from lets_plot import (
+    aes,
+    as_discrete,
+    facet_grid,
+    geom_hline,
+    geom_line,
+    geom_rect,
+    ggplot,
+    ggsize,
+    labs,
+    scale_y_continuous,
+    theme_bw,
+)
 
 
 def create_visualization_data(dataset, sample_indices=None, components_to_include=None):
@@ -270,8 +282,8 @@ def create_ts_visualization(
     free_y=False,
     x_order=1,
     y_order=1,
-    panel_width=225,
-    panel_height=175,
+    panel_width=250,
+    panel_height=150,
 ):
     """Create time series visualization with feature indicators as rectangles.
 
@@ -362,6 +374,8 @@ def create_ts_visualization(
                     xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax", fill="feature"
                 ),
                 alpha=rect_alpha,
+                size=0.2,
+                color="grey",
             )
         else:
             # Use specified rectangle color
@@ -370,6 +384,8 @@ def create_ts_visualization(
                 mapping=aes(xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax"),
                 fill=rect_fill,
                 alpha=rect_alpha,
+                size=0.2,
+                color="grey",
             )
 
     # Complete the plot
@@ -395,7 +411,7 @@ def create_ts_visualization(
     return p
 
 
-def plot_sample_lets_plot(
+def plot_sample(
     X,
     y=None,
     feature_masks=None,
