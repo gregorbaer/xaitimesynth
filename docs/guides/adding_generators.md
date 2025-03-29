@@ -10,6 +10,48 @@ The xaitimesynth package has a flexible system for creating and registering comp
 - **Component Functions**: Define how to create component definitions (in components.py)
 - **Registration System**: Connects generators to components and makes them available to users
 
+## Understanding The Two Functions and Their Use Cases
+
+It's important to understand the different roles of the two function types in the XAITimeSynth architecture:
+
+1. **Component Functions** (e.g., `constant`, `random_walk`):
+   - Used directly by end users in the TimeSeriesBuilder pipeline
+   - Called when constructing datasets through the fluent API
+   - Need complete docstrings to help users understand parameters when coding
+   - Example usage in the pipeline:
+     ```python
+     dataset = (
+         TimeSeriesBuilder(n_timesteps=100, n_samples=200)
+         .for_class(0)
+         .add_signal(random_walk(step_size=0.2))
+         .add_signal(gaussian(sigma=0.1), role="noise")
+         .for_class(1)
+         .add_feature(shapelet(scale=1.0), start_pct=0.4)
+         .build()
+     )
+     ```
+
+2. **Generator Functions** (e.g., `generate_constant`, `generate_random_walk`):
+   - Used internally by the system to actually create the data
+   - Can be used directly by advanced users who need more control
+   - Allow manual generation of specific waveforms outside the pipeline
+   - Example direct usage:
+     ```python
+     import numpy as np
+     from xaitimesynth.generators import generate_sine_wave
+     
+     # Manually create a sine wave
+     rng = np.random.RandomState(42)
+     wave = generate_sine_wave(
+         n_timesteps=100, 
+         rng=rng, 
+         frequency=0.05, 
+         amplitude=2.0
+     )
+     ```
+
+This is why it's important to provide complete docstrings for both functions - they serve different audiences and use cases.
+
 ## Step 1: Add the Generator Function
 
 First, add your generator function to generators.py. Follow this function signature pattern:
@@ -64,9 +106,9 @@ GENERATOR_FUNCS = {
 }
 ```
 
-## Step 3: Create a Component Function (Option 1: Manual)
+## Step 3: Create a Component Function (Option 1: Manual - Preferred for Package Integration)
 
-You can manually add a component function to components.py:
+For stable integration into the package, manually adding a component function to components.py is the preferred approach. This method exposes proper docstrings with parameters to users, making the API clear and discoverable:
 
 ```python
 def your_component(param1: type = default_value, param2: type = default_value, **kwargs) -> Dict[str, Any]:
@@ -83,6 +125,11 @@ def your_component(param1: type = default_value, param2: type = default_value, *
     return {"type": "your_component", "param1": param1, "param2": param2, **kwargs}
 ```
 
+This approach ensures that:
+- Function signature is properly exposed in IDE tooltips and documentation
+- Parameter descriptions are available to users
+- Type hints guide correct usage
+
 ## Step 4: Register the Component (if using Option 1)
 
 In __init__.py, import and register your component:
@@ -94,9 +141,9 @@ from .components import your_component  # Add this import
 register_component(your_component, "signal")  # Or "feature" or "both"
 ```
 
-## Step 3+4 Alternative: Use the Decorator (Option 2: Automatic)
+## Step 3+4 Alternative: Use the Decorator (Option 2: For Quick Custom Extensions)
 
-Instead of manually creating a component function, you can use the @register_component_generator decorator:
+The decorator approach is primarily intended for users who want to quickly add custom generators without modifying multiple files. This is useful for extensions but not recommended for stable package integration:
 
 ```python
 # In generators.py
@@ -115,11 +162,10 @@ def generate_your_component(
     # Implementation
 ```
 
-This automatically:
-
-- Creates a component function named your_component
-- Registers it in the appropriate registries
-- Makes it available in the module namespace
+**Note:** While this approach is convenient, it has limitations:
+- The docstrings from the generator function won't be visible in the component API
+- Parameter descriptions won't be accessible when users call the component function
+- It's harder to customize the component function behavior separately from the generator
 
 ## Step 5: Update __init__.py Exports
 
@@ -162,7 +208,69 @@ All component functions must:
 
 ## Example: Adding a Sine Wave Generator
 
-Here's a complete example of adding a sine wave generator:
+Here's a complete example showing both approaches for adding a sine wave generator:
+
+### Option 1: Manual Approach (Preferred for Package Integration)
+
+```python
+# In generators.py
+def generate_sine_wave(
+    n_timesteps: int,
+    rng: np.random.RandomState,
+    length: Optional[int] = None,
+    frequency: float = 0.1,
+    amplitude: float = 1.0,
+    phase: float = 0.0,
+    **kwargs,
+) -> np.ndarray:
+    """Generate a sine wave signal.
+
+    Args:
+        n_timesteps: Length of time series.
+        rng: Random number generator.
+        length: Length of feature in timesteps. If None, uses n_timesteps.
+        frequency: Frequency of the sine wave.
+        amplitude: Amplitude of the sine wave.
+        phase: Phase shift in radians.
+        **kwargs: Additional parameters.
+
+    Returns:
+        Sine wave signal vector.
+    """
+    # If length is not provided, use the entire time series length
+    if length is None:
+        length = n_timesteps
+
+    t = np.arange(length)
+    return amplitude * np.sin(2 * np.pi * frequency * t / n_timesteps + phase)
+
+# Add to the GENERATOR_FUNCS dictionary
+GENERATOR_FUNCS = {
+    # ...existing generators...
+    "sine_wave": generate_sine_wave,
+}
+
+# In components.py
+def sine_wave(frequency: float = 0.1, amplitude: float = 1.0, phase: float = 0.0, **kwargs) -> Dict[str, Any]:
+    """Create a sine wave component.
+
+    Args:
+        frequency: Frequency of the sine wave.
+        amplitude: Amplitude of the sine wave.
+        phase: Phase shift in radians.
+        **kwargs: Additional parameters.
+
+    Returns:
+        Component definition dictionary.
+    """
+    return {"type": "sine_wave", "frequency": frequency, "amplitude": amplitude, "phase": phase, **kwargs}
+
+# In __init__.py
+from .components import sine_wave
+register_component(sine_wave, "both")
+```
+
+### Option 2: Decorator Approach (For Quick Custom Extensions)
 
 ```python
 # In generators.py
@@ -198,8 +306,6 @@ def generate_sine_wave(
 
     t = np.arange(length)
     return amplitude * np.sin(2 * np.pi * frequency * t / n_timesteps + phase)
-
-# The decorator automatically adds it to GENERATOR_FUNCS and creates the component function
 ```
 
 With this approach, you can now use your component in the builder API:
