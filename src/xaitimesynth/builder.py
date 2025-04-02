@@ -14,6 +14,14 @@ class TimeSeriesBuilder:
     This class provides a fluent API for building synthetic time series
     datasets with known ground truth features for XAI evaluation.
 
+    The builder uses different fill values for different component types:
+    - Features: Typically filled with NaN where the feature doesn't exist
+    - Foundation: Typically filled with zeros where no foundation component exists
+    - Noise: Typically filled with zeros where no noise component exists
+
+    These fill values control how components are visualized and combined,
+    with NaN values being ignored during addition operations.
+
     Attributes:
         n_timesteps: Length of each time series.
         n_samples: Total number of samples to generate.
@@ -22,6 +30,9 @@ class TimeSeriesBuilder:
         rng: Random number generator.
         class_definitions: List of class definitions.
         current_class: Current class being configured.
+        feature_fill_value: Value used for non-existent features (default: np.nan).
+        foundation_fill_value: Value used for foundation when none exists (default: 0.0).
+        noise_fill_value: Value used for noise when none exists (default: 0.0).
     """
 
     def __init__(
@@ -31,6 +42,9 @@ class TimeSeriesBuilder:
         normalization: str = "zscore",
         random_state: Optional[int] = None,
         normalization_kwargs: Optional[Dict[str, Any]] = {},
+        feature_fill_value: Any = np.nan,
+        foundation_fill_value: Any = 0.0,
+        noise_fill_value: Any = 0.0,
     ):
         """Initialize the time series builder.
 
@@ -41,6 +55,14 @@ class TimeSeriesBuilder:
                 Options: "zscore", "minmax", or "none". Default is "zscore".
             random_state: Random seed for reproducibility.
             normalization_kwargs: Additional parameters for normalization.
+            feature_fill_value: Value used for non-existent features (default: np.nan).
+                This represents points where a feature doesn't exist. Using NaN makes
+                features only appear where they're defined in visualizations.
+            foundation_fill_value: Value used for foundation when none exists (default: 0.0).
+                Foundation typically affects the entire time series, so zeros represent
+                "no contribution" rather than "doesn't exist".
+            noise_fill_value: Value used for noise when none exists (default: 0.0).
+                Similar to foundation, zeros indicate "no contribution".
         """
         self.n_timesteps = n_timesteps
         self.n_samples = n_samples
@@ -48,6 +70,9 @@ class TimeSeriesBuilder:
         self.normalization_kwargs = normalization_kwargs or {}
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
+        self.feature_fill_value = feature_fill_value
+        self.foundation_fill_value = foundation_fill_value
+        self.noise_fill_value = noise_fill_value
 
         # Initialize class definitions and the current class
         self.class_definitions = []
@@ -188,8 +213,8 @@ class TimeSeriesBuilder:
         Returns:
             Tuple of (feature vector, boolean mask).
         """
-        # Initialize
-        feature = np.zeros(self.n_timesteps)
+        # Initialize with feature_fill_value instead of fill_value
+        feature = np.full(self.n_timesteps, self.feature_fill_value)
         mask = np.zeros(self.n_timesteps, dtype=bool)
 
         # Determine feature location
@@ -277,21 +302,21 @@ class TimeSeriesBuilder:
             class_label = class_def["label"]
 
             for _ in range(count):
-                # Initialize arrays for this sample
-                foundation = np.zeros(self.n_timesteps)
-                noise = np.zeros(self.n_timesteps)
+                # Initialize arrays for this sample with appropriate fill values
+                foundation = np.full(self.n_timesteps, self.foundation_fill_value)
+                noise = np.full(self.n_timesteps, self.noise_fill_value)
                 features_dict = {}
                 feature_masks_dict = {}
 
                 # Add base structure components
                 for base_def in class_def["components"]["foundation"]:
                     base_vector = self._generate_component_vector(base_def)
-                    foundation += base_vector
+                    foundation = self._add_vector_handling_nans(foundation, base_vector)
 
                 # Add noise components
                 for noise_def in class_def["components"]["noise"]:
                     noise_vector = self._generate_component_vector(noise_def)
-                    noise += noise_vector
+                    noise = self._add_vector_handling_nans(noise, noise_vector)
 
                 # Initialize aggregated time series
                 aggregated = foundation.copy()
@@ -302,8 +327,8 @@ class TimeSeriesBuilder:
                 ):
                     feature, mask = self._generate_feature_vector(feature_def)
 
-                    # Add to aggregated series
-                    aggregated += feature
+                    # Add to aggregated series using helper method
+                    aggregated = self._add_vector_handling_nans(aggregated, feature)
 
                     # Store components
                     feature_name = f"feature_{feature_idx}_{feature_def['type']}"
@@ -320,7 +345,7 @@ class TimeSeriesBuilder:
                     feature_masks[feature_key][sample_idx] = mask
 
                 # Add noise to aggregated series
-                aggregated += noise
+                aggregated = self._add_vector_handling_nans(aggregated, noise)
 
                 # Normalize if required
                 aggregated = normalize(
@@ -586,3 +611,31 @@ class TimeSeriesBuilder:
             )
 
         return df
+
+    def _add_vector_handling_nans(
+        self, base: np.ndarray, to_add: np.ndarray
+    ) -> np.ndarray:
+        """Add two vectors while properly handling NaN values.
+
+        When adding vectors that may contain NaN values:
+        1. Where both vectors have values (not NaN): Normal addition
+        2. Where one vector has NaN: Use the non-NaN value
+        3. Where both have NaN: Result remains NaN
+
+        This allows components to only contribute where they're defined.
+
+        Args:
+            base: Base vector to add to.
+            to_add: Vector to add to the base.
+
+        Returns:
+            Combined vector with NaNs handled appropriately.
+        """
+        # Stack arrays and use nansum for element-wise addition that ignores NaNs
+        result = np.nansum(np.stack([base, to_add]), axis=0)
+
+        # Fix case where both values are NaN (nansum would return 0, but we want NaN)
+        both_nan = np.isnan(base) & np.isnan(to_add)
+        result[both_nan] = np.nan
+
+        return result
