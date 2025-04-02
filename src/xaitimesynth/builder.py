@@ -1,6 +1,7 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 
 from .data_structures import TimeSeriesComponents
 from .functions import normalize
@@ -392,3 +393,196 @@ class TimeSeriesBuilder:
                 result["components_test"] = [all_components[i] for i in test_indices]
 
         return result
+
+    def to_df(
+        self,
+        dataset: Dict[str, Any],
+        samples: Optional[List[int]] = None,
+        classes: Optional[List[int]] = None,
+        components: Optional[List[str]] = None,
+        format_classes: bool = True,
+    ) -> pd.DataFrame:
+        """Convert time series dataset to a long-format pandas DataFrame.
+
+        This method creates a DataFrame with one row per timestep per component per sample,
+        suitable for detailed analysis and visualization.
+
+        Args:
+            dataset: Dataset returned by build().
+            samples: List of sample indices to include. If None, includes all samples.
+            classes: List of class labels to include. If None, includes all classes.
+            components: List of component types to include. Default includes all:
+                ["aggregated", "foundation", "noise", "features"]
+            format_classes: If True, format class labels as "Class X".
+                Otherwise use numeric labels.
+
+        Returns:
+            pd.DataFrame: Long-format DataFrame with columns for timesteps, values,
+                class labels, sample indices, and component types.
+        """
+        # Default components to include (use programming-friendly names)
+        default_components = ["aggregated", "foundation", "noise", "features"]
+        components_to_include = (
+            components if components is not None else default_components
+        )
+
+        # Filter by class if specified
+        if classes is not None:
+            class_indices = np.where(np.isin(dataset["y"], classes))[0]
+        else:
+            class_indices = np.arange(len(dataset["y"]))
+
+        # Filter by sample if specified
+        if samples is not None:
+            sample_indices = np.array(samples)
+            # Ensure sample indices are within class_indices
+            sample_indices = np.intersect1d(sample_indices, class_indices)
+        else:
+            sample_indices = class_indices
+
+        # Initialize list to hold DataFrames
+        dfs = []
+
+        # Process aggregated time series (formerly "Complete Series")
+        if "aggregated" in components_to_include:
+            # Get all selected samples at once
+            X_selected = dataset["X"][sample_indices]
+            n_samples = len(sample_indices)
+            n_timesteps = X_selected.shape[1]
+
+            # Create time indices for all samples
+            times = np.arange(n_timesteps)
+
+            # Create sample indices repeated for each timestep
+            sample_idx_rep = np.repeat(sample_indices, n_timesteps)
+            time_idx_rep = np.tile(times, n_samples)
+
+            # Create values array
+            values = X_selected.flatten()
+
+            # Get class labels
+            classes_rep = np.repeat(dataset["y"][sample_indices], n_timesteps)
+            if format_classes:
+                class_labels = np.array([f"Class {c}" for c in classes_rep])
+            else:
+                class_labels = classes_rep
+
+            # Create DataFrame
+            df_agg = pd.DataFrame(
+                {
+                    "time": time_idx_rep,
+                    "value": values,
+                    "class": class_labels,
+                    "sample": sample_idx_rep,
+                    "component": "aggregated",
+                    "feature": None,
+                }
+            )
+
+            dfs.append(df_agg)
+
+        # Process components if available
+        if "components" in dataset:
+            for component_name in ["foundation", "noise"]:
+                if component_name in components_to_include:
+                    comp_data = []
+                    valid_samples = []
+
+                    # Collect data from all samples
+                    for i, idx in enumerate(sample_indices):
+                        comp = dataset["components"][idx]
+                        if (
+                            hasattr(comp, component_name)
+                            and getattr(comp, component_name) is not None
+                        ):
+                            comp_data.append(getattr(comp, component_name))
+                            valid_samples.append(idx)
+
+                    if comp_data:
+                        # Stack component data
+                        comp_array = np.vstack(comp_data)
+                        n_valid = len(valid_samples)
+                        n_timesteps = comp_array.shape[1]
+
+                        # Create indices
+                        sample_idx_rep = np.repeat(valid_samples, n_timesteps)
+                        time_idx_rep = np.tile(np.arange(n_timesteps), n_valid)
+
+                        # Get class labels
+                        classes_rep = np.repeat(
+                            dataset["y"][valid_samples], n_timesteps
+                        )
+                        if format_classes:
+                            class_labels = np.array([f"Class {c}" for c in classes_rep])
+                        else:
+                            class_labels = classes_rep
+
+                        # Create DataFrame
+                        df_comp = pd.DataFrame(
+                            {
+                                "time": time_idx_rep,
+                                "value": comp_array.flatten(),
+                                "class": class_labels,
+                                "sample": sample_idx_rep,
+                                "component": component_name,
+                                "feature": None,
+                            }
+                        )
+
+                        dfs.append(df_comp)
+
+            # Process features
+            if "features" in components_to_include:
+                feature_dfs = []
+
+                for idx in sample_indices:
+                    comp = dataset["components"][idx]
+                    if hasattr(comp, "features") and comp.features:
+                        for feature_name, feature_values in comp.features.items():
+                            # Get class label
+                            class_label = dataset["y"][idx]
+                            if format_classes:
+                                class_str = f"Class {class_label}"
+                            else:
+                                class_str = class_label
+
+                            # Create feature DataFrame
+                            df_feature = pd.DataFrame(
+                                {
+                                    "time": np.arange(len(feature_values)),
+                                    "value": feature_values,
+                                    "class": class_str,
+                                    "sample": idx,
+                                    "component": "features",
+                                    "feature": feature_name,
+                                }
+                            )
+
+                            feature_dfs.append(df_feature)
+
+                if feature_dfs:
+                    dfs.append(pd.concat(feature_dfs, ignore_index=True))
+
+        # Combine all DataFrames
+        if not dfs:
+            return pd.DataFrame()
+
+        df = pd.concat(dfs, ignore_index=True)
+
+        # Set up categorical variables for ordered plotting
+        components_present = [
+            c for c in components_to_include if c in df["component"].unique()
+        ]
+        df["component"] = pd.Categorical(
+            df["component"], categories=components_present, ordered=True
+        )
+
+        if format_classes:
+            class_labels = sorted(
+                df["class"].unique(), key=lambda x: int(x.split()[-1])
+            )
+            df["class"] = pd.Categorical(
+                df["class"], categories=class_labels, ordered=True
+            )
+
+        return df

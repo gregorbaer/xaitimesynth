@@ -18,6 +18,7 @@ from lets_plot import (
     theme_light,
 )
 
+from .builder import TimeSeriesBuilder
 from .functions import normalize
 from .generators import GENERATOR_FUNCS, generate_component
 
@@ -121,6 +122,7 @@ def create_visualization_data(dataset, sample_indices=None, components_to_includ
         sample_indices: Dictionary mapping class labels to sample indices.
             If None, use first sample of each class.
         components_to_include: List of components to include. If None, include all.
+            Default components: ["aggregated", "features", "foundation", "noise"]
 
     Returns:
         Prepared DataFrame for visualization.
@@ -131,111 +133,14 @@ def create_visualization_data(dataset, sample_indices=None, components_to_includ
         for class_label in np.unique(dataset["y"]):
             sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
 
-    # Create main time series data
-    data_rows = []
+    # Convert sample_indices dict to list of indices
+    indices = list(sample_indices.values())
 
-    # Define default components and their order
-    default_components = ["Complete Series", "Features", "Foundation", "Noise"]
-
-    # Use specified components if provided, otherwise use defaults
-    components = (
-        components_to_include
-        if components_to_include is not None
-        else default_components
+    # Use the to_df method to get the data in the right format
+    builder = TimeSeriesBuilder()
+    df = builder.to_df(
+        dataset, samples=indices, components=components_to_include, format_classes=True
     )
-
-    # Process each class
-    for class_label, idx in sample_indices.items():
-        # Get component for this sample
-        comp = dataset["components"][idx]
-
-        # Get time series length
-        n_timesteps = len(dataset["X"][idx])
-
-        # Add data for each component in the specified order
-        for component_name in components:
-            if component_name == "Complete Series" and idx < len(dataset["X"]):
-                for t, val in enumerate(dataset["X"][idx]):
-                    data_rows.append(
-                        {
-                            "time": float(t),
-                            "value": float(val),
-                            "class": f"Class {class_label}",
-                            "component": component_name,
-                        }
-                    )
-
-            elif component_name == "Features" and hasattr(comp, "features"):
-                if not comp.features:
-                    # Empty features
-                    for t in range(n_timesteps):
-                        data_rows.append(
-                            {
-                                "time": float(t),
-                                "value": 0.0,
-                                "class": f"Class {class_label}",
-                                "component": component_name,
-                            }
-                        )
-                else:
-                    # Combine all features
-                    combined_features = np.zeros(n_timesteps)
-                    for name, feature in comp.features.items():
-                        combined_features += feature
-
-                    for t, val in enumerate(combined_features):
-                        data_rows.append(
-                            {
-                                "time": float(t),
-                                "value": float(val),
-                                "class": f"Class {class_label}",
-                                "component": component_name,
-                            }
-                        )
-
-            elif component_name == "Foundation" and hasattr(comp, "foundation"):
-                for t, val in enumerate(comp.foundation):
-                    data_rows.append(
-                        {
-                            "time": float(t),
-                            "value": float(val),
-                            "class": f"Class {class_label}",
-                            "component": component_name,
-                        }
-                    )
-
-            elif (
-                component_name == "Noise"
-                and hasattr(comp, "noise")
-                and comp.noise is not None
-            ):
-                for t, val in enumerate(comp.noise):
-                    data_rows.append(
-                        {
-                            "time": float(t),
-                            "value": float(val),
-                            "class": f"Class {class_label}",
-                            "component": component_name,
-                        }
-                    )
-
-    # Create DataFrame
-    df = pd.DataFrame(data_rows)
-
-    # No data after filtering
-    if len(df) == 0:
-        return df
-
-    # Ensure component order matches the input order
-    # Only include components that actually exist in the data
-    available_components = [c for c in components if c in df["component"].unique()]
-    df["component"] = pd.Categorical(
-        df["component"], categories=available_components, ordered=True
-    )
-
-    # Ensure class order is numeric
-    class_labels = sorted(df["class"].unique(), key=lambda x: int(x.split()[-1]))
-    df["class"] = pd.Categorical(df["class"], categories=class_labels, ordered=True)
 
     return df
 
@@ -252,11 +157,8 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
     Returns:
         DataFrame with rectangle coordinates for feature regions.
     """
-    # If components_to_include doesn't have Complete Series, no need for rectangles
-    if (
-        components_to_include is not None
-        and "Complete Series" not in components_to_include
-    ):
+    # If components_to_include doesn't have aggregated, no need for rectangles
+    if components_to_include is not None and "aggregated" not in components_to_include:
         return None
 
     # Determine sample indices if not provided
@@ -292,7 +194,7 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
                             rectangles.append(
                                 {
                                     "class": f"Class {class_label}",
-                                    "component": "Complete Series",
+                                    "component": "aggregated",
                                     "feature": feature_name,
                                     "xmin": float(start),
                                     "xmax": float(end),
@@ -320,7 +222,7 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
                                 rectangles.append(
                                     {
                                         "class": f"Class {class_label}",
-                                        "component": "Complete Series",
+                                        "component": "aggregated",  # Capitalize for visualization display
                                         "feature": feature_name,
                                         "xmin": float(start),
                                         "xmax": float(end),
@@ -346,7 +248,7 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
                                     rectangles.append(
                                         {
                                             "class": f"Class {class_label}",
-                                            "component": "Complete Series",
+                                            "component": "Aggregated",  # Capitalize for visualization display
                                             "feature": feature_name,
                                             "xmin": float(start),
                                             "xmax": float(end),
@@ -391,7 +293,7 @@ def create_ts_visualization(
         sample_indices: Dictionary mapping class labels to sample indices.
             If None, use first sample of each class.
         components: List of components to include. Can be used to exclude certain components.
-            Default: ["Complete Series", "Features", "Foundation", "Noise"]
+            Default: ["aggregated", "features", "foundation", "noise"]
         show_indicators: Whether to show feature indicators.
         line_color: Color of the time series lines ("black" or "auto" for colored by class).
         line_size: Size of the time series lines.
@@ -412,8 +314,8 @@ def create_ts_visualization(
     Returns:
         lets_plot visualization.
     """
-    # Default component order
-    default_components = ["Complete Series", "Features", "Foundation", "Noise"]
+    # Default component order - use internal names but capitalize for display
+    default_components = ["aggregated", "features", "foundation", "noise"]
     components_to_use = components if components is not None else default_components
 
     # Prepare data for visualization
@@ -601,9 +503,9 @@ def plot_class_comparison(
     for class_label in np.unique(dataset["y"]):
         sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
 
-    # Default to only showing "Complete Series" for class comparison
+    # Default to only showing "Aggregated" for class comparison
     if components_to_include is None:
-        components_to_include = ["Complete Series"]
+        components_to_include = ["aggregated"]  # Changed from "Complete Series"
 
     # Create and return visualization
     return create_ts_visualization(
