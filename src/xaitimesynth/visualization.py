@@ -314,7 +314,7 @@ def create_ts_visualization(
     Returns:
         lets_plot visualization.
     """
-    # Default component order - use internal names but capitalize for display
+    # Default component order - use internal names
     default_components = ["aggregated", "features", "foundation", "noise"]
     components_to_use = components if components is not None else default_components
 
@@ -324,12 +324,29 @@ def create_ts_visualization(
     # If no data, return empty plot
     assert len(df) > 0, "No data to display"
 
+    # Capitalize component names for display
+    # First get the current categories to maintain order
+    current_categories = df["component"].cat.categories
+    component_display_names = [c.capitalize() for c in current_categories]
+    df = df.copy()
+    df["component"] = pd.Categorical(
+        [c.capitalize() for c in df["component"].astype(str)],
+        categories=component_display_names,
+        ordered=True,
+    )
+
     # Create feature rectangles if needed
     rectangles = None
     if show_indicators:
         rectangles = create_feature_rectangles(
             dataset, sample_indices, components_to_use
         )
+        # Also capitalize component names in rectangles if they exist
+        if rectangles is not None:
+            rectangles = rectangles.copy()
+            if "component" in rectangles.columns:
+                # Make sure component names are capitalized
+                rectangles["component"] = rectangles["component"].str.capitalize()
 
     # Calculate global y-limits
     y_min = df["value"].min()
