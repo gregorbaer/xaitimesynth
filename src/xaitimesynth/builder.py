@@ -9,31 +9,80 @@ from .generators import generate_component
 
 
 class TimeSeriesBuilder:
-    """Builder for synthetic time series datasets.
+    """Builder for synthetic time series datasets with known ground truth for XAI.
 
-    This class provides a fluent API for building synthetic time series
-    datasets with known ground truth features for XAI evaluation.
+    This class provides a fluent API for building synthetic time series datasets with
+    known ground truth features for explainable AI (XAI) evaluation.
 
-    The builder uses different fill values for different component types:
-    - Features: Typically filled with NaN where the feature doesn't exist
-    - Foundation: Typically filled with zeros where no foundation component exists
-    - Noise: Typically filled with zeros where no noise component exists
+    The builder creates time series by combining multiple components:
+    - Foundation: The base structure of the time series (e.g., random walk, constant)
+    - Noise: Random noise added to the time series
+    - Features: Discriminative patterns for class separation (e.g., shapelet, peak)
 
-    These fill values control how components are visualized and combined,
-    with NaN values being ignored during addition operations.
+    Terminology:
+    - "Signals" refer to either foundation or noise components, added with add_signal()
+    - Foundation and noise components differ mainly for visualization purposes
+    - Features are components that distinguish between classes, added with add_feature()
+
+    Component flexibility:
+    - Component generators are not strictly limited to their registered role
+    - A signal generator could be used as a feature or vice versa
+    - Features can be localized in time or span the entire series
+    - It's up to the user to ensure features actually create meaningful class differences
+
+    Key capabilities:
+    - Univariate and multivariate time series generation
+    - Control over feature positions and randomness
+    - Support for shared patterns across dimensions
+    - Training/test splits with consistent class distributions
+    - Built-in visualization and conversion utilities
+
+    Example usage (univariate):
+        ```python
+        from xaitimesynth import (
+            TimeSeriesBuilder, random_walk, gaussian, shapelet
+        )
+
+        # Create a simple binary classification dataset
+        dataset = (
+            TimeSeriesBuilder(n_timesteps=100, n_samples=200)
+            # Class 0: Just random walk with noise
+            .for_class(0)
+            .add_signal(random_walk(step_size=0.2))
+            .add_signal(gaussian(sigma=0.1), role="noise")
+            # Class 1: Random walk with noise plus a shapelet feature
+            .for_class(1)
+            .add_signal(random_walk(step_size=0.2))
+            .add_signal(gaussian(sigma=0.1), role="noise")
+            .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
+            .build(train_test_split=0.7)
+        )
+        ```
+
+    Advanced usage:
+    - Components can be configured with various parameters
+    - Features can be positioned at fixed or random locations
+    - For multivariate series, components can target specific dimensions
+    - Shared randomness and locations can be controlled across dimensions
+
+    When components are not registered, the builder uses default fill values:
+    - Features: NaN where the feature doesn't exist
+    - Foundation: zeros where no foundation component exists
+    - Noise: zeros where no noise component exists
 
     Attributes:
-        n_timesteps: Length of each time series.
-        n_samples: Total number of samples to generate.
-        n_dimensions: Number of dimensions in each time series (for multivariate series).
-        normalization: Normalization method for the final time series.
-        random_state: Random seed for reproducibility.
-        rng: Random number generator.
-        class_definitions: List of class definitions.
-        current_class: Current class being configured.
+        n_timesteps (int): Length of each time series.
+        n_samples (int): Total number of samples to generate.
+        n_dimensions (int): Number of dimensions in each time series.
+        normalization (str): Normalization method for the final time series.
+        normalization_kwargs (dict): Additional parameters for normalization.
+        random_state (int): Random seed for reproducibility.
+        rng (np.random.RandomState): Random number generator.
         feature_fill_value: Value used for non-existent features (default: np.nan).
         foundation_fill_value: Value used for foundation when none exists (default: 0.0).
         noise_fill_value: Value used for noise when none exists (default: 0.0).
+        class_definitions (list): List of class definitions with components.
+        current_class (dict): Current class being configured.
     """
 
     def __init__(
@@ -51,21 +100,24 @@ class TimeSeriesBuilder:
         """Initialize the time series builder.
 
         Args:
-            n_timesteps: Length of each time series.
-            n_samples: Total number of samples to generate.
-            n_dimensions: Number of dimensions in each time series. Default is 1 (univariate).
-            normalization: Normalization method for the final time series.
-                Options: "zscore", "minmax", or "none". Default is "zscore".
-            random_state: Random seed for reproducibility.
-            normalization_kwargs: Additional parameters for normalization.
-            feature_fill_value: Value used for non-existent features (default: np.nan).
-                This represents points where a feature doesn't exist. Using NaN makes
-                features only appear where they're defined in visualizations.
-            foundation_fill_value: Value used for foundation when none exists (default: 0.0).
+            n_timesteps (int): Length of each time series. Default is 100.
+            n_samples (int): Total number of samples to generate. Default is 1000.
+            n_dimensions (int): Number of dimensions for multivariate time series. Default is 1 (univariate).
+            normalization (str): Normalization method for the final time series.
+                Options: "zscore" (standardization), "minmax" (scale to 0-1), or "none". Default is "zscore".
+            random_state (int, optional): Seed for random number generation to ensure reproducibility.
+            normalization_kwargs (dict, optional): Additional parameters for normalization methods.
+                For "minmax": can specify "feature_range" as tuple (min, max).
+            feature_fill_value: Value used for non-existent features. Default is np.nan.
+                Using NaN makes features only appear where they're defined in visualizations.
+            foundation_fill_value: Value used for foundation when none exists. Default is 0.0.
                 Foundation typically affects the entire time series, so zeros represent
                 "no contribution" rather than "doesn't exist".
-            noise_fill_value: Value used for noise when none exists (default: 0.0).
+            noise_fill_value: Value used for noise when none exists. Default is 0.0.
                 Similar to foundation, zeros indicate "no contribution".
+
+        Raises:
+            ValueError: If n_dimensions is less than 1.
         """
         self.n_timesteps = n_timesteps
         self.n_samples = n_samples
@@ -92,7 +144,8 @@ class TimeSeriesBuilder:
 
         Args:
             class_label: Label for the class.
-            weight: Relative weight of this class in the dataset.
+            weight: Relative weight of this class in the dataset. Used to control the
+                distribution of classes in the generated dataset. Default is 1.0.
 
         Returns:
             self for method chaining.
@@ -121,14 +174,15 @@ class TimeSeriesBuilder:
         for d in dimensions:
             if not 0 <= d < self.n_dimensions:
                 raise ValueError(
-                    f"Dimension {d} is out of range. Valid dimensions are 0 to {self.n_dimensions - 1}."
+                    f"Dimension {d} is out of range. "
+                    f"Valid dimensions are 0 to {self.n_dimensions - 1}."
                 )
 
     def add_signal(
         self,
         component: Dict[str, Any],
         role: str = "foundation",
-        dim: Optional[List[int]] = None,
+        dim: Optional[List[int]] = [0],
         shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
@@ -150,29 +204,22 @@ class TimeSeriesBuilder:
         if role not in ("foundation", "noise"):
             raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
-        # Default to dimension 0 if not specified (for backward compatibility)
-        if dim is None:
-            dim = [0]
-
-        # Validate dimensions
         self._validate_dimensions(dim)
 
         # If shared_randomness is True or only one dimension, store a single component
         if shared_randomness or len(dim) == 1:
-            # Store dimension information with the component
             component_with_dim = component.copy()
             component_with_dim["dimensions"] = dim
             component_with_dim["shared_randomness"] = shared_randomness
-
             self.current_class["components"][role].append(component_with_dim)
+
+        # For multiple dimensions with different randomness,
+        # create separate component entries for each dimension
         else:
-            # For multiple dimensions with different randomness,
-            # create separate component entries for each dimension
             for d in dim:
                 component_with_dim = component.copy()
                 component_with_dim["dimensions"] = [d]  # Single dimension
                 component_with_dim["shared_randomness"] = shared_randomness
-
                 self.current_class["components"][role].append(component_with_dim)
 
         return self
@@ -184,7 +231,7 @@ class TimeSeriesBuilder:
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
         random_location: bool = False,
-        dim: Optional[List[int]] = None,
+        dim: Optional[List[int]] = [0],
         shared_location: bool = True,
         shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
@@ -196,8 +243,8 @@ class TimeSeriesBuilder:
             end_pct: End position as percentage of time series length (0-1).
             length_pct: Length of feature as percentage of time series length (0-1).
             random_location: Whether to place the feature at a random location.
-            dim: List of dimension indices where this feature should be applied.
-                 Default is [0] for backward compatibility (univariate case).
+            dim: List of dimension indices where this signal should be applied.
+                 Default is [0] (→ univariate time series if all signals have dim=[0]).
             shared_location: If True and random_location is True, the same random
                              location will be used across all dimensions.
                              If False, each dimension gets its own random location.
@@ -210,11 +257,6 @@ class TimeSeriesBuilder:
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
 
-        # Default to dimension 0 if not specified
-        if dim is None:
-            dim = [0]
-
-        # Validate dimensions
         self._validate_dimensions(dim)
 
         # Create feature definition
@@ -247,23 +289,18 @@ class TimeSeriesBuilder:
 
         # If shared_randomness is True or only one dimension, add a single feature
         if shared_randomness or len(dim) == 1:
-            # Add dimension information
             feature_def["dimensions"] = dim
             feature_def["shared_location"] = shared_location
             feature_def["shared_randomness"] = shared_randomness
-
             self.current_class["components"]["features"].append(feature_def)
+        # For multiple dimensions with different randomness,
+        # create separate feature entries for each dimension
         else:
-            # For multiple dimensions with different randomness,
-            # create separate feature entries for each dimension
             for d in dim:
                 feature_single_dim = feature_def.copy()
                 feature_single_dim["dimensions"] = [d]  # Single dimension
-                feature_single_dim["shared_location"] = (
-                    shared_location  # Preserve shared_location setting
-                )
+                feature_single_dim["shared_location"] = shared_location
                 feature_single_dim["shared_randomness"] = shared_randomness
-
                 self.current_class["components"]["features"].append(feature_single_dim)
 
         return self
@@ -311,7 +348,7 @@ class TimeSeriesBuilder:
         Returns:
             Tuple of (feature vector, boolean mask).
         """
-        # Initialize with feature_fill_value instead of fill_value
+        # Initialize with feature with fill value
         feature = np.full(self.n_timesteps, self.feature_fill_value)
         mask = np.zeros(self.n_timesteps, dtype=bool)
 
@@ -386,20 +423,17 @@ class TimeSeriesBuilder:
         Returns:
             Dictionary containing the generated dataset.
         """
-        # Validate class definitions
         if not self.class_definitions:
             raise ValueError(
                 "No class definitions provided. Call for_class() at least once."
             )
 
-        # Normalize class weights
+        # Normalize class weights and determine class distribution
         weights = np.array([cd["weight"] for cd in self.class_definitions])
         weights = weights / weights.sum()
-
-        # Determine class distribution
         class_counts = self.rng.multinomial(self.n_samples, weights)
 
-        # Initialize arrays - now with n_dimensions
+        # Initialize arrays
         X = np.zeros((self.n_samples, self.n_timesteps, self.n_dimensions))
         y = np.zeros(self.n_samples, dtype=int)
         all_components = []
@@ -448,10 +482,8 @@ class TimeSeriesBuilder:
                 for feature_idx, feature_def in enumerate(
                     class_def["components"]["features"]
                 ):
-                    # Get dimensions for this feature
-                    feature_dims = feature_def["dimensions"]
-
                     # For each dimension in the feature
+                    feature_dims = feature_def["dimensions"]
                     for i, dim_idx in enumerate(feature_dims):
                         # Generate feature vector - if shared_location is True, all dimensions
                         # will use the same location, otherwise pass the dimension index
@@ -489,6 +521,7 @@ class TimeSeriesBuilder:
                     )
 
                 # Normalize if required (apply to each dimension separately)
+                # #TODO: check whether normalisation works as intended
                 for dim_idx in range(self.n_dimensions):
                     aggregated[:, dim_idx] = normalize(
                         aggregated[:, dim_idx],
