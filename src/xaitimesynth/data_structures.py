@@ -26,3 +26,39 @@ class TimeSeriesComponents:
     features: Optional[Dict[str, np.ndarray]] = None
     feature_masks: Optional[Dict[str, np.ndarray]] = None
     aggregated: Optional[np.ndarray] = None
+
+    def __post_init__(self):
+        """Validate that all components have the same shape as the foundation."""
+        expected_shape = self.foundation.shape
+
+        # Check noise component
+        if self.noise is not None and self.noise.shape != expected_shape:
+            raise ValueError(
+                f"The 'noise' component shape {self.noise.shape} doesn't match "
+                f"foundation shape {expected_shape}."
+            )
+
+        # Check features components
+        if self.features is not None:
+            for feature_name, feature_data in self.features.items():
+                if feature_data.shape != expected_shape:
+                    raise ValueError(
+                        f"The feature '{feature_name}' shape {feature_data.shape} doesn't match "
+                        f"foundation shape {expected_shape}."
+                    )
+
+        # Check feature masks components
+        if self.feature_masks is not None:
+            for mask_name, mask_data in self.feature_masks.items():
+                if mask_data.shape != expected_shape:
+                    raise ValueError(
+                        f"The feature mask '{mask_name}' shape {mask_data.shape} doesn't match "
+                        f"foundation shape {expected_shape}."
+                    )
+
+        # Check aggregated component
+        if self.aggregated is not None and self.aggregated.shape != expected_shape:
+            raise ValueError(
+                f"The 'aggregated' component shape {self.aggregated.shape} doesn't match "
+                f"foundation shape {expected_shape}."
+            )
