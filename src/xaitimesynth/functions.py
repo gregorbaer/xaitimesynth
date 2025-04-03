@@ -14,6 +14,7 @@ class SignalAdder:
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
         random_location: bool = False,
+        shared_location: bool = True,
     ):
         """Initialize the signal adder.
 
@@ -24,6 +25,8 @@ class SignalAdder:
             end_pct: End position as percentage of time series length (0-1).
             length_pct: Length of feature as percentage of time series length (0-1).
             random_location: Whether to place the signal at a random location.
+            shared_location: If True and random_location is True, the same random
+                location will be used across all dimensions. Default is True.
         """
         self.component = component
         self.role = role
@@ -31,6 +34,7 @@ class SignalAdder:
         self.end_pct = end_pct
         self.length_pct = length_pct
         self.random_location = random_location
+        self.shared_location = shared_location
 
     def __call__(self, builder):
         """Add the component to the builder.
@@ -48,6 +52,7 @@ class SignalAdder:
             end_pct=self.end_pct,
             length_pct=self.length_pct,
             random_location=self.random_location,
+            shared_location=self.shared_location,
         )
 
 
@@ -102,6 +107,7 @@ def add_signal(
     end_pct: Optional[float] = None,
     length_pct: Optional[float] = None,
     random_location: bool = False,
+    shared_location: bool = True,
 ) -> SignalAdder:
     """Add a component as a global signal.
 
@@ -115,6 +121,8 @@ def add_signal(
         end_pct: End position as percentage of time series length (0-1).
         length_pct: Length of signal as percentage of time series length (0-1).
         random_location: Whether to place the signal at a random location.
+        shared_location: If True and random_location is True, the same random
+            location will be used across all dimensions. Default is True.
 
     Returns:
         SignalAdder instance.
@@ -126,6 +134,7 @@ def add_signal(
         end_pct=end_pct,
         length_pct=length_pct,
         random_location=random_location,
+        shared_location=shared_location,
     )
 
 

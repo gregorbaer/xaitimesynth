@@ -247,6 +247,7 @@ class TimeSeriesBuilder:
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
         random_location: bool = False,
+        shared_location: bool = True,
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
 
@@ -266,6 +267,9 @@ class TimeSeriesBuilder:
             length_pct (float, optional): Length of signal as percentage of time series length (0-1).
             random_location (bool): Whether to place the signal at a random location.
                 Default is False (applied to entire time series).
+            shared_location (bool): If True and random_location is True, the same random
+                location will be used across all dimensions. If False, each dimension gets
+                its own random location. Default is True.
 
         Returns:
             TimeSeriesBuilder: Self for method chaining.
@@ -303,6 +307,7 @@ class TimeSeriesBuilder:
 
                 component_with_time["random_location"] = True
                 component_with_time["length_pct"] = length_pct
+                component_with_time["shared_location"] = shared_location
             else:
                 if start_pct is None or end_pct is None:
                     raise ValueError(
@@ -610,121 +615,215 @@ class TimeSeriesBuilder:
 
                 # Add base structure components
                 for base_def in class_def["components"]["foundation"]:
-                    # Check if this foundation component has time range parameters
-                    if "random_location" in base_def:
-                        # Create a full-length vector filled with the foundation fill value
-                        base_vector = np.full(
-                            self.n_timesteps, self.foundation_fill_value
-                        )
+                    # For signals with time range parameters, generate random location once if shared
+                    if "random_location" in base_def and base_def["random_location"]:
+                        # Determine signal length
+                        length_pct = base_def["length_pct"]
+                        signal_length = max(1, int(length_pct * self.n_timesteps))
+                        max_start = self.n_timesteps - signal_length
 
-                        # Determine signal location
-                        if base_def["random_location"]:
-                            length_pct = base_def["length_pct"]
-                            signal_length = max(1, int(length_pct * self.n_timesteps))
-                            max_start = self.n_timesteps - signal_length
-                            start_idx = self.rng.randint(0, max_start + 1)
-                            end_idx = start_idx + signal_length
-                        else:
+                        # If shared_location is True, generate the location once for all dimensions
+                        shared_location = base_def.get("shared_location", True)
+                        if shared_location:
+                            shared_start_idx = self.rng.randint(0, max_start + 1)
+                            shared_end_idx = shared_start_idx + signal_length
+
+                        # Apply to specified dimensions with appropriate location handling
+                        for i, dim_idx in enumerate(base_def["dimensions"]):
+                            # Create a full-length vector filled with the foundation fill value
+                            base_vector = np.full(
+                                self.n_timesteps, self.foundation_fill_value
+                            )
+
+                            # Determine signal location - possibly unique per dimension
+                            if shared_location:
+                                # Use the shared location for all dimensions
+                                start_idx = shared_start_idx
+                                end_idx = shared_end_idx
+                            else:
+                                # Create a unique location for each dimension
+                                dim_rng = np.random.RandomState(
+                                    self.rng.randint(0, 2**32 - 1)
+                                )
+                                start_idx = dim_rng.randint(0, max_start + 1)
+                                end_idx = start_idx + signal_length
+
+                            # Calculate the actual length of the signal segment
+                            signal_length = end_idx - start_idx
+
+                            # Prepare parameters for component generation
+                            signal_params = base_def.copy()
+                            signal_type = signal_params.pop("type")
+
+                            # Remove location and dimension parameters
+                            signal_params.pop("random_location", None)
+                            signal_params.pop("length_pct", None)
+                            signal_params.pop("shared_location", None)
+                            signal_params.pop("dimensions", None)
+                            signal_params.pop("shared_randomness", None)
+
+                            # Generate the component only for the specified length
+                            signal_values = generate_component(
+                                signal_type, signal_length, self.rng, **signal_params
+                            )
+
+                            # Place the signal in the correct location
+                            base_vector[start_idx:end_idx] = signal_values
+
+                            # Add to foundation for this dimension
+                            foundation[:, dim_idx] = self._add_vector_handling_nans(
+                                foundation[:, dim_idx], base_vector
+                            )
+                    else:
+                        # Handle non-random location signals (the original behavior)
+                        if "random_location" in base_def:
+                            # Fixed location signal
+                            base_vector = np.full(
+                                self.n_timesteps, self.foundation_fill_value
+                            )
+
                             start_pct = base_def["start_pct"]
                             end_pct = base_def["end_pct"]
                             start_idx = int(start_pct * self.n_timesteps)
                             end_idx = int(end_pct * self.n_timesteps)
+
                             # Ensure at least one timestep is selected
                             if start_idx == end_idx:
                                 end_idx = start_idx + 1
 
-                        # Calculate the actual length of the signal segment
-                        signal_length = end_idx - start_idx
+                            signal_length = end_idx - start_idx
 
-                        # Prepare parameters for component generation
-                        signal_params = base_def.copy()
-                        signal_type = signal_params.pop("type")
+                            # Generate the component only for the specified length
+                            signal_params = base_def.copy()
+                            signal_type = signal_params.pop("type")
 
-                        # Remove location parameters
-                        signal_params.pop("random_location", None)
-                        signal_params.pop("start_pct", None)
-                        signal_params.pop("end_pct", None)
-                        signal_params.pop("length_pct", None)
-                        signal_params.pop("dimensions", None)
-                        signal_params.pop("shared_randomness", None)
+                            # Remove location parameters
+                            signal_params.pop("random_location", None)
+                            signal_params.pop("start_pct", None)
+                            signal_params.pop("end_pct", None)
+                            signal_params.pop("dimensions", None)
+                            signal_params.pop("shared_randomness", None)
 
-                        # Generate the component only for the specified length
-                        signal_values = generate_component(
-                            signal_type,
-                            signal_length,  # Generate only for the segment length
-                            self.rng,
-                            **signal_params,
-                        )
+                            signal_values = generate_component(
+                                signal_type, signal_length, self.rng, **signal_params
+                            )
 
-                        # Place the signal in the correct location
-                        base_vector[start_idx:end_idx] = signal_values
-                    else:
-                        # Generate signal for the entire time series (original behavior)
-                        base_vector = self._generate_component_vector(base_def)
-
-                    # Apply to specified dimensions
-                    for dim_idx in base_def["dimensions"]:
-                        foundation[:, dim_idx] = self._add_vector_handling_nans(
-                            foundation[:, dim_idx], base_vector
-                        )
-
-                # Add noise components
-                for noise_def in class_def["components"]["noise"]:
-                    # Check if this noise component has time range parameters
-                    if "random_location" in noise_def:
-                        # Create a full-length vector filled with the noise fill value
-                        noise_vector = np.full(self.n_timesteps, self.noise_fill_value)
-
-                        # Determine noise location
-                        if noise_def["random_location"]:
-                            length_pct = noise_def["length_pct"]
-                            noise_length = max(1, int(length_pct * self.n_timesteps))
-                            max_start = self.n_timesteps - noise_length
-                            start_idx = self.rng.randint(0, max_start + 1)
-                            end_idx = start_idx + noise_length
+                            base_vector[start_idx:end_idx] = signal_values
                         else:
+                            # Full-length signal (original behavior)
+                            base_vector = self._generate_component_vector(base_def)
+
+                        # Apply to all specified dimensions with the same signal
+                        for dim_idx in base_def["dimensions"]:
+                            foundation[:, dim_idx] = self._add_vector_handling_nans(
+                                foundation[:, dim_idx], base_vector
+                            )
+
+                # Add noise components - use the same approach as foundation components
+                for noise_def in class_def["components"]["noise"]:
+                    # For noise with random location parameters, generate random location once if shared
+                    if "random_location" in noise_def and noise_def["random_location"]:
+                        # Determine noise length
+                        length_pct = noise_def["length_pct"]
+                        noise_length = max(1, int(length_pct * self.n_timesteps))
+                        max_start = self.n_timesteps - noise_length
+
+                        # If shared_location is True, generate the location once for all dimensions
+                        shared_location = noise_def.get("shared_location", True)
+                        if shared_location:
+                            shared_start_idx = self.rng.randint(0, max_start + 1)
+                            shared_end_idx = shared_start_idx + noise_length
+
+                        # Apply to specified dimensions with appropriate location handling
+                        for i, dim_idx in enumerate(noise_def["dimensions"]):
+                            # Create a full-length vector filled with the noise fill value
+                            noise_vector = np.full(
+                                self.n_timesteps, self.noise_fill_value
+                            )
+
+                            # Determine noise location - possibly unique per dimension
+                            if shared_location:
+                                # Use the shared location for all dimensions
+                                start_idx = shared_start_idx
+                                end_idx = shared_end_idx
+                            else:
+                                # Create a unique location for each dimension
+                                dim_rng = np.random.RandomState(
+                                    self.rng.randint(0, 2**32 - 1)
+                                )
+                                start_idx = dim_rng.randint(0, max_start + 1)
+                                end_idx = start_idx + noise_length
+
+                            # Calculate the actual length of the noise segment
+                            noise_length = end_idx - start_idx
+
+                            # Prepare parameters for component generation
+                            noise_params = noise_def.copy()
+                            noise_type = noise_params.pop("type")
+
+                            # Remove location and dimension parameters
+                            noise_params.pop("random_location", None)
+                            noise_params.pop("length_pct", None)
+                            noise_params.pop("shared_location", None)
+                            noise_params.pop("dimensions", None)
+                            noise_params.pop("shared_randomness", None)
+
+                            # Generate the component only for the specified length
+                            noise_values = generate_component(
+                                noise_type, noise_length, self.rng, **noise_params
+                            )
+
+                            # Place the noise in the correct location
+                            noise_vector[start_idx:end_idx] = noise_values
+
+                            # Add to noise for this dimension
+                            noise[:, dim_idx] = self._add_vector_handling_nans(
+                                noise[:, dim_idx], noise_vector
+                            )
+                    else:
+                        # Handle non-random location noise (the original behavior)
+                        if "random_location" in noise_def:
+                            # Fixed location noise
+                            noise_vector = np.full(
+                                self.n_timesteps, self.noise_fill_value
+                            )
+
                             start_pct = noise_def["start_pct"]
                             end_pct = noise_def["end_pct"]
                             start_idx = int(start_pct * self.n_timesteps)
                             end_idx = int(end_pct * self.n_timesteps)
+
                             # Ensure at least one timestep is selected
                             if start_idx == end_idx:
                                 end_idx = start_idx + 1
 
-                        # Calculate the actual length of the noise segment
-                        noise_length = end_idx - start_idx
+                            noise_length = end_idx - start_idx
 
-                        # Prepare parameters for component generation
-                        noise_params = noise_def.copy()
-                        noise_type = noise_params.pop("type")
+                            # Generate the component only for the specified length
+                            noise_params = noise_def.copy()
+                            noise_type = noise_params.pop("type")
 
-                        # Remove location parameters
-                        noise_params.pop("random_location", None)
-                        noise_params.pop("start_pct", None)
-                        noise_params.pop("end_pct", None)
-                        noise_params.pop("length_pct", None)
-                        noise_params.pop("dimensions", None)
-                        noise_params.pop("shared_randomness", None)
+                            # Remove location parameters
+                            noise_params.pop("random_location", None)
+                            noise_params.pop("start_pct", None)
+                            noise_params.pop("end_pct", None)
+                            noise_params.pop("dimensions", None)
+                            noise_params.pop("shared_randomness", None)
 
-                        # Generate the component only for the specified length
-                        noise_values = generate_component(
-                            noise_type,
-                            noise_length,  # Generate only for the segment length
-                            self.rng,
-                            **noise_params,
-                        )
+                            noise_values = generate_component(
+                                noise_type, noise_length, self.rng, **noise_params
+                            )
 
-                        # Place the noise in the correct location
-                        noise_vector[start_idx:end_idx] = noise_values
-                    else:
-                        # Generate noise for the entire time series (original behavior)
-                        noise_vector = self._generate_component_vector(noise_def)
+                            noise_vector[start_idx:end_idx] = noise_values
+                        else:
+                            # Full-length noise (original behavior)
+                            noise_vector = self._generate_component_vector(noise_def)
 
-                    # Apply to specified dimensions
-                    for dim_idx in noise_def["dimensions"]:
-                        noise[:, dim_idx] = self._add_vector_handling_nans(
-                            noise[:, dim_idx], noise_vector
-                        )
+                        # Apply to all specified dimensions with the same noise
+                        for dim_idx in noise_def["dimensions"]:
+                            noise[:, dim_idx] = self._add_vector_handling_nans(
+                                noise[:, dim_idx], noise_vector
+                            )
 
                 # Initialize aggregated time series
                 aggregated = foundation.copy()
