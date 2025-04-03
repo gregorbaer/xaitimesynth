@@ -142,13 +142,16 @@ class TimeSeriesBuilder:
     def for_class(self, class_label: int, weight: float = 1.0) -> "TimeSeriesBuilder":
         """Set the current class for component assignment.
 
+        Creates a new class definition and makes it the target for subsequent component additions.
+        Multiple calls create multiple classes for classification tasks.
+
         Args:
-            class_label: Label for the class.
-            weight: Relative weight of this class in the dataset. Used to control the
-                distribution of classes in the generated dataset. Default is 1.0.
+            class_label (int): Integer label for the class, used as the target value.
+            weight (float): Relative weight of this class in the dataset. Controls the
+                class distribution in the generated dataset. Default is 1.0.
 
         Returns:
-            self for method chaining.
+            TimeSeriesBuilder: Self for method chaining.
         """
         # Create a new class definition
         class_def = {
@@ -165,11 +168,14 @@ class TimeSeriesBuilder:
     def _validate_dimensions(self, dimensions: List[int]) -> None:
         """Validate dimension indices against n_dimensions.
 
+        Ensures all provided dimension indices are within valid range for the configured
+        number of dimensions in the builder.
+
         Args:
-            dimensions: List of dimension indices to validate.
+            dimensions (List[int]): List of dimension indices to validate.
 
         Raises:
-            ValueError: If any dimension is out of range.
+            ValueError: If any dimension index is out of range (0 to n_dimensions-1).
         """
         for d in dimensions:
             if not 0 <= d < self.n_dimensions:
@@ -187,16 +193,23 @@ class TimeSeriesBuilder:
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
 
+        Signal components can be either foundation or noise. Foundation components form the
+        base structure of the time series, while noise components add random variations.
+
         Args:
-            component: Component definition dictionary.
-            role: Role of the component (foundation, noise).
-            dim: List of dimension indices where this signal should be applied.
-                 Default is [0] (→ univariate time series if all signals have dim=[0]).
-            shared_randomness: If True, the same random pattern will be used across all dimensions.
-                               If False, each dimension gets its own random pattern (for stochastic components).
+            component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
+            role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
+            dim (List[int]): List of dimension indices where this signal should be applied.
+                Default is [0] (creates univariate time series if all components have dim=[0]).
+            shared_randomness (bool): If True, the same random pattern will be used across all
+                specified dimensions. If False, each dimension gets its own random pattern
+                (for stochastic components). Default is False.
 
         Returns:
-            self for method chaining.
+            TimeSeriesBuilder: Self for method chaining.
+
+        Raises:
+            ValueError: If no class is selected or if the role is invalid.
         """
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
@@ -237,22 +250,33 @@ class TimeSeriesBuilder:
     ) -> "TimeSeriesBuilder":
         """Add a feature component to the current class.
 
+        Features are distinctive patterns that can differentiate between classes.
+        They can be placed at fixed or random locations within the time series.
+
         Args:
-            component: Component definition dictionary.
-            start_pct: Start position as percentage of time series length (0-1).
-            end_pct: End position as percentage of time series length (0-1).
-            length_pct: Length of feature as percentage of time series length (0-1).
-            random_location: Whether to place the feature at a random location.
-            dim: List of dimension indices where this signal should be applied.
-                 Default is [0] (→ univariate time series if all signals have dim=[0]).
-            shared_location: If True and random_location is True, the same random
-                             location will be used across all dimensions.
-                             If False, each dimension gets its own random location.
-            shared_randomness: If True, the same random pattern will be used across all dimensions.
-                               If False, each dimension gets its own random pattern (for stochastic components).
+            component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
+            start_pct (float, optional): Start position as percentage of time series length (0-1).
+                Required when random_location is False.
+            end_pct (float, optional): End position as percentage of time series length (0-1).
+                Required when random_location is False.
+            length_pct (float, optional): Length of feature as percentage of time series length (0-1).
+                Required when random_location is True.
+            random_location (bool): Whether to place the feature at a random location.
+                Default is False (fixed position).
+            dim (List[int]): List of dimension indices where this feature should be applied.
+                Default is [0] (creates univariate time series if all components have dim=[0]).
+            shared_location (bool): If True and random_location is True, the same random
+                location will be used across all dimensions. If False, each dimension gets
+                its own random location. Default is True.
+            shared_randomness (bool): If True, the same random pattern will be used across
+                all dimensions. If False, each dimension gets its own random pattern
+                (for stochastic components). Default is False.
 
         Returns:
-            self for method chaining.
+            TimeSeriesBuilder: Self for method chaining.
+
+        Raises:
+            ValueError: If no class is selected or if location parameters are invalid.
         """
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
@@ -310,13 +334,17 @@ class TimeSeriesBuilder:
     ) -> np.ndarray:
         """Generate a component vector based on its definition.
 
+        Calls the appropriate component generator based on the component type
+        and parameters specified in the definition.
+
         Args:
-            component_def: Component definition dictionary.
-            feature_length: Length of the feature in timesteps.
+            component_def (Dict[str, Any]): Component definition dictionary with 'type'
+                and parameters for the generator.
+            feature_length (Optional[int]): Length of the feature in timesteps.
                 Only used for feature components.
 
         Returns:
-            Component vector.
+            np.ndarray: Generated component vector with specified pattern.
         """
         component_type = component_def["type"]
         component_params = component_def.copy()
@@ -338,15 +366,21 @@ class TimeSeriesBuilder:
     def _generate_feature_vector(
         self, feature_def: Dict[str, Any], dim_index: Optional[int] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Generate a feature vector and its mask.
+        """Generate a feature vector and its corresponding mask.
+
+        Creates a feature at the specified location (fixed or random) and returns
+        both the vector and a boolean mask indicating the feature's position.
 
         Args:
-            feature_def: Feature definition dictionary.
-            dim_index: The index in the dimensions list to use for location
-                       determination. Only used when shared_location is False.
+            feature_def (Dict[str, Any]): Feature definition dictionary with 'type',
+                location parameters, and generator parameters.
+            dim_index (Optional[int]): The index in the dimensions list to use for location
+                determination. Only used when shared_location is False.
 
         Returns:
-            Tuple of (feature vector, boolean mask).
+            Tuple[np.ndarray, np.ndarray]: Tuple containing:
+                - Feature vector with specified pattern at the determined location
+                - Boolean mask indicating the feature's position (True where feature exists)
         """
         # Initialize with feature with fill value
         feature = np.full(self.n_timesteps, self.feature_fill_value)
@@ -414,14 +448,32 @@ class TimeSeriesBuilder:
     def build(
         self, return_components: bool = True, train_test_split: Optional[float] = None
     ) -> Dict[str, Any]:
-        """Build the dataset based on the class definitions.
+        """Build the dataset based on the configured class definitions.
+
+        Generates time series data by combining all components for each class according
+        to the specified parameters, with options to include component vectors and
+        create a train/test split.
 
         Args:
-            return_components: Whether to return the component vectors.
-            train_test_split: If not None, fraction of data to use for training.
+            return_components (bool): Whether to return the individual component vectors.
+                Useful for visualization and analysis. Default is True.
+            train_test_split (Optional[float]): If provided, fraction of data to use for training
+                (between 0 and 1). The dataset will be randomly split into train and test sets.
+                If None, no split is performed. Default is None.
 
         Returns:
-            Dictionary containing the generated dataset.
+            Dict[str, Any]: Dictionary containing the generated dataset with keys:
+                - 'X': Time series data with shape (n_samples, n_timesteps, n_dimensions)
+                - 'y': Class labels for each sample
+                - 'feature_masks': Boolean masks showing feature locations
+                - 'metadata': Dataset configuration information
+                - 'components': Individual component vectors (if return_components=True)
+                If train_test_split is provided, also includes:
+                - 'X_train', 'y_train': Training data
+                - 'X_test', 'y_test': Testing data
+
+        Raises:
+            ValueError: If no class definitions have been provided.
         """
         if not self.class_definitions:
             raise ValueError(
@@ -608,22 +660,34 @@ class TimeSeriesBuilder:
     ) -> pd.DataFrame:
         """Convert time series dataset to a long-format pandas DataFrame.
 
-        This method creates a DataFrame with one row per timestep per component per sample per dimension,
-        suitable for detailed analysis and visualization.
+        Creates a DataFrame with one row per timestep per component per sample per dimension,
+        suitable for detailed analysis and visualization with libraries like Seaborn or Plotly.
 
         Args:
-            dataset: Dataset returned by build().
-            samples: List of sample indices to include. If None, includes all samples.
-            classes: List of class labels to include. If None, includes all classes.
-            components: List of component types to include. Default includes all:
-                ["aggregated", "foundation", "noise", "features"]
-            dimensions: List of dimension indices to include. If None, includes all dimensions.
-            format_classes: If True, format class labels as "Class X".
-                Otherwise use numeric labels.
+            dataset (Dict[str, Any]): Dataset dictionary returned by build().
+            samples (Optional[List[int]]): List of sample indices to include.
+                If None, includes all samples.
+            classes (Optional[List[int]]): List of class labels to include.
+                If None, includes all classes.
+            components (Optional[List[str]]): List of component types to include.
+                Default includes all: ["aggregated", "foundation", "noise", "features"]
+            dimensions (Optional[List[int]]): List of dimension indices to include.
+                If None, includes all dimensions.
+            format_classes (bool): If True, format class labels as "Class X".
+                Otherwise use numeric labels. Default is False.
 
         Returns:
-            pd.DataFrame: Long-format DataFrame with columns for timesteps, values,
-                class labels, sample indices, component types, and dimensions.
+            pd.DataFrame: Long-format DataFrame with columns:
+                - time: Timestep index
+                - value: Component value at that timestep
+                - class: Class label (formatted if format_classes=True)
+                - sample: Sample index
+                - component: Component type
+                - feature: Feature name (for feature components)
+                - dim: Dimension index
+
+        Raises:
+            ValueError: If specified dimensions are out of range.
         """
         # Default components to include (use programming-friendly names)
         default_components = ["aggregated", "foundation", "noise", "features"]
@@ -846,7 +910,7 @@ class TimeSeriesBuilder:
     ) -> np.ndarray:
         """Add two vectors while properly handling NaN values.
 
-        When adding vectors that may contain NaN values:
+        Special handling of NaN values during vector addition:
         1. Where both vectors have values (not NaN): Normal addition
         2. Where one vector has NaN: Use the non-NaN value
         3. Where both have NaN: Result remains NaN
@@ -854,11 +918,11 @@ class TimeSeriesBuilder:
         This allows components to only contribute where they're defined.
 
         Args:
-            base: Base vector to add to.
-            to_add: Vector to add to the base.
+            base (np.ndarray): Base vector to add to.
+            to_add (np.ndarray): Vector to add to the base.
 
         Returns:
-            Combined vector with NaNs handled appropriately.
+            np.ndarray: Combined vector with NaNs handled according to the rules above.
         """
         # Stack arrays and use nansum for element-wise addition that ignores NaNs
         result = np.nansum(np.stack([base, to_add]), axis=0)
