@@ -129,6 +129,7 @@ class TimeSeriesBuilder:
         component: Dict[str, Any],
         role: str = "foundation",
         dim: Optional[List[int]] = None,
+        shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
 
@@ -136,8 +137,10 @@ class TimeSeriesBuilder:
             component: Component definition dictionary.
             role: Role of the component (foundation, noise).
             dim: List of dimension indices where this signal should be applied.
-
                  Default is [0] (→ univariate time series if all signals have dim=[0]).
+            shared_randomness: If True, the same random pattern will be used across all dimensions.
+                               If False, each dimension gets its own random pattern (for stochastic components).
+
         Returns:
             self for method chaining.
         """
@@ -154,11 +157,23 @@ class TimeSeriesBuilder:
         # Validate dimensions
         self._validate_dimensions(dim)
 
-        # Store dimension information with the component
-        component_with_dim = component.copy()
-        component_with_dim["dimensions"] = dim
+        # If shared_randomness is True or only one dimension, store a single component
+        if shared_randomness or len(dim) == 1:
+            # Store dimension information with the component
+            component_with_dim = component.copy()
+            component_with_dim["dimensions"] = dim
+            component_with_dim["shared_randomness"] = shared_randomness
 
-        self.current_class["components"][role].append(component_with_dim)
+            self.current_class["components"][role].append(component_with_dim)
+        else:
+            # For multiple dimensions with different randomness,
+            # create separate component entries for each dimension
+            for d in dim:
+                component_with_dim = component.copy()
+                component_with_dim["dimensions"] = [d]  # Single dimension
+                component_with_dim["shared_randomness"] = shared_randomness
+
+                self.current_class["components"][role].append(component_with_dim)
 
         return self
 
@@ -171,6 +186,7 @@ class TimeSeriesBuilder:
         random_location: bool = False,
         dim: Optional[List[int]] = None,
         shared_location: bool = True,
+        shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
         """Add a feature component to the current class.
 
@@ -185,6 +201,8 @@ class TimeSeriesBuilder:
             shared_location: If True and random_location is True, the same random
                              location will be used across all dimensions.
                              If False, each dimension gets its own random location.
+            shared_randomness: If True, the same random pattern will be used across all dimensions.
+                               If False, each dimension gets its own random pattern (for stochastic components).
 
         Returns:
             self for method chaining.
@@ -227,11 +245,26 @@ class TimeSeriesBuilder:
             feature_def["start_pct"] = start_pct
             feature_def["end_pct"] = end_pct
 
-        # Add dimension information
-        feature_def["dimensions"] = dim
-        feature_def["shared_location"] = shared_location
+        # If shared_randomness is True or only one dimension, add a single feature
+        if shared_randomness or len(dim) == 1:
+            # Add dimension information
+            feature_def["dimensions"] = dim
+            feature_def["shared_location"] = shared_location
+            feature_def["shared_randomness"] = shared_randomness
 
-        self.current_class["components"]["features"].append(feature_def)
+            self.current_class["components"]["features"].append(feature_def)
+        else:
+            # For multiple dimensions with different randomness,
+            # create separate feature entries for each dimension
+            for d in dim:
+                feature_single_dim = feature_def.copy()
+                feature_single_dim["dimensions"] = [d]  # Single dimension
+                feature_single_dim["shared_location"] = (
+                    shared_location  # Preserve shared_location setting
+                )
+                feature_single_dim["shared_randomness"] = shared_randomness
+
+                self.current_class["components"]["features"].append(feature_single_dim)
 
         return self
 
@@ -255,6 +288,7 @@ class TimeSeriesBuilder:
         # Remove dimension information if present
         component_params.pop("dimensions", None)
         component_params.pop("shared_location", None)
+        component_params.pop("shared_randomness", None)
 
         # If it's a feature, add the feature_length parameter
         if feature_length is not None:
@@ -537,7 +571,7 @@ class TimeSeriesBuilder:
         classes: Optional[List[int]] = None,
         components: Optional[List[str]] = None,
         dimensions: Optional[List[int]] = None,
-        format_classes: bool = True,
+        format_classes: bool = False,
     ) -> pd.DataFrame:
         """Convert time series dataset to a long-format pandas DataFrame.
 
@@ -635,7 +669,7 @@ class TimeSeriesBuilder:
                         "sample": sample_idx_rep,
                         "component": "aggregated",
                         "feature": None,
-                        "dimension": dim_idx,
+                        "dim": dim_idx,
                     }
                 )
 
@@ -699,7 +733,7 @@ class TimeSeriesBuilder:
                                     "sample": sample_idx_rep,
                                     "component": component_name,
                                     "feature": None,
-                                    "dimension": dim_idx,
+                                    "dim": dim_idx,
                                 }
                             )
 
@@ -741,7 +775,7 @@ class TimeSeriesBuilder:
                                     "sample": idx,
                                     "component": "features",
                                     "feature": feature_name,
-                                    "dimension": dim_idx,
+                                    "dim": dim_idx,
                                 }
                             )
 

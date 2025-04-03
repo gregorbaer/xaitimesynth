@@ -337,7 +337,7 @@ def create_ts_visualization(
     assert len(df) > 0, "No data to display"
 
     # Determine if we're dealing with a multivariate time series
-    is_multivariate = len(df["dimension"].unique()) > 1
+    is_multivariate = len(df["dim"].unique()) > 1
 
     # Capitalize component names for display
     current_categories = df["component"].cat.categories
@@ -365,7 +365,7 @@ def create_ts_visualization(
     # For multivariate time series, use a different approach
     if is_multivariate:
         # Get dimensions from the DataFrame
-        available_dims = sorted(df["dimension"].unique())
+        available_dims = sorted(df["dim"].unique())
 
         # Simplify visualizations by creating per-dimension plots
         result = plot_multivariate_ts_by_dimension(
@@ -501,14 +501,14 @@ def plot_multivariate_ts_by_dimension(
     df = df.copy()
 
     # Get unique dimensions and create a label for plotting
-    dimensions = sorted(df["dimension"].unique())
+    dimensions = sorted(df["dim"].unique())
 
     # Create separate plots for each dimension
     plots = []
 
     for dim in dimensions:
         # Filter data for this dimension
-        dim_df = df[df["dimension"] == dim].copy()
+        dim_df = df[df["dim"] == dim].copy()
 
         # Calculate y-limits for this dimension
         y_min = dim_df["value"].min()
@@ -661,12 +661,10 @@ def plot_multivariate_ts(
         class_df = df[df["class"] == class_name].copy()
 
         # Add dimension display
-        class_df["dim_display"] = "Dim " + class_df["dimension"].astype(str)
+        class_df["dim_display"] = "Dim " + class_df["dim"].astype(str)
         class_df["dim_display"] = pd.Categorical(
             class_df["dim_display"],
-            categories=[
-                "Dim " + str(d) for d in sorted(class_df["dimension"].unique())
-            ],
+            categories=["Dim " + str(d) for d in sorted(class_df["dim"].unique())],
             ordered=True,
         )
 
@@ -692,7 +690,7 @@ def plot_multivariate_ts(
 
         # Calculate plot dimensions
         n_components = len(class_df["component"].unique())
-        n_dimensions = len(class_df["dimension"].unique())
+        n_dimensions = len(class_df["dim"].unique())
         total_width = panel_width * n_components
         total_height = panel_height * n_dimensions
 
