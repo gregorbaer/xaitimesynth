@@ -6,15 +6,31 @@ import numpy as np
 class SignalAdder:
     """Helper class for adding signal components."""
 
-    def __init__(self, component: Dict[str, Any], role: str = "foundation"):
+    def __init__(
+        self,
+        component: Dict[str, Any],
+        role: str = "foundation",
+        start_pct: Optional[float] = None,
+        end_pct: Optional[float] = None,
+        length_pct: Optional[float] = None,
+        random_location: bool = False,
+    ):
         """Initialize the signal adder.
 
         Args:
             component: Component definition dictionary.
             role: Role of the component (foundation, noise).
+            start_pct: Start position as percentage of time series length (0-1).
+            end_pct: End position as percentage of time series length (0-1).
+            length_pct: Length of feature as percentage of time series length (0-1).
+            random_location: Whether to place the signal at a random location.
         """
         self.component = component
         self.role = role
+        self.start_pct = start_pct
+        self.end_pct = end_pct
+        self.length_pct = length_pct
+        self.random_location = random_location
 
     def __call__(self, builder):
         """Add the component to the builder.
@@ -25,7 +41,14 @@ class SignalAdder:
         Returns:
             The builder for method chaining.
         """
-        return builder.add_signal_component(self.component, role=self.role)
+        return builder.add_signal_component(
+            self.component,
+            role=self.role,
+            start_pct=self.start_pct,
+            end_pct=self.end_pct,
+            length_pct=self.length_pct,
+            random_location=self.random_location,
+        )
 
 
 class FeatureAdder:
@@ -72,17 +95,38 @@ class FeatureAdder:
         )
 
 
-def add_signal(component: Dict[str, Any], role: str = "foundation") -> SignalAdder:
+def add_signal(
+    component: Dict[str, Any],
+    role: str = "foundation",
+    start_pct: Optional[float] = None,
+    end_pct: Optional[float] = None,
+    length_pct: Optional[float] = None,
+    random_location: bool = False,
+) -> SignalAdder:
     """Add a component as a global signal.
+
+    By default, signals are applied to the entire time series. Optional time range
+    parameters can be specified to limit where the signal appears.
 
     Args:
         component: Component definition dictionary.
         role: Role of the component (foundation, noise).
+        start_pct: Start position as percentage of time series length (0-1).
+        end_pct: End position as percentage of time series length (0-1).
+        length_pct: Length of signal as percentage of time series length (0-1).
+        random_location: Whether to place the signal at a random location.
 
     Returns:
         SignalAdder instance.
     """
-    return SignalAdder(component, role)
+    return SignalAdder(
+        component,
+        role=role,
+        start_pct=start_pct,
+        end_pct=end_pct,
+        length_pct=length_pct,
+        random_location=random_location,
+    )
 
 
 def add_feature(

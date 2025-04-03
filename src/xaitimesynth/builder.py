@@ -237,6 +237,107 @@ class TimeSeriesBuilder:
 
         return self
 
+    def add_signal_component(
+        self,
+        component: Dict[str, Any],
+        role: str = "foundation",
+        dim: Optional[List[int]] = [0],
+        shared_randomness: bool = False,
+        start_pct: Optional[float] = None,
+        end_pct: Optional[float] = None,
+        length_pct: Optional[float] = None,
+        random_location: bool = False,
+    ) -> "TimeSeriesBuilder":
+        """Add a signal component to the current class.
+
+        Signal components can be either foundation or noise. Foundation components form the
+        base structure of the time series, while noise components add random variations.
+
+        Args:
+            component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
+            role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
+            dim (List[int]): List of dimension indices where this signal should be applied.
+                Default is [0] (creates univariate time series if all components have dim=[0]).
+            shared_randomness (bool): If True, the same random pattern will be used across all
+                specified dimensions. If False, each dimension gets its own random pattern
+                (for stochastic components). Default is False.
+            start_pct (float, optional): Start position as percentage of time series length (0-1).
+            end_pct (float, optional): End position as percentage of time series length (0-1).
+            length_pct (float, optional): Length of signal as percentage of time series length (0-1).
+            random_location (bool): Whether to place the signal at a random location.
+                Default is False (applied to entire time series).
+
+        Returns:
+            TimeSeriesBuilder: Self for method chaining.
+
+        Raises:
+            ValueError: If no class is selected or if the role is invalid.
+        """
+        if self.current_class is None:
+            raise ValueError("No class selected. Call for_class() first.")
+
+        if role not in ("foundation", "noise"):
+            raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
+
+        self._validate_dimensions(dim)
+
+        # If we have time range parameters, validate them
+        has_time_range = (
+            start_pct is not None
+            or end_pct is not None
+            or length_pct is not None
+            or random_location
+        )
+
+        if has_time_range:
+            # Add time range parameters to component
+            component_with_time = component.copy()
+
+            if random_location:
+                if length_pct is None:
+                    raise ValueError(
+                        "length_pct must be provided when random_location is True"
+                    )
+                if not (0 < length_pct <= 1):
+                    raise ValueError("length_pct must be between 0 and 1")
+
+                component_with_time["random_location"] = True
+                component_with_time["length_pct"] = length_pct
+            else:
+                if start_pct is None or end_pct is None:
+                    raise ValueError(
+                        "start_pct and end_pct must be provided when random_location is False"
+                    )
+                if not (
+                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
+                ):
+                    raise ValueError(
+                        "Invalid start_pct or end_pct. Must be between 0 and 1, with start_pct < end_pct"
+                    )
+
+                component_with_time["random_location"] = False
+                component_with_time["start_pct"] = start_pct
+                component_with_time["end_pct"] = end_pct
+        else:
+            component_with_time = component.copy()
+
+        # If shared_randomness is True or only one dimension, store a single component
+        if shared_randomness or len(dim) == 1:
+            component_with_time["dimensions"] = dim
+            component_with_time["shared_randomness"] = shared_randomness
+            self.current_class["components"][role].append(component_with_time)
+
+        # For multiple dimensions with different randomness,
+        # create separate component entries for each dimension
+        else:
+            for d in dim:
+                component_with_dim = component_with_time.copy()
+                component_with_dim["dimensions"] = [d]  # Single dimension
+                component_with_dim["shared_randomness"] = shared_randomness
+                self.current_class["components"][role].append(component_with_dim)
+
+        return self
+
     def add_feature(
         self,
         component: Dict[str, Any],
@@ -509,7 +610,57 @@ class TimeSeriesBuilder:
 
                 # Add base structure components
                 for base_def in class_def["components"]["foundation"]:
-                    base_vector = self._generate_component_vector(base_def)
+                    # Check if this foundation component has time range parameters
+                    if "random_location" in base_def:
+                        # Create a full-length vector filled with the foundation fill value
+                        base_vector = np.full(
+                            self.n_timesteps, self.foundation_fill_value
+                        )
+
+                        # Determine signal location
+                        if base_def["random_location"]:
+                            length_pct = base_def["length_pct"]
+                            signal_length = max(1, int(length_pct * self.n_timesteps))
+                            max_start = self.n_timesteps - signal_length
+                            start_idx = self.rng.randint(0, max_start + 1)
+                            end_idx = start_idx + signal_length
+                        else:
+                            start_pct = base_def["start_pct"]
+                            end_pct = base_def["end_pct"]
+                            start_idx = int(start_pct * self.n_timesteps)
+                            end_idx = int(end_pct * self.n_timesteps)
+                            # Ensure at least one timestep is selected
+                            if start_idx == end_idx:
+                                end_idx = start_idx + 1
+
+                        # Calculate the actual length of the signal segment
+                        signal_length = end_idx - start_idx
+
+                        # Prepare parameters for component generation
+                        signal_params = base_def.copy()
+                        signal_type = signal_params.pop("type")
+
+                        # Remove location parameters
+                        signal_params.pop("random_location", None)
+                        signal_params.pop("start_pct", None)
+                        signal_params.pop("end_pct", None)
+                        signal_params.pop("length_pct", None)
+                        signal_params.pop("dimensions", None)
+                        signal_params.pop("shared_randomness", None)
+
+                        # Generate the component only for the specified length
+                        signal_values = generate_component(
+                            signal_type,
+                            signal_length,  # Generate only for the segment length
+                            self.rng,
+                            **signal_params,
+                        )
+
+                        # Place the signal in the correct location
+                        base_vector[start_idx:end_idx] = signal_values
+                    else:
+                        # Generate signal for the entire time series (original behavior)
+                        base_vector = self._generate_component_vector(base_def)
 
                     # Apply to specified dimensions
                     for dim_idx in base_def["dimensions"]:
@@ -519,7 +670,55 @@ class TimeSeriesBuilder:
 
                 # Add noise components
                 for noise_def in class_def["components"]["noise"]:
-                    noise_vector = self._generate_component_vector(noise_def)
+                    # Check if this noise component has time range parameters
+                    if "random_location" in noise_def:
+                        # Create a full-length vector filled with the noise fill value
+                        noise_vector = np.full(self.n_timesteps, self.noise_fill_value)
+
+                        # Determine noise location
+                        if noise_def["random_location"]:
+                            length_pct = noise_def["length_pct"]
+                            noise_length = max(1, int(length_pct * self.n_timesteps))
+                            max_start = self.n_timesteps - noise_length
+                            start_idx = self.rng.randint(0, max_start + 1)
+                            end_idx = start_idx + noise_length
+                        else:
+                            start_pct = noise_def["start_pct"]
+                            end_pct = noise_def["end_pct"]
+                            start_idx = int(start_pct * self.n_timesteps)
+                            end_idx = int(end_pct * self.n_timesteps)
+                            # Ensure at least one timestep is selected
+                            if start_idx == end_idx:
+                                end_idx = start_idx + 1
+
+                        # Calculate the actual length of the noise segment
+                        noise_length = end_idx - start_idx
+
+                        # Prepare parameters for component generation
+                        noise_params = noise_def.copy()
+                        noise_type = noise_params.pop("type")
+
+                        # Remove location parameters
+                        noise_params.pop("random_location", None)
+                        noise_params.pop("start_pct", None)
+                        noise_params.pop("end_pct", None)
+                        noise_params.pop("length_pct", None)
+                        noise_params.pop("dimensions", None)
+                        noise_params.pop("shared_randomness", None)
+
+                        # Generate the component only for the specified length
+                        noise_values = generate_component(
+                            noise_type,
+                            noise_length,  # Generate only for the segment length
+                            self.rng,
+                            **noise_params,
+                        )
+
+                        # Place the noise in the correct location
+                        noise_vector[start_idx:end_idx] = noise_values
+                    else:
+                        # Generate noise for the entire time series (original behavior)
+                        noise_vector = self._generate_component_vector(noise_def)
 
                     # Apply to specified dimensions
                     for dim_idx in noise_def["dimensions"]:
