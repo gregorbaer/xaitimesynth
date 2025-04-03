@@ -13,12 +13,16 @@ def register_component(
 ) -> Callable:
     """Register a component function in the registry.
 
+    Adds the component to the global registry and appropriate component type sets.
+
     Args:
-        component_func: Function that creates a component.
-        component_type: Type of component ("signal", "feature", or "both").
+        component_func: Function that creates a component. When used as a decorator
+            without arguments, this will be the decorated function.
+        component_type: Type of component. Must be one of "signal", "feature", or "both".
+            Determines which registries the component is added to.
 
     Returns:
-        The original function.
+        Callable: The original function, unchanged but now registered.
     """
 
     def decorator(func):
@@ -40,15 +44,27 @@ def register_component(
 def register_component_generator(
     name: Optional[str] = None, component_type: str = "both", **default_overrides
 ) -> Callable:
-    """Decorator to register a generator function and create a component function.
+    """Register a generator function and create a component function.
 
     This decorator simplifies component creation by automatically:
     1. Creating a component definition function based on the generator
     2. Registering both in the appropriate registries
+    3. Exposing the component function in the generator's module namespace
 
     The component name is determined as follows:
     - If the 'name' parameter is provided, that exact name is used
     - Otherwise, the function's name is used, with the 'generate_' prefix removed if present
+
+    Args:
+        name: Optional custom name for the component. If not provided,
+            derives name from the generator function name.
+        component_type: Type of component. Must be one of "signal", "feature", or "both".
+            Determines which registries the component is added to.
+        **default_overrides: Override default parameter values for the component function.
+            These will replace the default values in the generator function.
+
+    Returns:
+        Callable: Decorator function that processes the generator function.
 
     Examples:
         # Basic usage - creates component named "sine_wave"
@@ -65,14 +81,6 @@ def register_component_generator(
         @register_component_generator(amplitude=2.0)
         def generate_sine_wave(n_timesteps, rng, length=None, amplitude=1.0):
             # Implementation...
-
-    Args:
-        name: Override name for the component (defaults to function name with 'generate_' prefix removed)
-        component_type: Type of component ("signal", "feature", or "both")
-        **default_overrides: Override default parameter values for the component function
-
-    Returns:
-        Decorator function
     """
 
     def decorator(generator_func: Callable) -> Callable:
@@ -96,7 +104,14 @@ def register_component_generator(
 
         # Create the component function
         def component_func(**kwargs):
-            """Create a component definition."""
+            """Create a component definition.
+
+            Args:
+                **kwargs: Component parameters to override defaults.
+
+            Returns:
+                Dict[str, Any]: Component definition dictionary with type and parameters.
+            """
             # Start with defaults
             component_def = {"type": component_name, **param_defaults}
             # Update with provided kwargs
@@ -108,10 +123,10 @@ def register_component_generator(
         component_func.__doc__ = f"""Create a {component_name} component.
         
         Args:
-            **kwargs: Component parameters.
+            **kwargs: Component parameters to override defaults.
             
         Returns:
-            Component definition dictionary.
+            Dict[str, Any]: Component definition dictionary.
         """
 
         # Register the generator function
@@ -146,8 +161,10 @@ def register_component_generator(
 def list_components() -> Dict[str, Callable]:
     """List all registered components.
 
+    Provides a copy of the complete component registry.
+
     Returns:
-        Dictionary of component names to functions.
+        Dict[str, Callable]: Dictionary mapping component names to their creation functions.
     """
     return _COMPONENT_REGISTRY.copy()
 
@@ -155,8 +172,10 @@ def list_components() -> Dict[str, Callable]:
 def list_signal_components() -> Dict[str, Callable]:
     """List components commonly used as signals.
 
+    Returns a dictionary of all components registered with the "signal" type.
+
     Returns:
-        Dictionary of signal component names to functions.
+        Dict[str, Callable]: Dictionary mapping signal component names to their creation functions.
     """
     return {name: _COMPONENT_REGISTRY[name] for name in _SIGNAL_COMPONENTS}
 
@@ -164,8 +183,10 @@ def list_signal_components() -> Dict[str, Callable]:
 def list_feature_components() -> Dict[str, Callable]:
     """List components commonly used as features.
 
+    Returns a dictionary of all components registered with the "feature" type.
+
     Returns:
-        Dictionary of feature component names to functions.
+        Dict[str, Callable]: Dictionary mapping feature component names to their creation functions.
     """
     return {name: _COMPONENT_REGISTRY[name] for name in _FEATURE_COMPONENTS}
 
@@ -173,11 +194,16 @@ def list_feature_components() -> Dict[str, Callable]:
 def get_component_parameters(component_name: str) -> Dict[str, Any]:
     """Get parameters for a component.
 
+    Retrieves the parameter names and default values for a registered component.
+
     Args:
-        component_name: Name of the component.
+        component_name: Name of the component in the registry.
 
     Returns:
-        Dictionary of parameter names to default values.
+        Dict[str, Any]: Dictionary mapping parameter names to their default values.
+
+    Raises:
+        ValueError: If the component_name is not found in the registry.
     """
     if component_name not in _COMPONENT_REGISTRY:
         raise ValueError(f"Component {component_name} not registered")

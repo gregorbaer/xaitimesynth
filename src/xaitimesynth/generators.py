@@ -9,13 +9,13 @@ def generate_constant(
     """Generate a constant signal.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        value: Constant value.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        value (float): Constant value.
         **kwargs: Additional parameters.
 
     Returns:
-        Constant signal vector.
+        np.ndarray: Constant signal vector.
     """
     return np.full(n_timesteps, value)
 
@@ -26,13 +26,13 @@ def generate_random_walk(
     """Generate a random walk signal.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        step_size: Standard deviation of random steps.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        step_size (float): Standard deviation of random steps.
         **kwargs: Additional parameters.
 
     Returns:
-        Random walk signal vector.
+        np.ndarray: Random walk signal vector.
     """
     steps = rng.normal(0, step_size, n_timesteps)
     return np.cumsum(steps)
@@ -48,14 +48,14 @@ def generate_autoregressive(
     """Generate an autoregressive signal.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        coefficients: AR coefficients.
-        sigma: Noise standard deviation.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        coefficients (List[float]): AR coefficients.
+        sigma (float): Noise standard deviation.
         **kwargs: Additional parameters.
 
     Returns:
-        Autoregressive signal vector.
+        np.ndarray: Autoregressive signal vector.
     """
     result = np.zeros(n_timesteps)
     p = len(coefficients)
@@ -82,14 +82,14 @@ def generate_gaussian(
     """Generate a Gaussian noise signal.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        mu: Mean of the Gaussian distribution.
-        sigma: Standard deviation of the Gaussian distribution.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        mu (float): Mean of the Gaussian distribution.
+        sigma (float): Standard deviation of the Gaussian distribution.
         **kwargs: Additional parameters.
 
     Returns:
-        Gaussian noise vector.
+        np.ndarray: Gaussian noise vector.
     """
     return rng.normal(mu, sigma, n_timesteps)
 
@@ -104,14 +104,14 @@ def generate_uniform(
     """Generate a uniform noise signal.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        low: Lower bound of the uniform distribution.
-        high: Upper bound of the uniform distribution.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        low (float): Lower bound of the uniform distribution.
+        high (float): Upper bound of the uniform distribution.
         **kwargs: Additional parameters.
 
     Returns:
-        Uniform noise vector.
+        np.ndarray: Uniform noise vector.
     """
     return rng.uniform(low, high, n_timesteps)
 
@@ -126,14 +126,14 @@ def generate_seasonal(
     """Generate a seasonal signal.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        period: Length of seasonal period.
-        amplitude: Amplitude of seasonal pattern.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        period (int): Length of seasonal period.
+        amplitude (float): Amplitude of seasonal pattern.
         **kwargs: Additional parameters.
 
     Returns:
-        Seasonal signal vector.
+        np.ndarray: Seasonal signal vector.
     """
     t = np.arange(n_timesteps)
     return amplitude * np.sin(2 * np.pi * t / period)
@@ -150,15 +150,15 @@ def generate_shapelet(
     """Generate a shapelet feature.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of feature in timesteps.
-        scale: Scale of the shapelet pattern.
-        pattern: Custom pattern values. If None, generate a Gaussian bump.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (int): Length of feature in timesteps.
+        scale (float): Scale of the shapelet pattern.
+        pattern (Optional[np.ndarray]): Custom pattern values. If None, generate a Gaussian bump.
         **kwargs: Additional parameters.
 
     Returns:
-        Shapelet feature vector.
+        np.ndarray: Shapelet feature vector.
     """
     if pattern is not None:
         # Ensure pattern length matches feature length
@@ -184,14 +184,14 @@ def generate_level_change(
     """Generate a level change feature.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of feature in timesteps.
-        amplitude: Amplitude of the level change.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (int): Length of feature in timesteps.
+        amplitude (float): Amplitude of the level change.
         **kwargs: Additional parameters.
 
     Returns:
-        Level change feature vector.
+        np.ndarray: Level change feature vector.
     """
     return np.full(length, amplitude)
 
@@ -206,14 +206,14 @@ def generate_trend(
     """Generate a trend feature.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of feature in timesteps.
-        slope: Slope of the trend.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (int): Length of feature in timesteps.
+        slope (float): Slope of the trend.
         **kwargs: Additional parameters.
 
     Returns:
-        Trend feature vector.
+        np.ndarray: Trend feature vector.
     """
     t = np.arange(length)
     return slope * t
@@ -230,15 +230,15 @@ def generate_peak(
     """Generate a peak feature.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of feature in timesteps.
-        amplitude: Amplitude of the peak.
-        width: Width of the peak in timesteps.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (int): Length of feature in timesteps.
+        amplitude (float): Amplitude of the peak.
+        width (int): Width of the peak in timesteps.
         **kwargs: Additional parameters.
 
     Returns:
-        Peak feature vector.
+        np.ndarray: Peak feature vector.
     """
     result = np.zeros(length)
 
@@ -265,15 +265,15 @@ def generate_trough(
     """Generate a trough feature.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of feature in timesteps.
-        amplitude: Amplitude of the trough.
-        width: Width of the trough in timesteps.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (int): Length of feature in timesteps.
+        amplitude (float): Amplitude of the trough.
+        width (int): Width of the trough in timesteps.
         **kwargs: Additional parameters.
 
     Returns:
-        Trough feature vector.
+        np.ndarray: Trough feature vector.
     """
     return generate_peak(n_timesteps, rng, length, -amplitude, width, **kwargs)
 
@@ -289,15 +289,15 @@ def generate_time_frequency(
     """Generate a time frequency feature.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of feature in timesteps.
-        frequency: Frequency of the pattern.
-        amplitude: Amplitude of the pattern.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (int): Length of feature in timesteps.
+        frequency (float): Frequency of the pattern.
+        amplitude (float): Amplitude of the pattern.
         **kwargs: Additional parameters.
 
     Returns:
-        Time frequency feature vector.
+        np.ndarray: Time frequency feature vector.
     """
     t = np.arange(length)
     return amplitude * np.sin(2 * np.pi * frequency * t / n_timesteps)
@@ -314,16 +314,16 @@ def generate_manual(
     """Generate a manual component from values or a generator function.
 
     Args:
-        n_timesteps: Length of time series.
-        rng: Random number generator.
-        length: Length of component in timesteps. If None, uses n_timesteps.
-        values: Array of values for the component.
-        generator: Function that generates the component.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of component in timesteps. If None, uses n_timesteps.
+        values (Optional[np.ndarray]): Array of values for the component.
+        generator (Optional[Callable]): Function that generates the component.
             Should accept length, rng, and **kwargs.
         **kwargs: Additional parameters.
 
     Returns:
-        Manual component vector.
+        np.ndarray: Manual component vector.
     """
     # If length is not provided, use the entire time series length
     if length is None:
@@ -368,58 +368,42 @@ def generate_ecg_like(
     P-QRS-T wave pattern seen in normal cardiac electrical activity. This function allows
     customization of various ECG components to model different cardiac conditions.
 
-    Note: This simulation is for illustrative and testing purposes only and is not intended
-    to replicate actual medical data. It should not be used for clinical decision making
-    or medical research.
+    Note:
+        This simulation is for illustrative and testing purposes only and is not intended
+        to replicate actual medical data. It should not be used for clinical decision making
+        or medical research.
 
     Args:
-        n_timesteps: int
-            Total length of the time series in samples.
-        rng: np.random.RandomState
-            Random number generator instance for reproducibility.
-        length: Optional[int]
-            Length of feature in timesteps. If None, uses n_timesteps.
-        heart_rate: float
-            Heart rate in beats per minute (BPM). Normal resting is 60-100 BPM.
+        n_timesteps (int): Total length of the time series in samples.
+        rng (np.random.RandomState): Random number generator instance for reproducibility.
+        length (Optional[int]): Length of feature in timesteps. If None, uses n_timesteps.
+        heart_rate (float): Heart rate in beats per minute (BPM). Normal resting is 60-100 BPM.
             Default is 70.0 (typical resting adult).
-        p_amplitude: float
-            Amplitude of P wave in millivolts. Represents atrial depolarization.
+        p_amplitude (float): Amplitude of P wave in millivolts. Represents atrial depolarization.
             Default is 0.15 (typical range 0.1-0.2 mV).
-        qrs_amplitude: float
-            Amplitude of the QRS complex in millivolts. Represents ventricular depolarization.
+        qrs_amplitude (float): Amplitude of the QRS complex in millivolts. Represents ventricular depolarization.
             Default is 1.0 (typical range 0.8-1.2 mV).
-        t_amplitude: float
-            Amplitude of T wave in millivolts. Represents ventricular repolarization.
+        t_amplitude (float): Amplitude of T wave in millivolts. Represents ventricular repolarization.
             Default is 0.3 (typical range 0.3-0.4 mV).
-        p_width: float
-            Width/duration of P wave in seconds.
+        p_width (float): Width/duration of P wave in seconds.
             Default is 0.09 (typical range 0.08-0.1 s).
-        qrs_width: float
-            Width/duration of QRS complex in seconds.
+        qrs_width (float): Width/duration of QRS complex in seconds.
             Default is 0.08 (typical range 0.06-0.1 s).
-        t_width: float
-            Width/duration of T wave in seconds.
+        t_width (float): Width/duration of T wave in seconds.
             Default is 0.16 (typical range 0.16-0.2 s).
-        pr_interval: float
-            Interval between start of P wave and start of QRS complex in seconds.
+        pr_interval (float): Interval between start of P wave and start of QRS complex in seconds.
             Default is 0.16 (typical range 0.12-0.2 s).
-        st_segment: float
-            Duration of the ST segment between S wave and T wave in seconds.
+        st_segment (float): Duration of the ST segment between S wave and T wave in seconds.
             Default is 0.1 (typical range 0.08-0.12 s).
-        noise_level: float
-            Amplitude of random noise in millivolts, simulating measurement noise.
+        noise_level (float): Amplitude of random noise in millivolts, simulating measurement noise.
             Default is 0.03.
-        sampling_rate: float
-            Sampling rate in Hz (samples per second).
+        sampling_rate (float): Sampling rate in Hz (samples per second).
             Default is 250.0 (clinical standard).
-        hr_variability: float
-            Heart rate variability factor (0-1). Higher values mean more variable beat intervals.
+        hr_variability (float): Heart rate variability factor (0-1). Higher values mean more variable beat intervals.
             Default is 0.05.
-        baseline_wander: float
-            Magnitude of low-frequency baseline wandering in millivolts.
+        baseline_wander (float): Magnitude of low-frequency baseline wandering in millivolts.
             Default is 0.02.
-        **kwargs:
-            Additional parameters.
+        **kwargs: Additional parameters.
 
     Returns:
         np.ndarray: Synthetic ECG signal of specified length.
@@ -578,13 +562,13 @@ def generate_component(
     """Generate a component vector.
 
     Args:
-        component_type: Type of component.
-        n_timesteps: Length of time series.
-        rng: Random number generator.
+        component_type (str): Type of component.
+        n_timesteps (int): Length of time series.
+        rng (np.random.RandomState): Random number generator.
         **kwargs: Component parameters.
 
     Returns:
-        Component vector.
+        np.ndarray: Component vector.
     """
     if component_type not in GENERATOR_FUNCS:
         raise ValueError(f"Unknown component type: {component_type}")
