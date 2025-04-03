@@ -114,7 +114,9 @@ def plot_signal(
     return p
 
 
-def create_visualization_data(dataset, sample_indices=None, components_to_include=None):
+def create_visualization_data(
+    dataset, sample_indices=None, components_to_include=None, dimensions=None
+):
     """Create data for visualization with lets_plot.
 
     Args:
@@ -123,6 +125,7 @@ def create_visualization_data(dataset, sample_indices=None, components_to_includ
             If None, use first sample of each class.
         components_to_include: List of components to include. If None, include all.
             Default components: ["aggregated", "features", "foundation", "noise"]
+        dimensions: List of dimensions to include. If None, include all dimensions.
 
     Returns:
         Prepared DataFrame for visualization.
@@ -139,7 +142,11 @@ def create_visualization_data(dataset, sample_indices=None, components_to_includ
     # Use the to_df method to get the data in the right format
     builder = TimeSeriesBuilder()
     df = builder.to_df(
-        dataset, samples=indices, components=components_to_include, format_classes=True
+        dataset,
+        samples=indices,
+        components=components_to_include,
+        dimensions=dimensions,
+        format_classes=True,
     )
 
     return df
@@ -273,6 +280,7 @@ def create_ts_visualization(
     dataset,
     sample_indices=None,
     components=None,
+    dimensions=None,
     show_indicators=True,
     line_color="black",
     line_size=1.5,
@@ -294,6 +302,8 @@ def create_ts_visualization(
             If None, use first sample of each class.
         components: List of components to include. Can be used to exclude certain components.
             Default: ["aggregated", "features", "foundation", "noise"]
+        dimensions: List of dimensions to include. If None, include all dimensions.
+            For multivariate time series, this allows selecting specific dimensions.
         show_indicators: Whether to show feature indicators.
         line_color: Color of the time series lines ("black" or "auto" for colored by class).
         line_size: Size of the time series lines.
@@ -312,20 +322,24 @@ def create_ts_visualization(
         panel_height: Height of each panel in pixels.
 
     Returns:
-        lets_plot visualization.
+        lets_plot visualization or list of visualizations for multivariate data.
     """
     # Default component order - use internal names
     default_components = ["aggregated", "features", "foundation", "noise"]
     components_to_use = components if components is not None else default_components
 
     # Prepare data for visualization
-    df = create_visualization_data(dataset, sample_indices, components_to_use)
+    df = create_visualization_data(
+        dataset, sample_indices, components_to_use, dimensions
+    )
 
     # If no data, return empty plot
     assert len(df) > 0, "No data to display"
 
+    # Determine if we're dealing with a multivariate time series
+    is_multivariate = len(df["dimension"].unique()) > 1
+
     # Capitalize component names for display
-    # First get the current categories to maintain order
     current_categories = df["component"].cat.categories
     component_display_names = [c.capitalize() for c in current_categories]
     df = df.copy()
@@ -348,6 +362,28 @@ def create_ts_visualization(
                 # Make sure component names are capitalized
                 rectangles["component"] = rectangles["component"].str.capitalize()
 
+    # For multivariate time series, use a different approach
+    if is_multivariate:
+        # Get dimensions from the DataFrame
+        available_dims = sorted(df["dimension"].unique())
+
+        # Simplify visualizations by creating per-dimension plots
+        result = plot_multivariate_ts_by_dimension(
+            df,
+            rectangles,
+            line_color=line_color,
+            line_size=line_size,
+            hline_intercept=hline_intercept,
+            rect_fill=rect_fill,
+            rect_alpha=rect_alpha,
+            free_y=free_y,
+            panel_width=panel_width,
+            panel_height=panel_height,
+        )
+
+        return result
+
+    # For univariate case, use original approach
     # Calculate global y-limits
     y_min = df["value"].min()
     y_max = df["value"].max()
@@ -355,7 +391,7 @@ def create_ts_visualization(
     y_min = float(y_min - padding)
     y_max = float(y_max + padding)
 
-    # Calculate plot dimensions based on the number of panels
+    # Calculate plot dimensions
     n_components = len(df["component"].unique())
     n_classes = len(df["class"].unique())
     total_width = panel_width * (
@@ -380,7 +416,7 @@ def create_ts_visualization(
     if hline_intercept is not None:
         p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
 
-    # Add the rectangles for feature regions
+    # Add rectangles for feature regions
     if show_indicators and rectangles is not None:
         # Set rectangle height to full panel height
         rectangles = rectangles.copy()
@@ -418,9 +454,6 @@ def create_ts_visualization(
 
     # Use regular facet grid with proper ordering
     scales = "free_y" if free_y else "fixed"
-
-    # Ensure we use proper ordering for components and classes
-    # The x_order and y_order parameters force the order of factors
     p = p + facet_grid(**facet_order, scales=scales, x_order=x_order, y_order=y_order)
 
     if not free_y:
@@ -430,6 +463,322 @@ def create_ts_visualization(
     p = p + ggsize(total_width, total_height)
 
     return p
+
+
+def plot_multivariate_ts_by_dimension(
+    df,
+    rectangles=None,
+    line_color="black",
+    line_size=1.5,
+    hline_intercept=0,
+    rect_fill="red",
+    rect_alpha=0.25,
+    free_y=False,
+    panel_width=250,
+    panel_height=150,
+):
+    """Plot multivariate time series with dimensions as separate facet grids.
+
+    This function visualizes multivariate time series by creating facet grids
+    that clearly separate dimensions.
+
+    Args:
+        df: DataFrame with time series data, already processed by create_visualization_data.
+        rectangles: DataFrame with rectangle data for feature indicators.
+        line_color: Color of the time series lines.
+        line_size: Size of the time series lines.
+        hline_intercept: Y-intercept for horizontal line.
+        rect_fill: Fill color for feature rectangles.
+        rect_alpha: Alpha transparency for feature rectangles.
+        free_y: Whether to use free y scales in facets.
+        panel_width: Width of each panel in pixels.
+        panel_height: Height of each panel in pixels.
+
+    Returns:
+        lets_plot visualization organized by dimensions.
+    """
+    # Make a clean copy to avoid modifying the original
+    df = df.copy()
+
+    # Get unique dimensions and create a label for plotting
+    dimensions = sorted(df["dimension"].unique())
+
+    # Create separate plots for each dimension
+    plots = []
+
+    for dim in dimensions:
+        # Filter data for this dimension
+        dim_df = df[df["dimension"] == dim].copy()
+
+        # Calculate y-limits for this dimension
+        y_min = dim_df["value"].min()
+        y_max = dim_df["value"].max()
+        padding = (y_max - y_min) * 0.15 if y_max > y_min else 0.1
+        y_min = float(y_min - padding)
+        y_max = float(y_max + padding)
+
+        # Prepare rectangles for this dimension if they exist
+        dim_rects = None
+        if rectangles is not None and len(rectangles) > 0:
+            dim_rects = rectangles.copy()
+            dim_rects["ymin"] = y_min
+            dim_rects["ymax"] = y_max
+
+        # Start building the plot
+        if line_color == "auto":
+            p = ggplot(dim_df, aes(x="time", y="value", color=as_discrete("class")))
+        else:
+            p = ggplot(dim_df, aes(x="time", y="value"))
+
+        # Add horizontal reference line if specified
+        if hline_intercept is not None:
+            p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
+
+        # Add rectangles for feature indicators if available
+        if dim_rects is not None:
+            if line_color == "auto":
+                p = p + geom_rect(
+                    data=dim_rects,
+                    mapping=aes(
+                        xmin="xmin",
+                        xmax="xmax",
+                        ymin="ymin",
+                        ymax="ymax",
+                        fill="feature",
+                    ),
+                    alpha=rect_alpha,
+                    size=0.2,
+                    color="grey",
+                )
+            else:
+                p = p + geom_rect(
+                    data=dim_rects,
+                    mapping=aes(xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax"),
+                    fill=rect_fill,
+                    alpha=rect_alpha,
+                    size=0.2,
+                    color="grey",
+                )
+
+        # Add the time series lines
+        if line_color == "auto":
+            p = p + geom_line(size=line_size)
+        else:
+            p = p + geom_line(size=line_size, color=line_color)
+
+        # Use a simple facet grid with class and component
+        p = p + facet_grid(
+            y="class", x="component", scales="free_y" if free_y else "fixed"
+        )
+
+        if not free_y:
+            p = p + scale_y_continuous(limits=[y_min, y_max])
+
+        # Add title and labels
+        p = p + labs(title=f"Dimension {dim}", x="Time Steps", y="Value")
+
+        # Calculate plot dimensions
+        n_components = len(dim_df["component"].unique())
+        n_classes = len(dim_df["class"].unique())
+        p = p + ggsize(panel_width * n_components, panel_height * n_classes)
+
+        plots.append(p)
+
+    # Return the first plot if only one dimension
+    if len(plots) == 1:
+        return plots[0]
+
+    # For multiple dimensions, return all plots
+    return plots
+
+
+def plot_multivariate_ts(
+    dataset,
+    sample_indices=None,
+    components=None,
+    dimensions=None,
+    show_indicators=True,
+    line_color="black",
+    line_size=1.5,
+    hline_intercept=0,
+    rect_fill="red",
+    rect_alpha=0.25,
+    free_y=False,
+    panel_width=250,
+    panel_height=150,
+):
+    """Plot multivariate time series with separate facet grids for each class.
+
+    This function is useful when the number of dimensions is too large for a single
+    facet grid. It creates a separate grid for each class.
+
+    Args:
+        dataset: Dataset containing time series data and components.
+        sample_indices: Dictionary mapping class labels to sample indices.
+            If None, use first sample of each class.
+        components: List of components to include.
+            Default: ["aggregated", "features", "foundation", "noise"]
+        dimensions: List of dimensions to include. If None, include all dimensions.
+        show_indicators: Whether to show feature indicators.
+        line_color: Color of the time series lines.
+        line_size: Size of the time series lines.
+        hline_intercept: Y-intercept for horizontal line.
+        rect_fill: Fill color for feature rectangles.
+        rect_alpha: Alpha transparency for feature rectangles.
+        free_y: Whether to use free y scales in facets.
+        panel_width: Width of each panel in pixels.
+        panel_height: Height of each panel in pixels.
+
+    Returns:
+        List of lets_plot visualizations, one per class.
+    """
+    # Default components
+    default_components = ["aggregated", "features", "foundation", "noise"]
+    components_to_use = components if components is not None else default_components
+
+    # Determine sample indices if not provided
+    if sample_indices is None:
+        sample_indices = {}
+        for class_label in np.unique(dataset["y"]):
+            sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
+
+    # Get all data first
+    df = create_visualization_data(
+        dataset, sample_indices, components_to_use, dimensions
+    )
+
+    # Create feature rectangles if needed
+    rectangles = None
+    if show_indicators:
+        rectangles = create_feature_rectangles(
+            dataset, sample_indices, components_to_use
+        )
+
+    # Split by class
+    plots = []
+    for class_name in df["class"].unique():
+        # Filter data for this class
+        class_df = df[df["class"] == class_name].copy()
+
+        # Add dimension display
+        class_df["dim_display"] = "Dim " + class_df["dimension"].astype(str)
+        class_df["dim_display"] = pd.Categorical(
+            class_df["dim_display"],
+            categories=[
+                "Dim " + str(d) for d in sorted(class_df["dimension"].unique())
+            ],
+            ordered=True,
+        )
+
+        # Calculate y limits for this class
+        y_min = class_df["value"].min()
+        y_max = class_df["value"].max()
+        padding = (y_max - y_min) * 0.15
+        y_min = float(y_min - padding)
+        y_max = float(y_max + padding)
+
+        # Capitalize component names for display
+        current_categories = (
+            class_df["component"].cat.categories
+            if hasattr(class_df["component"], "cat")
+            else class_df["component"].unique()
+        )
+        component_display_names = [c.capitalize() for c in current_categories]
+        class_df["component"] = pd.Categorical(
+            [c.capitalize() for c in class_df["component"].astype(str)],
+            categories=component_display_names,
+            ordered=True,
+        )
+
+        # Calculate plot dimensions
+        n_components = len(class_df["component"].unique())
+        n_dimensions = len(class_df["dimension"].unique())
+        total_width = panel_width * n_components
+        total_height = panel_height * n_dimensions
+
+        # Filter rectangles for this class if they exist
+        class_rectangles = None
+        if rectangles is not None:
+            class_rectangles = rectangles[rectangles["class"] == class_name].copy()
+            if len(class_rectangles) > 0:
+                class_rectangles["ymin"] = y_min
+                class_rectangles["ymax"] = y_max
+
+                # Add dimension display if it's missing and there are _dim markers in feature names
+                if "dim_display" not in class_rectangles.columns:
+
+                    def extract_dim(feature_name):
+                        if "_dim" in str(feature_name):
+                            parts = str(feature_name).split("_dim")
+                            return "Dim " + parts[-1]
+                        return "Dim 0"  # Default dimension
+
+                    class_rectangles["dim_display"] = class_rectangles["feature"].apply(
+                        extract_dim
+                    )
+
+        # Build plot for this class
+        if line_color == "auto":
+            p = ggplot(
+                class_df, aes(x="time", y="value", color=as_discrete("component"))
+            )
+        else:
+            p = ggplot(class_df, aes(x="time", y="value"))
+
+        if hline_intercept is not None:
+            p = p + geom_hline(yintercept=0, linetype="dashed", color="gray")
+
+        # Add rectangles if available
+        if (
+            show_indicators
+            and class_rectangles is not None
+            and len(class_rectangles) > 0
+        ):
+            if line_color == "auto":
+                p = p + geom_rect(
+                    data=class_rectangles,
+                    mapping=aes(
+                        xmin="xmin",
+                        xmax="xmax",
+                        ymin="ymin",
+                        ymax="ymax",
+                        fill="feature",
+                    ),
+                    alpha=rect_alpha,
+                    size=0.2,
+                    color="grey",
+                )
+            else:
+                p = p + geom_rect(
+                    data=class_rectangles,
+                    mapping=aes(xmin="xmin", xmax="xmax", ymin="ymin", ymax="ymax"),
+                    fill=rect_fill,
+                    alpha=rect_alpha,
+                    size=0.2,
+                    color="grey",
+                )
+
+        # Add lines
+        if line_color == "auto":
+            p = p + geom_line(size=line_size)
+        else:
+            p = p + geom_line(size=line_size, color=line_color)
+
+        # Create facet grid with dimensions as rows and components as columns
+        p = p + facet_grid(
+            y="dim_display", x="component", scales="free_y" if free_y else "fixed"
+        )
+
+        if not free_y:
+            p = p + scale_y_continuous(limits=[y_min, y_max])
+
+        p = p + labs(title=class_name, x="Time Steps", y="Value")
+        p = p + ggsize(total_width, total_height)
+
+        plots.append(p)
+
+    # Return the list of plots, one per class
+    return plots
 
 
 def plot_sample(
