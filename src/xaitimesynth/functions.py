@@ -45,7 +45,7 @@ class SignalAdder:
         Returns:
             The builder for method chaining.
         """
-        return builder.add_signal_component(
+        return builder.add_signal_segment(
             self.component,
             role=self.role,
             start_pct=self.start_pct,

@@ -237,7 +237,7 @@ class TimeSeriesBuilder:
 
         return self
 
-    def add_signal_component(
+    def add_signal_segment(
         self,
         component: Dict[str, Any],
         role: str = "foundation",
@@ -249,7 +249,9 @@ class TimeSeriesBuilder:
         random_location: bool = False,
         shared_location: bool = True,
     ) -> "TimeSeriesBuilder":
-        """Add a signal component to the current class.
+        """Add a signal component to the current class for a segment of the time series.
+
+        Use this instead of add_signal() when you want to specify a time range for the signal.
 
         Signal components can be either foundation or noise. Foundation components form the
         base structure of the time series, while noise components add random variations.
@@ -326,19 +328,21 @@ class TimeSeriesBuilder:
         else:
             component_with_time = component.copy()
 
-        # If shared_randomness is True or only one dimension, store a single component
-        if shared_randomness or len(dim) == 1:
+        # Add dimensions and randomness settings to a single component
+        # when using shared location/randomness
+        if shared_location and random_location or shared_randomness or len(dim) == 1:
             component_with_time["dimensions"] = dim
             component_with_time["shared_randomness"] = shared_randomness
+            component_with_time["shared_location"] = shared_location
             self.current_class["components"][role].append(component_with_time)
-
-        # For multiple dimensions with different randomness,
-        # create separate component entries for each dimension
         else:
+            # For multiple dimensions without shared location/randomness,
+            # create separate component entries for each dimension
             for d in dim:
                 component_with_dim = component_with_time.copy()
                 component_with_dim["dimensions"] = [d]  # Single dimension
                 component_with_dim["shared_randomness"] = shared_randomness
+                component_with_dim["shared_location"] = shared_location
                 self.current_class["components"][role].append(component_with_dim)
 
         return self
@@ -417,15 +421,14 @@ class TimeSeriesBuilder:
             feature_def["start_pct"] = start_pct
             feature_def["end_pct"] = end_pct
 
-        # If shared_randomness is True or only one dimension, add a single feature
-        if shared_randomness or len(dim) == 1:
+        # Add to feature collection, ensuring the shared location logic is properly observed
+        if shared_location and random_location or shared_randomness or len(dim) == 1:
             feature_def["dimensions"] = dim
             feature_def["shared_location"] = shared_location
             feature_def["shared_randomness"] = shared_randomness
             self.current_class["components"]["features"].append(feature_def)
-        # For multiple dimensions with different randomness,
-        # create separate feature entries for each dimension
         else:
+            # Create separate feature entries for each dimension when not sharing
             for d in dim:
                 feature_single_dim = feature_def.copy()
                 feature_single_dim["dimensions"] = [d]  # Single dimension
@@ -470,7 +473,10 @@ class TimeSeriesBuilder:
         )
 
     def _generate_feature_vector(
-        self, feature_def: Dict[str, Any], dim_index: Optional[int] = None
+        self,
+        feature_def: Dict[str, Any],
+        dim_index: Optional[int] = None,
+        shared_location_cache: Optional[Tuple[int, int]] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Generate a feature vector and its corresponding mask.
 
@@ -482,6 +488,8 @@ class TimeSeriesBuilder:
                 location parameters, and generator parameters.
             dim_index (Optional[int]): The index in the dimensions list to use for location
                 determination. Only used when shared_location is False.
+            shared_location_cache (Optional[Tuple[int, int]]): Pre-calculated start and end
+                indices for a shared location. Used to ensure consistency across dimensions.
 
         Returns:
             Tuple[np.ndarray, np.ndarray]: Tuple containing:
@@ -494,22 +502,26 @@ class TimeSeriesBuilder:
 
         # Determine feature location
         if feature_def["random_location"]:
-            length_pct = feature_def["length_pct"]
-            feature_length = max(1, int(length_pct * self.n_timesteps))
-
-            # Generate random start position
-            # If dim_index is provided and shared_location is False, use different
-            # random locations for each dimension
-            if dim_index is not None and not feature_def["shared_location"]:
-                # Use dim_index to get a different random seed for each dimension
-                dim_rng = np.random.RandomState(self.rng.randint(0, 2**32 - 1))
-                max_start = self.n_timesteps - feature_length
-                start_idx = dim_rng.randint(0, max_start + 1)
+            if shared_location_cache is not None:
+                # Use the cached shared location
+                start_idx, end_idx = shared_location_cache
             else:
-                max_start = self.n_timesteps - feature_length
-                start_idx = self.rng.randint(0, max_start + 1)
+                length_pct = feature_def["length_pct"]
+                feature_length = max(1, int(length_pct * self.n_timesteps))
 
-            end_idx = start_idx + feature_length
+                # Generate random start position
+                # If dim_index is provided and shared_location is False, use different
+                # random locations for each dimension
+                if dim_index is not None and not feature_def["shared_location"]:
+                    # Use dim_index to get a different random seed for each dimension
+                    dim_rng = np.random.RandomState(self.rng.randint(0, 2**32 - 1))
+                    max_start = self.n_timesteps - feature_length
+                    start_idx = dim_rng.randint(0, max_start + 1)
+                else:
+                    max_start = self.n_timesteps - feature_length
+                    start_idx = self.rng.randint(0, max_start + 1)
+
+                end_idx = start_idx + feature_length
         else:
             start_pct = feature_def["start_pct"]
             end_pct = feature_def["end_pct"]
@@ -535,6 +547,7 @@ class TimeSeriesBuilder:
         feature_params.pop("length_pct", None)
         feature_params.pop("dimensions", None)
         feature_params.pop("shared_location", None)
+        feature_params.pop("shared_randomness", None)
 
         # Generate the component for the feature length
         feature_length = end_idx - start_idx
@@ -834,12 +847,30 @@ class TimeSeriesBuilder:
                 ):
                     # For each dimension in the feature
                     feature_dims = feature_def["dimensions"]
+
+                    # Generate a shared random location once if needed
+                    shared_location_cache = None
+                    if feature_def.get("random_location", False) and feature_def.get(
+                        "shared_location", True
+                    ):
+                        # Pre-calculate the shared location to ensure it's the same across dimensions
+                        length_pct = feature_def["length_pct"]
+                        feature_length = max(1, int(length_pct * self.n_timesteps))
+                        max_start = self.n_timesteps - feature_length
+                        shared_start_idx = self.rng.randint(0, max_start + 1)
+                        shared_end_idx = shared_start_idx + feature_length
+                        shared_location_cache = (shared_start_idx, shared_end_idx)
+
                     for i, dim_idx in enumerate(feature_dims):
-                        # Generate feature vector - if shared_location is True, all dimensions
-                        # will use the same location, otherwise pass the dimension index
-                        dim_index = None if feature_def["shared_location"] else i
+                        # Generate feature vector - if shared_location is True and we have a cached location,
+                        # pass it; otherwise pass the dimension index for unique locations
+                        dim_index = (
+                            None
+                            if feature_def.get("shared_location", True)
+                            else dim_idx
+                        )
                         feature, mask = self._generate_feature_vector(
-                            feature_def, dim_index
+                            feature_def, dim_index, shared_location_cache
                         )
 
                         # Add to aggregated series for this dimension
