@@ -152,7 +152,9 @@ def create_visualization_data(
     return df
 
 
-def create_feature_rectangles(dataset, sample_indices=None, components_to_include=None):
+def create_feature_rectangles(
+    dataset, sample_indices=None, components_to_include=None, dimensions=None
+):
     """Create rectangle data for feature visualization.
 
     Args:
@@ -160,6 +162,8 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
         sample_indices: Dictionary mapping class labels to sample indices.
             If None, use first sample of each class.
         components_to_include: List of components to include. If None, include all.
+        dimensions: List of dimensions to include or an integer for a single dimension.
+            If None, include all dimensions.
 
     Returns:
         DataFrame with rectangle coordinates for feature regions.
@@ -174,6 +178,10 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
         for class_label in np.unique(dataset["y"]):
             sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
 
+    # Convert dimensions to list if it's a single value
+    if dimensions is not None and not isinstance(dimensions, list):
+        dimensions = [dimensions]
+
     rectangles = []
 
     # Process each class and sample
@@ -183,6 +191,25 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
             for key, mask in dataset["feature_masks"].items():
                 # Check if mask is for this class
                 if f"class_{class_label}_" in key:
+                    # Extract dimension from feature name if present
+                    dim_match = None
+                    if "_dim" in key:
+                        # Try to extract dimension number
+                        try:
+                            dim_parts = key.split("_dim")
+                            dim_num = int(dim_parts[-1])
+                            dim_match = dim_num
+                        except (ValueError, IndexError):
+                            pass
+
+                    # Skip if dimensions are specified and this feature is for a different dimension
+                    if (
+                        dimensions is not None
+                        and dim_match is not None
+                        and dim_match not in dimensions
+                    ):
+                        continue
+
                     sample_mask = mask[idx]
 
                     # Find contiguous regions in the mask
@@ -198,15 +225,19 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
 
                         # Create rectangle for each region
                         for start, end in zip(start_indices, end_indices):
-                            rectangles.append(
-                                {
-                                    "class": f"Class {class_label}",
-                                    "component": "aggregated",
-                                    "feature": feature_name,
-                                    "xmin": float(start),
-                                    "xmax": float(end),
-                                }
-                            )
+                            rect = {
+                                "class": f"Class {class_label}",
+                                "component": "aggregated",
+                                "feature": feature_name,
+                                "xmin": float(start),
+                                "xmax": float(end),
+                            }
+
+                            # Add dimension information if available
+                            if dim_match is not None:
+                                rect["dim"] = dim_match
+
+                            rectangles.append(rect)
 
         # If no rectangles found, try to extract from components
         if not any(r["class"] == f"Class {class_label}" for r in rectangles):
@@ -216,6 +247,24 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
                 # Try feature masks first
                 if hasattr(comp, "feature_masks") and comp.feature_masks:
                     for feature_name, feature_mask in comp.feature_masks.items():
+                        # Extract dimension if present in the feature name
+                        dim_match = None
+                        if "_dim" in feature_name:
+                            try:
+                                dim_parts = feature_name.split("_dim")
+                                dim_num = int(dim_parts[-1])
+                                dim_match = dim_num
+                            except (ValueError, IndexError):
+                                pass
+
+                        # Skip if dimensions are specified and this feature is for a different dimension
+                        if (
+                            dimensions is not None
+                            and dim_match is not None
+                            and dim_match not in dimensions
+                        ):
+                            continue
+
                         if np.any(feature_mask):
                             changes = np.diff(
                                 np.concatenate([[False], feature_mask, [False]]).astype(
@@ -226,20 +275,42 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
                             end_indices = np.where(changes == -1)[0]
 
                             for start, end in zip(start_indices, end_indices):
-                                rectangles.append(
-                                    {
-                                        "class": f"Class {class_label}",
-                                        "component": "aggregated",  # Capitalize for visualization display
-                                        "feature": feature_name,
-                                        "xmin": float(start),
-                                        "xmax": float(end),
-                                    }
-                                )
+                                rect = {
+                                    "class": f"Class {class_label}",
+                                    "component": "aggregated",
+                                    "feature": feature_name,
+                                    "xmin": float(start),
+                                    "xmax": float(end),
+                                }
+
+                                # Add dimension information if available
+                                if dim_match is not None:
+                                    rect["dim"] = dim_match
+
+                                rectangles.append(rect)
 
                 # If still no rectangles, try feature values
                 if not any(r["class"] == f"Class {class_label}" for r in rectangles):
                     if hasattr(comp, "features") and comp.features:
                         for feature_name, feature_values in comp.features.items():
+                            # Extract dimension if present in the feature name
+                            dim_match = None
+                            if "_dim" in feature_name:
+                                try:
+                                    dim_parts = feature_name.split("_dim")
+                                    dim_num = int(dim_parts[-1])
+                                    dim_match = dim_num
+                                except (ValueError, IndexError):
+                                    pass
+
+                            # Skip if dimensions are specified and this feature is for a different dimension
+                            if (
+                                dimensions is not None
+                                and dim_match is not None
+                                and dim_match not in dimensions
+                            ):
+                                continue
+
                             # Find where the feature has non-zero values
                             non_zero = np.abs(feature_values) > 1e-6
                             if np.any(non_zero):
@@ -252,15 +323,19 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
                                 end_indices = np.where(changes == -1)[0]
 
                                 for start, end in zip(start_indices, end_indices):
-                                    rectangles.append(
-                                        {
-                                            "class": f"Class {class_label}",
-                                            "component": "Aggregated",  # Capitalize for visualization display
-                                            "feature": feature_name,
-                                            "xmin": float(start),
-                                            "xmax": float(end),
-                                        }
-                                    )
+                                    rect = {
+                                        "class": f"Class {class_label}",
+                                        "component": "Aggregated",
+                                        "feature": feature_name,
+                                        "xmin": float(start),
+                                        "xmax": float(end),
+                                    }
+
+                                    # Add dimension information if available
+                                    if dim_match is not None:
+                                        rect["dim"] = dim_match
+
+                                    rectangles.append(rect)
 
     if not rectangles:
         return None
@@ -276,6 +351,8 @@ def create_feature_rectangles(dataset, sample_indices=None, components_to_includ
     return rect_df
 
 
+# TODO: fix rectangles creation for multivariate TS
+# currently, it uses rectangles over all feature dimensions, but I want them per dimension of the time series
 def create_ts_visualization(
     dataset,
     sample_indices=None,
@@ -349,11 +426,42 @@ def create_ts_visualization(
         ordered=True,
     )
 
+    # For multivariate time series, handle rectangles per dimension
+    if is_multivariate and show_indicators:
+        # For multivariate case, we'll create rectangles that include dimension information
+        rectangles = create_feature_rectangles(
+            dataset, sample_indices, components_to_use
+        )
+
+        # Also capitalize component names in rectangles if they exist
+        if rectangles is not None:
+            rectangles = rectangles.copy()
+            if "component" in rectangles.columns:
+                # Make sure component names are capitalized
+                rectangles["component"] = rectangles["component"].str.capitalize()
+
+        # Now call the multivariate plot function with the rectangles
+        result = plot_multivariate_ts_by_dimension(
+            df,
+            rectangles,
+            line_color=line_color,
+            line_size=line_size,
+            hline_intercept=hline_intercept,
+            rect_fill=rect_fill,
+            rect_alpha=rect_alpha,
+            free_y=free_y,
+            panel_width=panel_width,
+            panel_height=panel_height,
+        )
+
+        return result
+
+    # For univariate case or when not showing indicators, use the original approach
     # Create feature rectangles if needed
     rectangles = None
     if show_indicators:
         rectangles = create_feature_rectangles(
-            dataset, sample_indices, components_to_use
+            dataset, sample_indices, components_to_use, dimensions
         )
         # Also capitalize component names in rectangles if they exist
         if rectangles is not None:
@@ -362,11 +470,8 @@ def create_ts_visualization(
                 # Make sure component names are capitalized
                 rectangles["component"] = rectangles["component"].str.capitalize()
 
-    # For multivariate time series, use a different approach
+    # For multivariate time series without indicators, still use the specialized function
     if is_multivariate:
-        # Get dimensions from the DataFrame
-        available_dims = sorted(df["dim"].unique())
-
         # Simplify visualizations by creating per-dimension plots
         result = plot_multivariate_ts_by_dimension(
             df,
@@ -517,12 +622,25 @@ def plot_multivariate_ts_by_dimension(
         y_min = float(y_min - padding)
         y_max = float(y_max + padding)
 
-        # Prepare rectangles for this dimension if they exist
+        # Filter rectangles for this dimension if they exist
         dim_rects = None
         if rectangles is not None and len(rectangles) > 0:
-            dim_rects = rectangles.copy()
-            dim_rects["ymin"] = y_min
-            dim_rects["ymax"] = y_max
+            # Filter rectangles by dimension if the 'dim' column exists
+            if "dim" in rectangles.columns:
+                dim_rects = rectangles[rectangles["dim"] == dim].copy()
+            else:
+                # Try to extract dimension from feature names if dim column doesn't exist
+                dim_rects = rectangles.copy()
+                dim_rects = dim_rects[
+                    dim_rects["feature"].apply(
+                        lambda f: f"_dim{dim}" in str(f)
+                        or not any(f"_dim{d}" in str(f) for d in dimensions)
+                    )
+                ]
+
+            if len(dim_rects) > 0:
+                dim_rects["ymin"] = y_min
+                dim_rects["ymax"] = y_max
 
         # Start building the plot
         if line_color == "auto":
