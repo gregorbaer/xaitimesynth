@@ -56,10 +56,10 @@ from .registry import (
     register_component_generator,
 )
 from .visualization import (
-    create_ts_visualization,
     plot_class_comparison,
+    plot_component,
+    plot_components,
     plot_sample,
-    plot_signal,
 )
 
 # Register standard components
