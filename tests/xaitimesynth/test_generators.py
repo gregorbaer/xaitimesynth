@@ -1,5 +1,3 @@
-# def test_generator_function():
-#     assert generator_function() == expected_output
-
-# def test_generator_empty():
-#     assert list(generator_function()) == []
+# TODO: add tests
+# Note: I might want to wait a bit
+# since components and generators will probably be significantly refactored,

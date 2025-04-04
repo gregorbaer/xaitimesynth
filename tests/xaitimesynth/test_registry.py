@@ -255,6 +255,15 @@ def test_register_component_generator(mock_generators_module):
         assert custom_feature_result == {"type": "custom_feature", "scale": 1.0}, (
             "Feature component function returned incorrect result"
         )
+
+        # Add test for with_overrides function to use the variable
+        with_overrides_result = with_overrides(amplitude=1.5)
+        assert with_overrides_result == {
+            "type": "with_overrides",
+            "amplitude": 1.5,
+            "frequency": 0.2,
+        }, "Component with overrides returned incorrect result"
+
     finally:
         # Clean up any component functions that were added to the current module
         for name in ["test_signal", "custom_feature", "with_overrides"]:
