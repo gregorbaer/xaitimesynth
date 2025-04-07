@@ -1,5 +1,17 @@
 # ds-project-template
 
+## Developer Set-up
+
+To activate pre-commit hooks in this project, run:
+```
+pre-commit install
+```
+
+To run the pre-commit hooks without committing for all files, you can run:
+```
+pre-commit run --all-files
+```
+
 ## Setting up the project
 
 Requirements: Have `uv`, `pyenv`, and `direnv` installed.
