@@ -19,7 +19,5 @@ Brief description of changes.
 ## ✅ Checklist
 - [ ] 🧪 Tests added/updated and passing locally
 - [ ] 📚 Documentation updated (if needed)
-- [ ] ✅ Type hints included for new code
-- [ ] 🔍 Code reviewed for security considerations
 - [ ] ⚠️ Breaking changes documented (if any)
 - [ ] 🧹 Code cleaned up (no debug prints, unused imports)
