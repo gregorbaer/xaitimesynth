@@ -14,7 +14,7 @@ def function_name(param1: type, param2: type) -> return_type:
     Args:
         param1 (type): Description.
         param2 (type): Description.
-    
+
     Returns:
         type: Description.
     """

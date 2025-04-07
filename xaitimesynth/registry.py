@@ -121,10 +121,10 @@ def register_component_generator(
         # Set the component function name and docstring
         component_func.__name__ = component_name
         component_func.__doc__ = f"""Create a {component_name} component.
-        
+
         Args:
             **kwargs: Component parameters to override defaults.
-            
+
         Returns:
             Dict[str, Any]: Component definition dictionary.
         """
