@@ -62,6 +62,36 @@ from .visualization import (
     plot_sample,
 )
 
+__all__ = [  # Export all the imported names
+    "TimeSeriesBuilder",
+    "autoregressive",
+    "constant",
+    "ecg_like",
+    "gaussian",
+    "level_change",
+    "manual",
+    "peak",
+    "random_walk",
+    "seasonal",
+    "shapelet",
+    "time_frequency",
+    "trend",
+    "trough",
+    "uniform",
+    "TimeSeriesComponents",
+    "normalize",
+    "get_component_parameters",
+    "list_components",
+    "list_feature_components",
+    "list_signal_components",
+    "register_component",
+    "register_component_generator",
+    "plot_class_comparison",
+    "plot_component",
+    "plot_components",
+    "plot_sample",
+]
+
 # Register standard components
 register_component(constant, "signal")
 register_component(random_walk, "signal")
