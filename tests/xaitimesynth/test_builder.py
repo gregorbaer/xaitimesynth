@@ -96,6 +96,7 @@ def test_add_signal_segment_parameter_validation() -> None:
     - Missing length_pct when random_location=True
     - Invalid start_pct/end_pct range
     - Invalid length_pct range
+    - Missing start_pct/end_pct when random_location=False
     """
     builder = TimeSeriesBuilder().for_class(1)
 
@@ -113,15 +114,11 @@ def test_add_signal_segment_parameter_validation() -> None:
             {"type": "constant"}, random_location=True, length_pct=1.5
         )
 
-    # Test fixed location without start_pct or end_pct, but ensure has_time_range=True
-    # by setting either random_location=True or providing one of the parameters
+    # Test fixed location without start_pct or end_pct
     with pytest.raises(ValueError, match="start_pct and end_pct must be provided"):
         builder.add_signal_segment(
             {"type": "constant"},
-            random_location=False,  # Explicitly set to False
-            start_pct=None,  # Explicitly set to None
-            end_pct=None,  # Explicitly set to None
-            length_pct=0.2,  # Add length_pct to trigger has_time_range=True
+            random_location=False,  # Just need to specify random_location=False
         )
 
 

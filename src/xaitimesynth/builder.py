@@ -289,7 +289,29 @@ class TimeSeriesBuilder:
 
         self._validate_dimensions(dim)
 
-        # If we have time range parameters, validate them
+        # Explicitly validate location parameters based on random_location setting
+        # This ensures validation happens even if has_time_range would be False
+        if random_location:
+            if length_pct is None:
+                raise ValueError(
+                    "length_pct must be provided when random_location is True"
+                )
+            if not (0 < length_pct <= 1):
+                raise ValueError("length_pct must be between 0 and 1")
+        else:
+            if start_pct is None or end_pct is None:
+                raise ValueError(
+                    "start_pct and end_pct must be provided when random_location is False"
+                )
+            if start_pct is not None and end_pct is not None:
+                if not (
+                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
+                ):
+                    raise ValueError(
+                        "Invalid start_pct or end_pct. Must be between 0 and 1, with start_pct < end_pct"
+                    )
+
+        # If we have time range parameters, apply them
         has_time_range = (
             start_pct is not None
             or end_pct is not None
@@ -302,28 +324,10 @@ class TimeSeriesBuilder:
             component_with_time = component.copy()
 
             if random_location:
-                if length_pct is None:
-                    raise ValueError(
-                        "length_pct must be provided when random_location is True"
-                    )
-                if not (0 < length_pct <= 1):
-                    raise ValueError("length_pct must be between 0 and 1")
-
                 component_with_time["random_location"] = True
                 component_with_time["length_pct"] = length_pct
                 component_with_time["shared_location"] = shared_location
             else:
-                if start_pct is None or end_pct is None:
-                    raise ValueError(
-                        "start_pct and end_pct must be provided when random_location is False"
-                    )
-                if not (
-                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
-                ):
-                    raise ValueError(
-                        "Invalid start_pct or end_pct. Must be between 0 and 1, with start_pct < end_pct"
-                    )
-
                 component_with_time["random_location"] = False
                 component_with_time["start_pct"] = start_pct
                 component_with_time["end_pct"] = end_pct
