@@ -184,6 +184,7 @@ class TimeSeriesBuilder:
                     f"Valid dimensions are 0 to {self.n_dimensions - 1}."
                 )
 
+    # TODO: add random time shift parameter over multiple channels
     def add_signal(
         self,
         component: Dict[str, Any],
@@ -237,6 +238,7 @@ class TimeSeriesBuilder:
 
         return self
 
+    # TODO: add random time shift parameter over multiple channels
     def add_signal_segment(
         self,
         component: Dict[str, Any],
@@ -347,6 +349,7 @@ class TimeSeriesBuilder:
 
         return self
 
+    # TODO: add random time shift parameter over multiple channels
     def add_feature(
         self,
         component: Dict[str, Any],
