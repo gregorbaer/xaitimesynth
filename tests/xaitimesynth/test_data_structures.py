@@ -96,8 +96,8 @@ def test_edge_cases():
 def test_shape_validation(standard_foundation, multidim_foundation):
     """Test shape validation across different component types and dimensions.
 
-    Verifies that TimeSeriesComponents correctly validates shapes across all
-    component types and raises appropriate errors when shapes don't match.
+    Verifies that TimeSeriesComponents correctly validates component time dimensions
+    and raises appropriate errors when shapes don't match the requirements.
     Works with both 1D and multi-dimensional arrays.
 
     Args:
@@ -109,17 +109,22 @@ def test_shape_validation(standard_foundation, multidim_foundation):
     def test_with_foundation(foundation):
         # Test with correct shapes first
         correct_noise = np.ones_like(foundation)
-        correct_features = {"feature1": np.ones_like(foundation)}
-        correct_masks = {"mask1": np.ones_like(foundation, dtype=bool)}
+
+        # For features, only the time dimension (first dimension) needs to match
+        # So if foundation is 2D with shape (3, 2), features can be 1D with length 3
+        time_length = foundation.shape[0]
+        features_time_match = {"feature1": np.ones(time_length)}
+
+        correct_masks = {"mask1": np.ones(time_length, dtype=bool)}
         correct_aggregated = np.ones_like(foundation)
 
         # This should not raise any errors
         ts = TimeSeriesComponents(
             foundation=foundation,
             noise=correct_noise,
-            features=correct_features,
-            feature_masks=correct_masks,
-            aggregated=correct_aggregated,
+            features=features_time_match,  # Only time dimension needs to match
+            feature_masks=correct_masks,  # Only time dimension needs to match
+            aggregated=correct_aggregated,  # Exact shape match required
         )
 
         # Verify all components were stored correctly
@@ -129,58 +134,82 @@ def test_shape_validation(standard_foundation, multidim_foundation):
         assert np.array_equal(ts.noise, correct_noise), (
             "Noise with correct shape not properly stored"
         )
-        assert np.array_equal(ts.features["feature1"], correct_features["feature1"]), (
-            "Feature with correct shape not properly stored"
-        )
+        assert np.array_equal(
+            ts.features["feature1"], features_time_match["feature1"]
+        ), "Feature with correct time dimension not properly stored"
         assert np.array_equal(ts.feature_masks["mask1"], correct_masks["mask1"]), (
-            "Feature mask with correct shape not properly stored"
+            "Feature mask with correct time dimension not properly stored"
         )
         assert np.array_equal(ts.aggregated, correct_aggregated), (
             "Aggregated array with correct shape not properly stored"
         )
 
-        # Wrong shape cases - create arrays with wrong shape
-        wrong_shape = np.ones(2) if foundation.size > 2 else np.ones(3)
+        # Wrong time dimension cases - create arrays with wrong first dimension
+        wrong_time_length = time_length + 1
+        wrong_time_dim = np.ones(wrong_time_length)
 
-        # Test each component type
+        # Wrong shape for aggregated (must match exactly)
+        if len(foundation.shape) == 1:
+            wrong_agg_shape = np.ones((time_length, 2))  # Add a dimension
+        else:
+            wrong_agg_shape = np.ones(
+                (time_length, foundation.shape[1] + 1)
+            )  # Add to second dimension
+
+        # Test each component type with wrong dimensions
         component_types = [
             (
                 "noise",
-                lambda: TimeSeriesComponents(foundation=foundation, noise=wrong_shape),
+                lambda: TimeSeriesComponents(
+                    foundation=foundation, noise=wrong_time_dim
+                ),
+                "first dimension",
             ),
             (
                 "feature",
                 lambda: TimeSeriesComponents(
-                    foundation=foundation, features={"wrong_feature": wrong_shape}
+                    foundation=foundation, features={"wrong_feature": wrong_time_dim}
                 ),
+                "first dimension",
             ),
             (
                 "feature mask",
                 lambda: TimeSeriesComponents(
-                    foundation=foundation, feature_masks={"wrong_mask": wrong_shape}
+                    foundation=foundation, feature_masks={"wrong_mask": wrong_time_dim}
                 ),
+                "first dimension",
             ),
             (
                 "aggregated",
                 lambda: TimeSeriesComponents(
-                    foundation=foundation, aggregated=wrong_shape
+                    foundation=foundation, aggregated=wrong_agg_shape
                 ),
+                "shape",  # For aggregated, the full shape must match
             ),
         ]
 
         # Test each case
-        for name, factory in component_types:
+        for name, factory, error_indicator in component_types:
             with pytest.raises(ValueError) as excinfo:
                 factory()
-            # Verify the error message mentions the component name
+            # Verify the error message mentions the component name and appropriate error indicator
             error_msg = str(excinfo.value).lower()
             assert any(n in error_msg for n in name.lower().split()), (
                 f"Error message should mention '{name}' component"
             )
-            assert "shape" in error_msg, "Error message should mention shape mismatch"
-            assert str(foundation.shape) in error_msg, (
-                f"Error message should include expected shape {foundation.shape}"
+            assert error_indicator in error_msg, (
+                f"Error message should mention {error_indicator}"
             )
+
+            # Check if the appropriate dimension info is in the error message
+            if error_indicator == "first dimension":
+                assert str(time_length) in error_msg, (
+                    f"Error message should include expected time dimension length {time_length}"
+                )
+            else:
+                assert str(foundation.shape) in error_msg, (
+                    f"Error message should include expected shape {foundation.shape}"
+                )
 
     # Run tests with both 1D and multi-dimensional arrays
     test_with_foundation(standard_foundation)

@@ -28,37 +28,49 @@ class TimeSeriesComponents:
     aggregated: Optional[np.ndarray] = None
 
     def __post_init__(self):
-        """Validate that all components have the same shape as the foundation."""
-        expected_shape = self.foundation.shape
+        """Validate that components have compatible shapes with the foundation."""
+        expected_length = self.foundation.shape[0]  # Time dimension length
 
         # Check noise component
-        if self.noise is not None and self.noise.shape != expected_shape:
-            raise ValueError(
-                f"The 'noise' component shape {self.noise.shape} doesn't match "
-                f"foundation shape {expected_shape}."
-            )
+        if self.noise is not None:
+            if self.noise.shape[0] != expected_length:
+                raise ValueError(
+                    f"The 'noise' component first dimension {self.noise.shape[0]} doesn't match "
+                    f"foundation first dimension {expected_length}."
+                )
+            # For multivariate case, ensure other dimensions match if present
+            if len(self.noise.shape) > 1 and len(self.foundation.shape) > 1:
+                if self.noise.shape[1] != self.foundation.shape[1]:
+                    raise ValueError(
+                        f"The 'noise' component shape {self.noise.shape} doesn't match "
+                        f"foundation shape {self.foundation.shape} in the second dimension."
+                    )
 
         # Check features components
         if self.features is not None:
             for feature_name, feature_data in self.features.items():
-                if feature_data.shape != expected_shape:
+                # For features, we only validate that the time dimension matches
+                # This allows dimension-specific features to be 1D arrays
+                if feature_data.shape[0] != expected_length:
                     raise ValueError(
-                        f"The feature '{feature_name}' shape {feature_data.shape} doesn't match "
-                        f"foundation shape {expected_shape}."
+                        f"The feature '{feature_name}' first dimension {feature_data.shape[0]} doesn't match "
+                        f"foundation first dimension {expected_length}."
                     )
 
         # Check feature masks components
         if self.feature_masks is not None:
             for mask_name, mask_data in self.feature_masks.items():
-                if mask_data.shape != expected_shape:
+                # Feature masks should also match at least in the time dimension
+                if mask_data.shape[0] != expected_length:
                     raise ValueError(
-                        f"The feature mask '{mask_name}' shape {mask_data.shape} doesn't match "
-                        f"foundation shape {expected_shape}."
+                        f"The feature mask '{mask_name}' first dimension {mask_data.shape[0]} doesn't match "
+                        f"foundation first dimension {expected_length}."
                     )
 
         # Check aggregated component
-        if self.aggregated is not None and self.aggregated.shape != expected_shape:
-            raise ValueError(
-                f"The 'aggregated' component shape {self.aggregated.shape} doesn't match "
-                f"foundation shape {expected_shape}."
-            )
+        if self.aggregated is not None:
+            if self.aggregated.shape != self.foundation.shape:
+                raise ValueError(
+                    f"The 'aggregated' component shape {self.aggregated.shape} doesn't match "
+                    f"foundation shape {self.foundation.shape}."
+                )
