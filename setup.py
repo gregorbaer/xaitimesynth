@@ -6,8 +6,7 @@ setup(
     description="",
     author="Gregor Baer",
     author_email="g.baer@tue.nl",
-    packages=find_packages(where="src"),
-    package_dir={"": "xaitimesynth"},
+    packages=find_packages(),
     python_requires=">=3.10",
     install_requires=[
         "numpy",
