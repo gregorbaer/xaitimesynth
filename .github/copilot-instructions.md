@@ -14,9 +14,9 @@ def function_name(param1: type, param2: type) -> return_type:
     Args:
         param1 (type): Description.
         param2 (type): Description.
-    
+
     Returns:
         type: Description.
     """
 ```
-
+We write pytests with informative docstrings, and try to write fewer tests by consolidating tests that cover similar functionality. Assert in tests statements include informative error messages.

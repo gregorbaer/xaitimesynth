@@ -25,7 +25,7 @@ from .generators import GENERATOR_FUNCS, generate_component
 LetsPlot.set_theme(theme_light())
 
 
-def plot_signal(
+def plot_component(
     signal=None,
     component_type=None,
     n_timesteps=100,
@@ -114,7 +114,7 @@ def plot_signal(
     return p
 
 
-def create_visualization_data(
+def prepare_plot_data(
     dataset, sample_indices=None, components_to_include=None, dimensions=None
 ):
     """Create data for visualization with lets_plot.
@@ -152,7 +152,7 @@ def create_visualization_data(
     return df
 
 
-def create_feature_rectangles(
+def prepare_feature_highlights(
     dataset, sample_indices=None, components_to_include=None, dimensions=None
 ):
     """Create rectangle data for feature visualization.
@@ -351,9 +351,7 @@ def create_feature_rectangles(
     return rect_df
 
 
-# TODO: fix rectangles creation for multivariate TS
-# currently, it uses rectangles over all feature dimensions, but I want them per dimension of the time series
-def create_ts_visualization(
+def plot_components(
     dataset,
     sample_indices=None,
     components=None,
@@ -406,9 +404,7 @@ def create_ts_visualization(
     components_to_use = components if components is not None else default_components
 
     # Prepare data for visualization
-    df = create_visualization_data(
-        dataset, sample_indices, components_to_use, dimensions
-    )
+    df = prepare_plot_data(dataset, sample_indices, components_to_use, dimensions)
 
     # If no data, return empty plot
     assert len(df) > 0, "No data to display"
@@ -429,7 +425,7 @@ def create_ts_visualization(
     # For multivariate time series, handle rectangles per dimension
     if is_multivariate and show_indicators:
         # For multivariate case, we'll create rectangles that include dimension information
-        rectangles = create_feature_rectangles(
+        rectangles = prepare_feature_highlights(
             dataset, sample_indices, components_to_use
         )
 
@@ -441,7 +437,7 @@ def create_ts_visualization(
                 rectangles["component"] = rectangles["component"].str.capitalize()
 
         # Now call the multivariate plot function with the rectangles
-        result = plot_multivariate_ts_by_dimension(
+        result = plot_dimensions(
             df,
             rectangles,
             line_color=line_color,
@@ -460,7 +456,7 @@ def create_ts_visualization(
     # Create feature rectangles if needed
     rectangles = None
     if show_indicators:
-        rectangles = create_feature_rectangles(
+        rectangles = prepare_feature_highlights(
             dataset, sample_indices, components_to_use, dimensions
         )
         # Also capitalize component names in rectangles if they exist
@@ -473,7 +469,7 @@ def create_ts_visualization(
     # For multivariate time series without indicators, still use the specialized function
     if is_multivariate:
         # Simplify visualizations by creating per-dimension plots
-        result = plot_multivariate_ts_by_dimension(
+        result = plot_dimensions(
             df,
             rectangles,
             line_color=line_color,
@@ -570,7 +566,7 @@ def create_ts_visualization(
     return p
 
 
-def plot_multivariate_ts_by_dimension(
+def plot_dimensions(
     df,
     rectangles=None,
     line_color="black",
@@ -588,7 +584,7 @@ def plot_multivariate_ts_by_dimension(
     that clearly separate dimensions.
 
     Args:
-        df: DataFrame with time series data, already processed by create_visualization_data.
+        df: DataFrame with time series data, already processed by prepare_plot_data.
         rectangles: DataFrame with rectangle data for feature indicators.
         line_color: Color of the time series lines.
         line_size: Size of the time series lines.
@@ -710,7 +706,7 @@ def plot_multivariate_ts_by_dimension(
     return plots
 
 
-def plot_multivariate_ts(
+def plot_by_class(
     dataset,
     sample_indices=None,
     components=None,
@@ -761,14 +757,12 @@ def plot_multivariate_ts(
             sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
 
     # Get all data first
-    df = create_visualization_data(
-        dataset, sample_indices, components_to_use, dimensions
-    )
+    df = prepare_plot_data(dataset, sample_indices, components_to_use, dimensions)
 
     # Create feature rectangles if needed
     rectangles = None
     if show_indicators:
-        rectangles = create_feature_rectangles(
+        rectangles = prepare_feature_highlights(
             dataset, sample_indices, components_to_use
         )
 
@@ -945,7 +939,7 @@ def plot_sample(
     sample_indices = {class_label: sample_idx}
 
     # Create and return plot
-    return create_ts_visualization(
+    return plot_components(
         dataset,
         sample_indices=sample_indices,
         components=components_to_include,
@@ -990,7 +984,7 @@ def plot_class_comparison(
         components_to_include = ["aggregated"]  # Changed from "Complete Series"
 
     # Create and return visualization
-    return create_ts_visualization(
+    return plot_components(
         dataset,
         sample_indices=sample_indices,
         components=components_to_include,

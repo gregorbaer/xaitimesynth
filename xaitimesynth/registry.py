@@ -121,10 +121,10 @@ def register_component_generator(
         # Set the component function name and docstring
         component_func.__name__ = component_name
         component_func.__doc__ = f"""Create a {component_name} component.
-        
+
         Args:
             **kwargs: Component parameters to override defaults.
-            
+
         Returns:
             Dict[str, Any]: Component definition dictionary.
         """
@@ -133,6 +133,9 @@ def register_component_generator(
         from .generators import GENERATOR_FUNCS
 
         GENERATOR_FUNCS[component_name] = generator_func
+
+        # Attach parameter defaults to the component function
+        component_func._param_defaults = param_defaults
 
         # Register the component function
         _COMPONENT_REGISTRY[component_name] = component_func
@@ -150,7 +153,13 @@ def register_component_generator(
         # Register the auto-generated component function globally
         import sys
 
-        module = sys.modules[generator_func.__module__]
+        # Get the module where the generator function is defined
+        module_name = generator_func.__module__
+
+        # Fix for tests: use the module where the function is actually defined
+        module = sys.modules[module_name]
+
+        # Set the attribute in that module
         setattr(module, component_name, component_func)
 
         return wrapper
@@ -209,8 +218,18 @@ def get_component_parameters(component_name: str) -> Dict[str, Any]:
         raise ValueError(f"Component {component_name} not registered")
 
     func = _COMPONENT_REGISTRY[component_name]
-    params = inspect.signature(func).parameters
 
+    # Retrieve the default parameters stored during registration
+    if hasattr(func, "_param_defaults"):
+        return func._param_defaults
+
+    # Fallback to inspecting the function signature (for backward compatibility)
+    params = inspect.signature(func).parameters
+    return {
+        name: param.default if param.default is not inspect.Parameter.empty else None
+        for name, param in params.items()
+        if name != "kwargs"
+    }
     return {
         name: param.default if param.default is not inspect.Parameter.empty else None
         for name, param in params.items()

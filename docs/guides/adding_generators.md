@@ -39,13 +39,13 @@ It's important to understand the different roles of the two function types in th
      ```python
      import numpy as np
      from xaitimesynth.generators import generate_sine_wave
-     
+
      # Manually create a sine wave
      rng = np.random.RandomState(42)
      wave = generate_sine_wave(
-         n_timesteps=100, 
-         rng=rng, 
-         frequency=0.05, 
+         n_timesteps=100,
+         rng=rng,
+         frequency=0.05,
          amplitude=2.0
      )
      ```
@@ -81,13 +81,13 @@ def generate_your_component(
     # Your implementation here
     # For a signal, return an array of length n_timesteps
     # For a feature, return an array of length `length`
-    
+
     # Example implementation:
     result = np.zeros(length if length is not None else n_timesteps)
     # ... calculation logic ...
     return result
 ```
-    
+
 Key requirements:
 
 - Function name should start with generate_ (e.g., generate_your_component)

@@ -1,6 +1,7 @@
 .venv
 .env
 .DS_Store
+.coverage
 *__pycache__/
 *.pdf
 *.docx

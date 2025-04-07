@@ -18,7 +18,7 @@ install-python:
 # Target to create a virtual environment with uv
 create-venv:
 	@echo "*** Creating virtual environment"
-	uv venv 
+	uv venv
 
 # Target to configure direnv for automatic activation
 configure-direnv:
@@ -54,4 +54,3 @@ init-nbstripout:
 init-nbdime:
 	@echo "*** Installing nbdime"
 	nbdime config-git --enable
-
