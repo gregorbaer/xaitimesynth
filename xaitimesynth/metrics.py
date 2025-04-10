@@ -108,6 +108,7 @@ def _validate_and_prepare_inputs(
     dim_indices: Optional[List[int]] = None,
     threshold: Optional[float] = None,
     class_label: Optional[int] = None,
+    allow_continuous: bool = False,
 ) -> Tuple[np.ndarray, Dict[int, np.ndarray], List[int], List[int]]:
     """Validate and prepare inputs for precision and recall calculations.
 
@@ -118,6 +119,7 @@ def _validate_and_prepare_inputs(
         dim_indices (Optional[List[int]]): Dimension indices to include.
         threshold (Optional[float]): Threshold for binarizing attribution values.
         class_label (Optional[int]): Class label to calculate metrics for.
+        allow_continuous (bool): If True, allows continuous attributions without binarization.
 
     Returns:
         Tuple containing:
@@ -286,13 +288,13 @@ def _validate_and_prepare_inputs(
                 f"Warning: No feature masks found for dimension {dim_idx}. This may affect metric calculations."
             )
 
-    # Binarize attributions if needed
-    if threshold is not None:
+    # Binarize or check for binary attributions if needed
+    if threshold is not None and not allow_continuous:
         attributions = _binarize_attributions(attributions, threshold)
-    elif not np.issubdtype(attributions.dtype, np.bool_):
+    elif not allow_continuous and not np.issubdtype(attributions.dtype, np.bool_):
         raise ValueError(
             "Attributions are not boolean and no threshold was provided for binarization. "
-            "Please provide a threshold value to binarize continuous attribution values."
+            "Set allow_continuous=True if continuous attributions are intended."
         )
 
     # Validate attributions against samples
@@ -575,3 +577,261 @@ def f1_score(
         if precision + recall == 0:
             return 0.0
         return 2 * (precision * recall) / (precision + recall)
+
+
+def nac_score(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: Optional[str] = "macro",
+    ground_truth_only: bool = True,
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Calculate Normalized Attribution Correspondence (NAC) score for feature attributions.
+
+    NAC measures how well attribution values correspond with ground truth by standardizing
+    the attribution values and taking the mean at specified locations. It evaluates whether
+    important features receive significantly higher attribution scores than would be expected
+    by chance.
+
+    Args:
+        attributions (np.ndarray): Feature attribution values. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate NAC for.
+            If None, uses all feature masks regardless of class.
+        average (Optional[str]): Method for averaging:
+            - 'macro': Average NAC across samples and dimensions
+            - 'per_sample': Return NAC for each sample (averaged across dimensions)
+            - 'per_dimension': Return NAC for each dimension (averaged across samples)
+            - 'per_sample_dimension': Return NAC for each sample-dimension pair
+            - None: Return overall NAC (all samples and dimensions combined)
+        ground_truth_only (bool): If True, calculate NAC only for timesteps with ground truth
+            features. If False, calculate for timesteps without ground truth features.
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            NAC score(s) depending on the averaging method.
+    """
+    # Validate and prepare inputs (pass None for threshold since we don't binarize here)
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            None,
+            class_label,
+            allow_continuous=True,
+        )
+    )
+
+    # Extract needed dimensions
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+
+    # Initialize results container based on average method
+    if average == "per_sample_dimension":
+        results = {}
+    elif average == "per_sample":
+        results = {sample_idx: 0.0 for sample_idx in sample_indices}
+    elif average == "per_dimension":
+        results = {dim_idx: 0.0 for dim_idx in dim_indices}
+    else:
+        # For 'macro' or None, initialize a single result
+        results = 0.0
+
+    # Calculate NAC for each sample and dimension
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and ground truth for this sample and dimension
+            attribution = attributions[i, :, j]
+            mask = ground_truth_by_dim[dim_idx][i]
+
+            # Select regions based on ground_truth_only parameter
+            if ground_truth_only:
+                region_mask = mask
+            else:
+                region_mask = ~mask
+
+            # Skip if no relevant regions (mask is all False)
+            if not np.any(region_mask):
+                nac = 0.0  # Default value when no regions to evaluate
+            else:
+                # Standardize attribution values (z-score normalization)
+                attribution_mean = np.mean(attribution)
+                attribution_std = np.std(attribution)
+
+                # Handle case where standard deviation is 0
+                if attribution_std == 0:
+                    standardized_attribution = np.zeros_like(attribution)
+                else:
+                    standardized_attribution = (
+                        attribution - attribution_mean
+                    ) / attribution_std
+
+                # Calculate NAC: mean of standardized values at selected regions
+                nac = np.mean(standardized_attribution[region_mask])
+
+            # Store result based on average method
+            if average == "per_sample_dimension":
+                results[(sample_idx, dim_idx)] = nac
+            elif average == "per_sample":
+                results[sample_idx] += nac / n_dimensions
+            elif average == "per_dimension":
+                results[dim_idx] += nac / n_samples
+            else:
+                results += nac / (n_samples * n_dimensions)
+
+    return results
+
+
+def auc_roc_score(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: Optional[str] = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Calculate AUC-ROC score for feature attributions.
+
+    AUC-ROC measures how well the attribution values discriminate between
+    important and non-important features across all possible threshold values.
+    A score of 0.5 indicates random performance, while 1.0 indicates perfect
+    discrimination.
+
+    Args:
+        attributions (np.ndarray): Feature attribution values. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate AUC-ROC for.
+            If None, uses all feature masks regardless of class.
+        average (Optional[str]): Method for averaging:
+            - 'macro': Average AUC-ROC across samples and dimensions
+            - 'per_sample': Return AUC-ROC for each sample (averaged across dimensions)
+            - 'per_dimension': Return AUC-ROC for each dimension (averaged across samples)
+            - 'per_sample_dimension': Return AUC-ROC for each sample-dimension pair
+            - None: Return overall AUC-ROC (all samples and dimensions combined)
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            AUC-ROC score(s) depending on the averaging method.
+    """
+    # Validate and prepare inputs (pass None for threshold since we don't binarize here)
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            None,
+            class_label,
+            allow_continuous=True,
+        )
+    )
+
+    # Extract needed dimensions
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+
+    # Initialize results container based on average method
+    if average == "per_sample_dimension":
+        results = {}
+    elif average == "per_sample":
+        results = {sample_idx: 0.0 for sample_idx in sample_indices}
+    elif average == "per_dimension":
+        results = {dim_idx: 0.0 for dim_idx in dim_indices}
+    else:
+        # For 'macro' or None, initialize a single result
+        results = 0.0
+
+    # Calculate AUC-ROC for each sample and dimension
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and ground truth for this sample and dimension
+            attribution = attributions[i, :, j]
+            mask = ground_truth_by_dim[dim_idx][i]
+
+            # Skip if all ground truth values are the same (AUC-ROC undefined)
+            if np.all(mask) or not np.any(mask):
+                auc = 0.5  # Default value when all ground truth is the same
+            else:
+                # Calculate TPR and FPR at each possible threshold
+                # Use unique attribution values as thresholds for efficiency
+                thresholds = np.unique(attribution)
+
+                # Add one threshold above the maximum to ensure we get (0,0) point
+                if thresholds.size > 0:
+                    thresholds = np.append(thresholds, thresholds.max() + 1)
+
+                n_pos = np.sum(mask)
+                n_neg = mask.size - n_pos
+
+                tpr_values = []
+                fpr_values = []
+
+                for threshold in sorted(thresholds, reverse=True):
+                    pred_pos = attribution >= threshold
+                    tp = np.sum(pred_pos & mask)
+                    fp = np.sum(pred_pos & ~mask)
+
+                    tpr = tp / n_pos if n_pos > 0 else 0
+                    fpr = fp / n_neg if n_neg > 0 else 0
+
+                    tpr_values.append(tpr)
+                    fpr_values.append(fpr)
+
+                # Convert to numpy arrays for calculation
+                tpr_values = np.array(tpr_values)
+                fpr_values = np.array(fpr_values)
+
+                # Calculate AUC using the trapezoidal rule
+                auc = np.trapezoid(tpr_values, fpr_values)
+
+                # Handle special case where fpr_values might not be monotonically increasing
+                if np.any(np.diff(fpr_values) < 0):
+                    # Sort points by fpr
+                    sort_idx = np.argsort(fpr_values)
+                    fpr_sorted = fpr_values[sort_idx]
+                    tpr_sorted = tpr_values[sort_idx]
+
+                    # Remove duplicate fpr values (keep max tpr for each fpr)
+                    unique_fprs, unique_indices = np.unique(
+                        fpr_sorted, return_index=True
+                    )
+                    if len(unique_fprs) > 1:
+                        unique_tprs = np.zeros_like(unique_fprs)
+
+                        for k, fpr in enumerate(unique_fprs):
+                            mask = fpr_sorted == fpr
+                            unique_tprs[k] = np.max(tpr_sorted[mask])
+
+                        auc = np.trapezoid(unique_tprs, unique_fprs)
+
+            # Store result based on average method
+            if average == "per_sample_dimension":
+                results[(sample_idx, dim_idx)] = auc
+            elif average == "per_sample":
+                results[sample_idx] += auc / n_dimensions
+            elif average == "per_dimension":
+                results[dim_idx] += auc / n_samples
+            else:
+                results += auc / (n_samples * n_dimensions)
+
+    return results
