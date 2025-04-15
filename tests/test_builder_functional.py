@@ -250,64 +250,76 @@ def test_multivariate_three_classes_and_dimensions():
     )
 
 
-def test_train_test_split(basic_univariate_config):
-    """Test the train_test_split functionality.
+def test_clone_method(basic_univariate_config):
+    """Test the clone method for creating train/test splits with consistent patterns.
 
     Tests that:
-    1. The data is split into train and test sets with the correct ratio
-    2. The shapes of X_train, X_test, y_train, and y_test are correct
-    3. Class distribution is preserved in both splits
+    1. The clone method preserves class definitions from the original builder
+    2. Different n_samples parameters correctly control the size of the datasets
+    3. Different random_state parameters produce different but structurally similar datasets
+    4. All dataset properties are correctly maintained in the cloned builders
     """
-    n_samples = basic_univariate_config["n_samples"]
-    train_ratio = 0.7
-
-    dataset = (
+    # Create a base builder with class definitions
+    base_builder = (
         TimeSeriesBuilder(**basic_univariate_config)
-        .for_class(0)
+        .for_class(0)  # Class 0: No discriminative features
         .add_signal(random_walk(step_size=0.2))
-        .for_class(1)
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .for_class(1)  # Class 1: Has shapelet feature
         .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
         .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
-        .build(train_test_split=train_ratio)
     )
 
-    # Verify train/test sets were created
-    assert "X_train" in dataset, "Dataset should contain 'X_train' key"
-    assert "y_train" in dataset, "Dataset should contain 'y_train' key"
-    assert "X_test" in dataset, "Dataset should contain 'X_test' key"
-    assert "y_test" in dataset, "Dataset should contain 'y_test' key"
+    # Generate train dataset with 70% of samples and the same random seed
+    train_samples = int(basic_univariate_config["n_samples"] * 0.7)
+    train_dataset = base_builder.clone(n_samples=train_samples, random_state=42).build()
 
-    # Check split ratio
-    expected_train_size = int(n_samples * train_ratio)
-    assert len(dataset["y_train"]) == expected_train_size, (
-        f"Expected train set size {expected_train_size}, got {len(dataset['y_train'])}"
-    )
-    expected_test_size = n_samples - expected_train_size
-    assert len(dataset["y_test"]) == expected_test_size, (
-        f"Expected test set size {expected_test_size}, got {len(dataset['y_test'])}"
-    )
+    # Generate test dataset with 30% of samples and a different random seed
+    test_samples = int(basic_univariate_config["n_samples"] * 0.3)
+    test_dataset = base_builder.clone(n_samples=test_samples, random_state=43).build()
 
-    # Check that class distribution is similar in train and test
-    train_classes, train_counts = np.unique(dataset["y_train"], return_counts=True)
-    test_classes, test_counts = np.unique(dataset["y_test"], return_counts=True)
-    assert set(train_classes) == set(test_classes), (
-        "Train and test sets should contain the same classes"
+    # Verify the datasets have the correct sizes
+    assert train_dataset["X"].shape[0] == train_samples, (
+        f"Expected {train_samples} training samples, got {train_dataset['X'].shape[0]}"
+    )
+    assert test_dataset["X"].shape[0] == test_samples, (
+        f"Expected {test_samples} test samples, got {test_dataset['X'].shape[0]}"
     )
 
-    # Check shapes
-    assert dataset["X_train"].shape[0] == expected_train_size, (
-        f"Expected {expected_train_size} training samples, "
-        f"got {dataset['X_train'].shape[0]}"
+    # Check that both datasets have the same class labels
+    train_classes = set(np.unique(train_dataset["y"]))
+    test_classes = set(np.unique(test_dataset["y"]))
+    assert train_classes == test_classes, (
+        f"Train and test datasets should have the same classes. "
+        f"Train: {train_classes}, Test: {test_classes}"
     )
-    assert dataset["X_test"].shape[0] == expected_test_size, (
-        f"Expected {expected_test_size} test samples, got {dataset['X_test'].shape[0]}"
+
+    # Verify datasets are different due to different random seeds
+    # Get first sample from each dataset
+    train_first_sample = train_dataset["X"][0]
+    test_first_sample = test_dataset["X"][0]
+
+    assert not np.array_equal(train_first_sample, test_first_sample), (
+        "Different random seeds should produce different data patterns"
     )
-    assert dataset["y_train"].shape[0] == expected_train_size, (
-        f"Expected {expected_train_size} training labels, "
-        f"got {dataset['y_train'].shape[0]}"
+
+    # Test cloning with different parameters
+    modified_builder = base_builder.clone(
+        n_timesteps=200,  # Different time steps
+        normalization="minmax",  # Different normalization
     )
-    assert dataset["y_test"].shape[0] == expected_test_size, (
-        f"Expected {expected_test_size} test labels, got {dataset['y_test'].shape[0]}"
+    modified_dataset = modified_builder.build()
+
+    # Check that the parameters were properly updated
+    assert modified_dataset["X"].shape[2] == 200, (
+        "Modified timesteps parameter should be reflected in the data shape"
+    )
+
+    # Check normalization change (minmax should be in range [0, 1])
+    data_values = modified_dataset["X"].reshape(-1)
+    assert np.min(data_values) >= 0 and np.max(data_values) <= 1, (
+        "Min-max normalized data should be in range [0, 1]"
     )
 
 

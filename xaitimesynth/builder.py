@@ -591,7 +591,6 @@ class TimeSeriesBuilder:
     def build(
         self,
         return_components: bool = True,
-        train_test_split: Optional[float] = None,
         deterministic_class_counts: bool = False,
     ) -> Dict[str, Any]:
         """Build the dataset based on the configured class definitions.
@@ -603,9 +602,6 @@ class TimeSeriesBuilder:
         Args:
             return_components (bool): Whether to return the individual component vectors.
                 Useful for visualization and analysis. Default is True.
-            train_test_split (Optional[float]): If provided, fraction of data to use for training
-                (between 0 and 1). The dataset will be randomly split into train and test sets.
-                If None, no split is performed. Default is None.
             deterministic_class_counts (bool): If True, class counts will be determined exactly
                 by the weights rather than using multinomial sampling. This ensures exact class
                 proportions. Default is False (uses multinomial sampling).
@@ -999,35 +995,6 @@ class TimeSeriesBuilder:
 
         if return_components:
             result["components"] = all_components
-
-        # Split into train and test if requested
-        if train_test_split is not None:
-            # Shuffle indices
-            indices = np.arange(self.n_samples)
-            self.rng.shuffle(indices)
-
-            # Split point
-            split_idx = int(self.n_samples * train_test_split)
-
-            # Train indices
-            train_indices = indices[:split_idx]
-            result["X_train"] = X[train_indices]
-            result["y_train"] = y[train_indices]
-
-            # Test indices
-            test_indices = indices[split_idx:]
-            result["X_test"] = X[test_indices]
-            result["y_test"] = y[test_indices]
-
-            # Split feature masks
-            for key in feature_masks:
-                result[f"feature_masks_train_{key}"] = feature_masks[key][train_indices]
-                result[f"feature_masks_test_{key}"] = feature_masks[key][test_indices]
-
-            # Split components if needed
-            if return_components:
-                result["components_train"] = [all_components[i] for i in train_indices]
-                result["components_test"] = [all_components[i] for i in test_indices]
 
         return result
 
