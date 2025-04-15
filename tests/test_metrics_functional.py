@@ -685,7 +685,7 @@ def test_error_handling():
     )
 
     # Case 1: Non-boolean attribution without threshold
-    with pytest.raises(ValueError, match="no threshold was provided"):
+    with pytest.raises(ValueError, match="Attribution must be boolean type"):
         continuous_attr = np.random.rand(1, 20, 1)  # Continuous values between 0 and 1
         precision_score(continuous_attr, dataset, sample_indices=[0])
 
@@ -695,6 +695,362 @@ def test_error_handling():
         precision_score(attr, dataset, sample_indices=[10])  # Only 2 samples in dataset
 
     # Case 3: Wrong shape attributions
-    with pytest.raises(ValueError, match="Attribution .* does not match dataset"):
+    with pytest.raises(ValueError, match="cannot be reshaped to match"):
         attr = np.zeros((1, 30, 1), dtype=bool)  # Dataset has 20 timesteps
         precision_score(attr, dataset, sample_indices=[0])
+
+
+# Update existing test case and add new tests for data format conversion
+
+
+def test_data_format_conversion():
+    """Test the tensor data format conversion feature.
+
+    This test verifies that:
+    1. Default format can be changed to channels_first (PyTorch/tsai format)
+    2. Dataset with channels_first can be converted to channels_last and back
+    3. Metrics work correctly with both data formats
+    """
+    # Create dataset with default channels_first format
+    dataset = (
+        TimeSeriesBuilder(
+            n_timesteps=20, n_samples=2, random_state=42, data_format="channels_first"
+        )
+        .for_class(0)
+        .add_signal(gaussian(), role="foundation")
+        .for_class(1)
+        .add_signal(gaussian(), role="foundation")
+        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .build()
+    )
+
+    # Verify format is channels_first
+    assert dataset["metadata"]["data_format"] == "channels_first"
+
+    # Check tensor shapes - channels_first means [batch_size, channels, time_steps]
+    assert dataset["X"].shape == (2, 1, 20)  # (n_samples, n_dimensions, n_timesteps)
+
+    # Convert to channels_last
+    channels_last_dataset = TimeSeriesBuilder.convert_data_format(
+        dataset, "channels_last"
+    )
+
+    # Verify format is now channels_last
+    assert channels_last_dataset["metadata"]["data_format"] == "channels_last"
+
+    # Check tensor shapes - channels_last means [batch_size, time_steps, channels]
+    assert channels_last_dataset["X"].shape == (
+        2,
+        20,
+        1,
+    )  # (n_samples, n_timesteps, n_dimensions)
+
+    # Create attribution in channels_first format
+    class1_indices = np.where(dataset["y"] == 1)[0]
+    sample_idx = class1_indices[0]
+    n_timesteps = dataset["metadata"]["n_timesteps"]
+    n_dimensions = dataset["metadata"]["n_dimensions"]
+
+    # Create a perfect attribution in channels_first format
+    feature_key = next(k for k in dataset["feature_masks"].keys())
+    mask = dataset["feature_masks"][feature_key][sample_idx]
+
+    # Create attribution with shape [1, n_dimensions, n_timesteps] for channels_first
+    attribution_channels_first = np.zeros((1, n_dimensions, n_timesteps), dtype=bool)
+    attribution_channels_first[0, 0, :] = mask  # Perfect attribution
+
+    # Calculate metrics with channels_first dataset
+    precision_cf = precision_score(
+        attribution_channels_first, dataset, sample_indices=[sample_idx], class_label=1
+    )
+    recall_cf = recall_score(
+        attribution_channels_first, dataset, sample_indices=[sample_idx], class_label=1
+    )
+
+    # Metrics should show perfect attribution
+    assert precision_cf == 1.0, "Precision should be 1.0 with channels_first format"
+    assert recall_cf == 1.0, "Recall should be 1.0 with channels_first format"
+
+    # Create a perfect attribution in channels_last format
+    attribution_channels_last = np.zeros((1, n_timesteps, n_dimensions), dtype=bool)
+    attribution_channels_last[0, :, 0] = mask  # Perfect attribution
+
+    # Calculate metrics with channels_last dataset
+    precision_cl = precision_score(
+        attribution_channels_last,
+        channels_last_dataset,
+        sample_indices=[sample_idx],
+        class_label=1,
+    )
+    recall_cl = recall_score(
+        attribution_channels_last,
+        channels_last_dataset,
+        sample_indices=[sample_idx],
+        class_label=1,
+    )
+
+    # Metrics should also show perfect attribution
+    assert precision_cl == 1.0, "Precision should be 1.0 with channels_last format"
+    assert recall_cl == 1.0, "Recall should be 1.0 with channels_last format"
+
+
+def test_auc_roc_score():
+    """Test area under ROC curve score for continuous attribution values.
+
+    This test verifies that the AUC-ROC score correctly measures how well
+    the attribution value rankings match the ground truth feature locations.
+    """
+    # Create a simple dataset with a clear feature at known position
+    dataset = (
+        TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
+        .for_class(1)
+        .add_signal(gaussian())
+        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .build()
+    )
+
+    # Get the feature mask
+    feature_key = next(k for k in dataset["feature_masks"].keys())
+    mask = dataset["feature_masks"][feature_key][0]
+    feature_start = np.argmax(mask)
+    feature_end = len(mask) - np.argmax(mask[::-1])
+    feature_center = feature_start + (feature_end - feature_start) // 2
+
+    n_timesteps = dataset["metadata"]["n_timesteps"]
+    n_dimensions = dataset["metadata"]["n_dimensions"]
+
+    # Test cases:
+
+    # Perfect ranking case: attribution values decrease with distance from feature
+    perfect_attr = np.zeros((1, n_timesteps, n_dimensions))
+    for i in range(n_timesteps):
+        # Distance from center, normalized to 0-1 range
+        distance = abs(i - feature_center) / (n_timesteps // 2)
+        perfect_attr[0, i, 0] = max(0, 1 - distance)  # Linear decay from center
+
+    # Random case: attribution values randomly distributed
+    np.random.seed(42)  # For reproducibility
+    random_attr = np.random.rand(1, n_timesteps, n_dimensions)
+
+    # Inverse case: attribution values increase with distance from feature
+    inverse_attr = np.zeros((1, n_timesteps, n_dimensions))
+    for i in range(n_timesteps):
+        # Distance from center, normalized to 0-1 range
+        distance = abs(i - feature_center) / (n_timesteps // 2)
+        inverse_attr[0, i, 0] = min(1, distance)  # Linear increase with distance
+
+    # Calculate AUC-ROC scores
+    from xaitimesynth.metrics import auc_roc_score
+
+    perfect_score = auc_roc_score(perfect_attr, dataset, sample_indices=[0])
+    random_score = auc_roc_score(random_attr, dataset, sample_indices=[0])
+    inverse_score = auc_roc_score(inverse_attr, dataset, sample_indices=[0])
+
+    # Perfect ranking should have AUC-ROC close to 1.0
+    assert perfect_score > 0.90, (
+        f"Perfect ranking should have AUC-ROC > 0.90, got {perfect_score}"
+    )
+
+    # Random ranking should have AUC-ROC around 0.5
+    assert 0.4 <= random_score <= 0.7, (
+        f"Random ranking should have AUC-ROC ≈ 0.5 (0.4-0.7 range), got {random_score}"
+    )
+
+    # Inverse ranking should have AUC-ROC close to 0.0
+    assert inverse_score < 0.10, (
+        f"Inverse ranking should have AUC-ROC < 0.10, got {inverse_score}"
+    )
+
+    # Test different average methods
+    perfect_per_dim = auc_roc_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_dimension"
+    )
+    perfect_per_sample = auc_roc_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_sample"
+    )
+    perfect_per_sample_dim = auc_roc_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_sample_dimension"
+    )
+
+    # All average methods should maintain high score for perfect attribution
+    if isinstance(perfect_per_dim, dict):
+        # If perfect_per_dim is a dictionary (with a single key), get its value
+        assert perfect_per_dim[0] > 0.90, (
+            f"per_dimension AUC-ROC should be > 0.90 for perfect ranking, got {perfect_per_dim[0]}"
+        )
+    else:
+        assert perfect_per_dim > 0.90, (
+            f"per_dimension AUC-ROC should be > 0.90 for perfect ranking, got {perfect_per_dim}"
+        )
+    assert perfect_per_sample[0] > 0.90, (
+        "per_sample AUC-ROC should be > 0.90 for perfect ranking"
+    )
+    assert perfect_per_sample_dim[(0, 0)] > 0.90, (
+        "per_sample_dimension AUC-ROC should be > 0.90 for perfect ranking"
+    )
+
+
+def test_nac_score():
+    """Test normalized attribution correlation (NAC) score.
+
+    This test verifies that the NAC score correctly measures the correlation
+    between attribution values and ground truth feature importance.
+    """
+    # Create a simple dataset with a clear feature at known position
+    dataset = (
+        TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
+        .for_class(1)
+        .add_signal(gaussian())
+        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .build()
+    )
+
+    # Get the feature mask
+    feature_key = next(k for k in dataset["feature_masks"].keys())
+    mask = dataset["feature_masks"][feature_key][0]
+
+    n_timesteps = dataset["metadata"]["n_timesteps"]
+    n_dimensions = dataset["metadata"]["n_dimensions"]
+
+    # Test cases:
+
+    # Perfect case: high attribution values at feature locations
+    perfect_attr = np.zeros((1, n_timesteps, n_dimensions))
+    for i in range(n_timesteps):
+        if mask[i]:
+            perfect_attr[0, i, 0] = 1.0
+
+    # Add small random noise to make standardization work properly
+    np.random.seed(42)
+    perfect_attr += np.random.normal(0, 0.01, perfect_attr.shape)
+
+    # Random case: attribution values randomly distributed
+    np.random.seed(42)
+    random_attr = np.random.rand(1, n_timesteps, n_dimensions)
+
+    # Inverse case: attribution values are low at feature locations
+    inverse_attr = np.ones((1, n_timesteps, n_dimensions))
+    for i in range(n_timesteps):
+        if mask[i]:
+            inverse_attr[0, i, 0] = 0.0
+
+    # Add small random noise
+    np.random.seed(42)
+    inverse_attr += np.random.normal(0, 0.01, inverse_attr.shape)
+
+    # Import nac_score
+    from xaitimesynth.metrics import nac_score
+
+    # Calculate NAC scores with ground_truth_only=True
+    perfect_nac = nac_score(
+        perfect_attr, dataset, sample_indices=[0], ground_truth_only=True
+    )
+    random_nac = nac_score(
+        random_attr, dataset, sample_indices=[0], ground_truth_only=True
+    )
+    inverse_nac = nac_score(
+        inverse_attr, dataset, sample_indices=[0], ground_truth_only=True
+    )
+
+    # Perfect attribution should have high positive NAC (standardized values are high at feature locations)
+    assert perfect_nac > 0.5, (
+        f"Perfect attribution should have NAC > 0.5, got {perfect_nac}"
+    )
+
+    # Random attribution should have NAC around 0
+    assert -0.3 <= random_nac <= 0.4, (
+        f"Random attribution should have NAC ≈ 0 (in range -0.3 to 0.4), got {random_nac}"
+    )
+
+    # Inverse attribution should have negative NAC (standardized values are low at feature locations)
+    assert inverse_nac < -0.5, (
+        f"Inverse attribution should have NAC < -0.5, got {inverse_nac}"
+    )
+
+    # Test with ground_truth_only=False (focusing on non-feature areas)
+    perfect_nac_inv = nac_score(
+        perfect_attr, dataset, sample_indices=[0], ground_truth_only=False
+    )
+    inverse_nac_inv = nac_score(
+        inverse_attr, dataset, sample_indices=[0], ground_truth_only=False
+    )
+
+    # Now the results should be inverted since we're looking at non-feature regions
+    assert perfect_nac_inv < 0, (
+        "NAC should be negative for perfect attribution with ground_truth_only=False"
+    )
+    assert inverse_nac_inv > 0, (
+        "NAC should be positive for inverse attribution with ground_truth_only=False"
+    )
+
+    # Test different average methods
+    from xaitimesynth.metrics import nac_score
+
+    perfect_per_dim = nac_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_dimension"
+    )
+    perfect_per_sample = nac_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_sample"
+    )
+    perfect_per_sample_dim = nac_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_sample_dimension"
+    )
+
+    # All average methods should maintain high score for perfect attribution
+    if isinstance(perfect_per_dim, dict):
+        assert perfect_per_dim[0] > 0.5, (
+            f"per_dimension NAC should be > 0.5 for perfect attribution, got {perfect_per_dim[0]}"
+        )
+    else:
+        assert perfect_per_dim > 0.5, (
+            f"per_dimension NAC should be > 0.5 for perfect attribution, got {perfect_per_dim}"
+        )
+    assert perfect_per_sample[0] > 0.5, (
+        "per_sample NAC should be > 0.5 for perfect attribution"
+    )
+    assert perfect_per_sample_dim[(0, 0)] > 0.5, (
+        "per_sample_dimension NAC should be > 0.5 for perfect attribution"
+    )
+
+    # Test with multivariate data
+    multivariate_dataset = (
+        TimeSeriesBuilder(n_timesteps=20, n_samples=1, n_dimensions=2, random_state=42)
+        .for_class(1)
+        .add_signal(gaussian(), dim=[0, 1])
+        .add_feature(level_change(amplitude=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
+        .add_feature(level_change(amplitude=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
+        .build()
+    )
+
+    # Create mixed attribution: good for dim0, random for dim1
+    mixed_attr = np.zeros((1, n_timesteps, 2))
+
+    # Get feature masks for dimension 0
+    dim0_mask = np.zeros(n_timesteps, dtype=bool)
+    for key, masks in multivariate_dataset["feature_masks"].items():
+        if "_dim0" in key or ("_dim" not in key):
+            dim0_mask |= masks[0]
+
+    # Perfect attribution for dimension 0
+    for i in range(n_timesteps):
+        if dim0_mask[i]:
+            mixed_attr[0, i, 0] = 1.0
+
+    # Random attribution for dimension 1
+    np.random.seed(42)
+    mixed_attr[0, :, 1] = np.random.rand(n_timesteps)
+
+    # Add noise for proper standardization
+    np.random.seed(42)
+    mixed_attr += np.random.normal(0, 0.01, mixed_attr.shape)
+
+    # Calculate per-dimension NAC scores
+    nac_per_dim = nac_score(mixed_attr, multivariate_dataset, average="per_dimension")
+
+    # Dimension 0 should have high NAC, dimension 1 should have NAC close to 0
+    assert nac_per_dim[0] > 0.5, (
+        f"Dimension 0 should have high NAC, got {nac_per_dim[0]}"
+    )
+    assert -0.3 <= nac_per_dim[1] <= 0.3, (
+        f"Dimension 1 should have NAC around 0, got {nac_per_dim[1]}"
+    )
