@@ -589,7 +589,10 @@ class TimeSeriesBuilder:
         return feature, mask
 
     def build(
-        self, return_components: bool = True, train_test_split: Optional[float] = None
+        self,
+        return_components: bool = True,
+        train_test_split: Optional[float] = None,
+        deterministic_class_counts: bool = False,
     ) -> Dict[str, Any]:
         """Build the dataset based on the configured class definitions.
 
@@ -603,6 +606,9 @@ class TimeSeriesBuilder:
             train_test_split (Optional[float]): If provided, fraction of data to use for training
                 (between 0 and 1). The dataset will be randomly split into train and test sets.
                 If None, no split is performed. Default is None.
+            deterministic_class_counts (bool): If True, class counts will be determined exactly
+                by the weights rather than using multinomial sampling. This ensures exact class
+                proportions. Default is False (uses multinomial sampling).
 
         Returns:
             Dict[str, Any]: Dictionary containing the generated dataset with keys:
@@ -628,7 +634,22 @@ class TimeSeriesBuilder:
         # Normalize class weights and determine class distribution
         weights = np.array([cd["weight"] for cd in self.class_definitions])
         weights = weights / weights.sum()
-        class_counts = self.rng.multinomial(self.n_samples, weights)
+
+        if deterministic_class_counts:
+            # Deterministic class counts based on exact weights
+            raw_counts = weights * self.n_samples
+            # Round to integers and ensure we have exactly n_samples total
+            class_counts = np.floor(raw_counts).astype(int)
+            remaining = self.n_samples - class_counts.sum()
+            # Distribute remaining samples based on fractional parts
+            if remaining > 0:
+                fractions = raw_counts - class_counts
+                indices = np.argsort(fractions)[-remaining:]
+                for idx in indices:
+                    class_counts[idx] += 1
+        else:
+            # Probabilistic class counts using multinomial sampling
+            class_counts = self.rng.multinomial(self.n_samples, weights)
 
         # Initialize arrays - always create in channels_last format first (internal format)
         X = np.zeros((self.n_samples, self.n_timesteps, self.n_dimensions))
