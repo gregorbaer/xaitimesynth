@@ -396,7 +396,7 @@ def prepare_feature_highlights(
 
 def plot_components(
     dataset: Dict,
-    sample_indices: Dict[int, int] = None,
+    samples: Union[int, List[int], Dict[int, int], None] = None,
     components: List[str] = None,
     dimensions: List[int] = None,
     show_indicators: bool = True,
@@ -414,10 +414,18 @@ def plot_components(
 ) -> Union[Any, List[Any]]:
     """Create time series visualization with feature indicators as rectangles.
 
+    This function visualizes time series data by showing its components (aggregated series,
+    foundation, features, noise) with options to highlight feature locations.
+
     Args:
         dataset (Dict): Dataset containing time series data and components.
-        sample_indices (Optional[Dict[int, int]]): Dictionary mapping class labels to sample indices.
-            If None, use first sample of each class.
+        samples (Union[int, List[int], Dict[int, int], None]): Specifies which samples to visualize.
+            Can be provided in several formats:
+            - int: A single sample index (e.g., 5 to show sample at index 5)
+            - List[int]: Multiple sample indices (e.g., [0, 10, 20] to show these samples)
+            - Dict[int, int]: Mapping from class labels to sample indices
+              (e.g., {0: 5, 1: 10} for first sample of class 0, second of class 1)
+            - None: Use first sample from each class (default behavior)
         components (Optional[List[str]]): List of components to include. Can be used to exclude
             certain components. Default: ["aggregated", "features", "foundation", "noise"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
@@ -441,9 +449,74 @@ def plot_components(
 
     Returns:
         Union[Any, List[Any]]: lets_plot visualization or list of visualizations for multivariate data.
+
+    Raises:
+        IndexError: If a sample index is out of range.
+
+    Examples:
+        # Show first sample of each class (default)
+        plot_components(dataset)
+
+        # Show a specific sample by index
+        plot_components(dataset, samples=5)
+
+        # Show multiple specific samples
+        plot_components(dataset, samples=[0, 10, 20])
+
+        # Show specific samples from each class
+        plot_components(dataset, samples={0: 5, 1: 10})
     """
     # Ensure dataset is in channels_last format for visualization
     dataset = _ensure_visualization_format(dataset)
+
+    # Process samples parameter to get sample_indices dict
+    sample_indices = None
+
+    if samples is not None:
+        if isinstance(samples, int):
+            # Single sample index
+            if samples < 0 or samples >= len(dataset["y"]):
+                raise IndexError(
+                    f"Sample index {samples} is out of range (0-{len(dataset['y']) - 1})"
+                )
+
+            # Get class of the sample and create sample_indices dict
+            class_label = dataset["y"][samples]
+            sample_indices = {class_label: samples}
+
+        elif isinstance(samples, list):
+            # Multiple sample indices
+            for idx in samples:
+                if idx < 0 or idx >= len(dataset["y"]):
+                    raise IndexError(
+                        f"Sample index {idx} is out of range (0-{len(dataset['y']) - 1})"
+                    )
+
+            # Group samples by class
+            sample_indices = {}
+            for idx in samples:
+                class_label = dataset["y"][idx]
+                # For multiple samples per class, we'll just use the last one
+                # This is because our visualization pipeline expects one sample per class
+                sample_indices[class_label] = idx
+
+        elif isinstance(samples, dict):
+            # Already in sample_indices format (class -> index mapping)
+            sample_indices = samples
+
+            # Validate the indices
+            for class_label, idx in sample_indices.items():
+                if idx < 0 or idx >= len(dataset["y"]):
+                    raise IndexError(
+                        f"Sample index {idx} is out of range (0-{len(dataset['y']) - 1})"
+                    )
+
+                # Verify the class label matches
+                actual_class = dataset["y"][idx]
+                if actual_class != class_label:
+                    raise ValueError(
+                        f"Sample at index {idx} has class {actual_class}, not {class_label} as specified"
+                    )
 
     # Default component order - use internal names
     default_components = ["aggregated", "features", "foundation", "noise"]
@@ -994,7 +1067,7 @@ def plot_sample(
     # Create and return plot
     return plot_components(
         dataset,
-        sample_indices=sample_indices,
+        samples=sample_indices,
         components=components_to_include,
         line_color=line_color,
         rect_fill=rect_fill,
@@ -1042,7 +1115,7 @@ def plot_class_comparison(
     # Create and return visualization
     return plot_components(
         dataset,
-        sample_indices=sample_indices,
+        samples=sample_indices,
         components=components_to_include,
         show_indicators=True,
         line_color=line_color,

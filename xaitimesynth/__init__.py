@@ -90,6 +90,7 @@ __all__ = [  # Export all the imported names
     "plot_component",
     "plot_components",
     "plot_sample",
+    "plot_timeseries",
 ]
 
 # Register standard components
