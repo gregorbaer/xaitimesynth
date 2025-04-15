@@ -66,8 +66,8 @@ def test_univariate_two_classes(basic_univariate_config):
     assert "components" in dataset, "Dataset should contain 'components' key"
 
     # Check the shapes
-    assert dataset["X"].shape == (n_samples, n_timesteps, 1), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, 1), "
+    assert dataset["X"].shape == (n_samples, 1, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions=1, n_timesteps={n_timesteps}), "
         f"got {dataset['X'].shape}"
     )
     assert dataset["y"].shape == (n_samples,), (
@@ -133,8 +133,8 @@ def test_univariate_three_classes(basic_univariate_config):
     assert set(classes) == {0, 1, 2}, f"Expected classes {0, 1, 2}, got {set(classes)}"
 
     # Check the shapes
-    assert dataset["X"].shape == (n_samples, n_timesteps, 1), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, 1), "
+    assert dataset["X"].shape == (n_samples, 1, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions=1, n_timesteps={n_timesteps}), "
         f"got {dataset['X'].shape}"
     )
     assert dataset["y"].shape == (n_samples,), (
@@ -170,9 +170,9 @@ def test_multivariate_two_classes(basic_multivariate_config):
     )
 
     # Verify the shape includes all dimensions
-    assert dataset["X"].shape == (n_samples, n_timesteps, n_dimensions), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, "
-        f"n_dimensions={n_dimensions}), got {dataset['X'].shape}"
+    assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions={n_dimensions}, "
+        f"n_timesteps={n_timesteps}), got {dataset['X'].shape}"
     )
     assert dataset["metadata"]["n_dimensions"] == n_dimensions, (
         f"Metadata should indicate {n_dimensions} dimensions"
@@ -244,9 +244,9 @@ def test_multivariate_three_classes_and_dimensions():
     assert set(classes) == {0, 1, 2}, f"Expected classes {0, 1, 2}, got {set(classes)}"
 
     # Check the shapes
-    assert dataset["X"].shape == (n_samples, n_timesteps, n_dimensions), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, "
-        f"n_dimensions={n_dimensions}), got {dataset['X'].shape}"
+    assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions={n_dimensions}, "
+        f"n_timesteps={n_timesteps}), got {dataset['X'].shape}"
     )
 
 
@@ -483,10 +483,10 @@ def test_add_signal_segment_functionality():
     )
 
     # Verify the shape of the datasets
-    assert dataset_fixed["X"].shape == (n_samples, n_timesteps, 1), (
+    assert dataset_fixed["X"].shape == (n_samples, 1, n_timesteps), (
         "Dataset with fixed signal segments has incorrect shape"
     )
-    assert dataset_random["X"].shape == (n_samples, n_timesteps, 1), (
+    assert dataset_random["X"].shape == (n_samples, 1, n_timesteps), (
         "Dataset with random signal segments has incorrect shape"
     )
 

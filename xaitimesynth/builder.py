@@ -83,6 +83,9 @@ class TimeSeriesBuilder:
         noise_fill_value: Value used for noise when none exists (default: 0.0).
         class_definitions (list): List of class definitions with components.
         current_class (dict): Current class being configured.
+        data_format (str): Format of the output tensor data. Either 'channels_last'
+            corresponding to shape [batch, time_steps, channels] or 'channels_first'
+            corresponding to shape [batch, channels, time_steps]. Default is 'channels_first'.
     """
 
     def __init__(
@@ -96,6 +99,7 @@ class TimeSeriesBuilder:
         feature_fill_value: Any = np.nan,
         foundation_fill_value: Any = 0.0,
         noise_fill_value: Any = 0.0,
+        data_format: str = "channels_first",
     ):
         """Initialize the time series builder.
 
@@ -115,9 +119,14 @@ class TimeSeriesBuilder:
                 "no contribution" rather than "doesn't exist".
             noise_fill_value: Value used for noise when none exists. Default is 0.0.
                 Similar to foundation, zeros indicate "no contribution".
+            data_format (str): Format of the output tensor data.
+                'channels_last': [batch, time_steps, channels] (original XAITimeSynth format)
+                'channels_first': [batch, channels, time_steps] (PyTorch/tsai format)
+                Default is 'channels_first'.
 
         Raises:
             ValueError: If n_dimensions is less than 1.
+            ValueError: If data_format is not one of ['channels_first', 'channels_last']
         """
         self.n_timesteps = n_timesteps
         self.n_samples = n_samples
@@ -126,6 +135,13 @@ class TimeSeriesBuilder:
         # Validate n_dimensions
         if n_dimensions < 1:
             raise ValueError("n_dimensions must be at least 1")
+
+        # Validate data_format
+        if data_format not in ["channels_first", "channels_last"]:
+            raise ValueError(
+                "data_format must be one of ['channels_first', 'channels_last']"
+            )
+        self.data_format = data_format
 
         self.normalization = normalization
         self.normalization_kwargs = normalization_kwargs or {}
@@ -589,7 +605,9 @@ class TimeSeriesBuilder:
 
         Returns:
             Dict[str, Any]: Dictionary containing the generated dataset with keys:
-                - 'X': Time series data with shape (n_samples, n_timesteps, n_dimensions)
+                - 'X': Time series data with shape determined by data_format:
+                       - 'channels_last': [n_samples, n_timesteps, n_dimensions]
+                       - 'channels_first': [n_samples, n_dimensions, n_timesteps]
                 - 'y': Class labels for each sample
                 - 'feature_masks': Boolean masks showing feature locations
                 - 'metadata': Dataset configuration information
@@ -611,7 +629,7 @@ class TimeSeriesBuilder:
         weights = weights / weights.sum()
         class_counts = self.rng.multinomial(self.n_samples, weights)
 
-        # Initialize arrays
+        # Initialize arrays - always create in channels_last format first (internal format)
         X = np.zeros((self.n_samples, self.n_timesteps, self.n_dimensions))
         y = np.zeros(self.n_samples, dtype=int)
         all_components = []
@@ -935,6 +953,11 @@ class TimeSeriesBuilder:
 
                 sample_idx += 1
 
+        # Convert the tensor format if needed (from channels_last to channels_first)
+        if self.data_format == "channels_first":
+            # Transpose from [n_samples, n_timesteps, n_dimensions] to [n_samples, n_dimensions, n_timesteps]
+            X = np.transpose(X, (0, 2, 1))
+
         # Prepare result dictionary
         result = {
             "X": X,
@@ -948,6 +971,7 @@ class TimeSeriesBuilder:
                 "normalize": self.normalization,
                 "normalization_kwargs": self.normalization_kwargs,
                 "random_state": self.random_state,
+                "data_format": self.data_format,
             },
         }
 
@@ -1266,5 +1290,88 @@ class TimeSeriesBuilder:
         # Fix case where both values are NaN (nansum would return 0, but we want NaN)
         both_nan = np.isnan(base) & np.isnan(to_add)
         result[both_nan] = np.nan
+
+        return result
+
+    @staticmethod
+    def convert_data_format(
+        dataset: Dict[str, Any], target_format: str
+    ) -> Dict[str, Any]:
+        """Convert an existing dataset between 'channels_first' and 'channels_last' formats.
+
+        This utility function helps convert datasets between the two supported tensor layouts:
+        - 'channels_last': [batch_size, time_steps, channels] (original XAITimeSynth format)
+        - 'channels_first': [batch_size, channels, time_steps] (PyTorch/tsai format)
+
+        Args:
+            dataset (Dict[str, Any]): Dataset dictionary returned by build().
+            target_format (str): Target format, either 'channels_first' or 'channels_last'.
+
+        Returns:
+            Dict[str, Any]: Dataset with X tensor in the target format. The metadata
+                is updated to reflect the new format.
+
+        Raises:
+            ValueError: If target_format is not one of ['channels_first', 'channels_last'].
+            ValueError: If dataset doesn't contain a metadata entry with data_format.
+        """
+        # Validate format
+        if target_format not in ["channels_first", "channels_last"]:
+            raise ValueError(
+                "target_format must be one of ['channels_first', 'channels_last']"
+            )
+
+        # Create a shallow copy of the dataset
+        result = dataset.copy()
+
+        # Get current format from metadata
+        if "metadata" not in dataset or "data_format" not in dataset["metadata"]:
+            # Try to infer format
+            if "X" in dataset and len(dataset["X"].shape) == 3:
+                # Assume original format for backward compatibility
+                current_format = "channels_last"
+            else:
+                raise ValueError("Dataset doesn't have format information in metadata")
+        else:
+            current_format = dataset["metadata"]["data_format"]
+
+        # If already in target format, return dataset as-is
+        if current_format == target_format:
+            return result
+
+        # Convert format by transposing the data
+        if "X" in result:
+            # Convert from channels_last to channels_first
+            if current_format == "channels_last" and target_format == "channels_first":
+                result["X"] = np.transpose(result["X"], (0, 2, 1))
+            # Convert from channels_first to channels_last
+            elif (
+                current_format == "channels_first" and target_format == "channels_last"
+            ):
+                result["X"] = np.transpose(result["X"], (0, 2, 1))
+
+            # Also convert train/test splits if they exist
+            if "X_train" in result:
+                if (
+                    current_format == "channels_last"
+                    and target_format == "channels_first"
+                ):
+                    result["X_train"] = np.transpose(result["X_train"], (0, 2, 1))
+                else:
+                    result["X_train"] = np.transpose(result["X_train"], (0, 2, 1))
+
+            if "X_test" in result:
+                if (
+                    current_format == "channels_last"
+                    and target_format == "channels_first"
+                ):
+                    result["X_test"] = np.transpose(result["X_test"], (0, 2, 1))
+                else:
+                    result["X_test"] = np.transpose(result["X_test"], (0, 2, 1))
+
+        # Update metadata
+        if "metadata" in result:
+            result["metadata"] = result["metadata"].copy()
+            result["metadata"]["data_format"] = target_format
 
         return result
