@@ -912,10 +912,7 @@ def auc_roc_score(
                 fpr_values = np.array(fpr_values)
 
                 # Calculate AUC using the trapezoidal rule
-                auc = np.trapz(
-                    tpr_values, fpr_values
-                )  # TODO: replace with np.trapezoid once tsxai uses numpy>=2.0.0
-
+                auc = np.trapezoid(tpr_values, fpr_values)
                 # Handle special case where fpr_values might not be monotonically increasing
                 if np.any(np.diff(fpr_values) < 0):
                     # Sort points by fpr
@@ -934,10 +931,7 @@ def auc_roc_score(
                             mask = fpr_sorted == fpr
                             unique_tprs[k] = np.max(tpr_sorted[mask])
 
-                        auc = np.trapz(
-                            unique_tprs, unique_fprs
-                        )  # TODO: replace with np.trapezoid once tsxai uses numpy>=2.0.0
-
+                        auc = np.trapezoid(unique_tprs, unique_fprs)
             # Store result based on average method
             if average == "per_sample_dimension":
                 results[(sample_idx, dim_idx)] = auc

@@ -1,3 +1,4 @@
+import copy
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -1375,3 +1376,103 @@ class TimeSeriesBuilder:
             result["metadata"]["data_format"] = target_format
 
         return result
+
+    def clone(
+        self,
+        n_timesteps: Optional[int] = None,
+        n_samples: Optional[int] = None,
+        n_dimensions: Optional[int] = None,
+        normalization: Optional[str] = None,
+        random_state: Optional[int] = None,
+        normalization_kwargs: Optional[Dict[str, Any]] = None,
+        feature_fill_value: Optional[Any] = None,
+        foundation_fill_value: Optional[Any] = None,
+        noise_fill_value: Optional[Any] = None,
+        data_format: Optional[str] = None,
+    ) -> "TimeSeriesBuilder":
+        """Create a new builder with the same class definitions but different parameters.
+
+        This method creates an independent copy of the builder with all its class
+        definitions but allows overriding specific parameters. This is particularly
+        useful for generating train/test/validation splits with the same underlying
+        patterns but different sample counts or random seeds.
+
+        Args:
+            n_timesteps: New length of each time series. Defaults to original value.
+            n_samples: New number of samples to generate. Defaults to original value.
+            n_dimensions: New number of dimensions. Defaults to original value.
+            normalization: New normalization method. Defaults to original value.
+            random_state: New random seed for reproducibility. Defaults to original value.
+            normalization_kwargs: New normalization parameters. Defaults to original value.
+            feature_fill_value: New value for non-existent features. Defaults to original value.
+            foundation_fill_value: New value for foundation. Defaults to original value.
+            noise_fill_value: New value for noise. Defaults to original value.
+            data_format: New data format ('channels_first' or 'channels_last'). Defaults to original value.
+
+        Returns:
+            TimeSeriesBuilder: A new independent builder with copied class definitions
+            and potentially updated parameters.
+
+        Example:
+            ```python
+            # Create base builder with class definitions
+            base_builder = (
+                TimeSeriesBuilder(n_timesteps=100, random_state=42)
+                .for_class(0)
+                .add_signal(random_walk(step_size=0.2))
+                .for_class(1)
+                .add_signal(random_walk(step_size=0.2))
+                .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
+            )
+
+            # Generate train dataset with 140 samples
+            train_dataset = base_builder.clone(n_samples=140, random_state=42).build()
+
+            # Generate test dataset with 60 samples and a different random seed
+            test_dataset = base_builder.clone(n_samples=60, random_state=43).build()
+            ```
+        """
+        # Prepare parameters with defaults from current instance when not provided
+        params = {
+            "n_timesteps": n_timesteps if n_timesteps is not None else self.n_timesteps,
+            "n_samples": n_samples if n_samples is not None else self.n_samples,
+            "n_dimensions": n_dimensions
+            if n_dimensions is not None
+            else self.n_dimensions,
+            "normalization": normalization
+            if normalization is not None
+            else self.normalization,
+            "random_state": random_state
+            if random_state is not None
+            else self.random_state,
+            "normalization_kwargs": (
+                normalization_kwargs
+                if normalization_kwargs is not None
+                else copy.deepcopy(self.normalization_kwargs)
+            ),
+            "feature_fill_value": feature_fill_value
+            if feature_fill_value is not None
+            else self.feature_fill_value,
+            "foundation_fill_value": foundation_fill_value
+            if foundation_fill_value is not None
+            else self.foundation_fill_value,
+            "noise_fill_value": noise_fill_value
+            if noise_fill_value is not None
+            else self.noise_fill_value,
+            "data_format": data_format if data_format is not None else self.data_format,
+        }
+        # Create new builder with updated parameters
+        new_builder = TimeSeriesBuilder(**params)
+
+        # Copy class definitions (deep copy to ensure complete independence)
+        new_builder.class_definitions = copy.deepcopy(self.class_definitions)
+
+        # Set current class if one was selected in the original builder
+        if self.current_class is not None:
+            # Find the class label of the current class
+            for i, class_def in enumerate(self.class_definitions):
+                if class_def is self.current_class:
+                    new_builder.current_class = new_builder.class_definitions[i]
+                    break
+
+        return new_builder

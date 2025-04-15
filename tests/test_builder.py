@@ -353,3 +353,68 @@ def test_to_df_basic(two_class_builder) -> None:
     assert "aggregated" in components, "DataFrame should contain aggregated component"
     assert "foundation" in components, "DataFrame should contain foundation component"
     assert "features" in components, "DataFrame should contain features component"
+
+
+def test_clone() -> None:
+    """Test the clone method creates independent builders with copied class definitions."""
+    # Create a builder with two classes and some components
+    original = (
+        TimeSeriesBuilder(n_timesteps=50, n_samples=20, random_state=42)
+        .for_class(0)
+        .add_signal({"type": "random_walk", "step_size": 0.2})
+        .for_class(1)
+        .add_signal({"type": "random_walk", "step_size": 0.2})
+        .add_feature({"type": "shapelet"}, start_pct=0.4, end_pct=0.6)
+    )
+
+    # Clone with different parameters
+    clone1 = original.clone(n_samples=30, random_state=43)
+
+    # Verify basic properties are correctly copied or overridden
+    assert clone1.n_timesteps == original.n_timesteps, "n_timesteps should be copied"
+    assert clone1.n_samples == 30, "n_samples should be overridden"
+    assert clone1.random_state == 43, "random_state should be overridden"
+    assert clone1.normalization == original.normalization, (
+        "normalization should be copied"
+    )
+
+    # Verify class definitions are copied
+    assert len(clone1.class_definitions) == len(original.class_definitions), (
+        "Class definitions should be copied"
+    )
+    assert clone1.class_definitions[0]["label"] == 0, "First class label should be 0"
+    assert clone1.class_definitions[1]["label"] == 1, "Second class label should be 1"
+
+    # Verify components are copied
+    assert len(clone1.class_definitions[0]["components"]["foundation"]) == 1, (
+        "Foundation components should be copied"
+    )
+    assert len(clone1.class_definitions[1]["components"]["features"]) == 1, (
+        "Feature components should be copied"
+    )
+
+    # Verify independence (deep copy)
+    clone1.class_definitions[0]["components"]["foundation"][0]["step_size"] = 0.3
+    assert (
+        original.class_definitions[0]["components"]["foundation"][0]["step_size"] == 0.2
+    ), "Modifying clone should not affect original"
+
+    # Verify current_class is properly set (pointing to cloned definitions, not original)
+    original.for_class(0)  # Set current_class in original
+    clone2 = original.clone()
+    assert clone2.current_class is not None, "Current class should be copied"
+    assert clone2.current_class["label"] == 0, "Current class label should be 0"
+    assert clone2.current_class is not original.current_class, (
+        "Current class should be a different object"
+    )
+
+    # Test that building datasets from clones produces correct shapes
+    dataset1 = original.build()
+    dataset2 = clone1.build()
+
+    assert dataset1["X"].shape == (20, 1, 50), (
+        "Original dataset should have shape (20, 1, 50)"
+    )
+    assert dataset2["X"].shape == (30, 1, 50), (
+        "Cloned dataset should have shape (30, 1, 50)"
+    )
