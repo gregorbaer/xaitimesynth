@@ -622,3 +622,107 @@ def test_normalization_options():
     assert not (np.min(none_data) >= 0 and np.max(none_data) <= 1), (
         "Non-normalized data should not match min-max normalization pattern"
     )
+
+
+def test_deterministic_class_counts():
+    """Test deterministic_class_counts parameter in the build method.
+
+    Tests that:
+    1. When deterministic_class_counts=True, class counts exactly match the expected proportions
+    2. When deterministic_class_counts=False, class counts follow multinomial distribution
+    3. Both methods produce valid datasets with the correct total sample count
+    """
+    n_samples = 100
+    n_timesteps = 50
+
+    # Define class weights
+    class0_weight = 0.2
+    class1_weight = 0.3
+    class2_weight = 0.5
+
+    # Expected counts with deterministic sampling
+    expected_class0 = int(n_samples * class0_weight)  # 20
+    expected_class1 = int(n_samples * class1_weight)  # 30
+    expected_class2 = n_samples - expected_class0 - expected_class1  # 50
+
+    # Create a builder with three classes and different weights
+    builder = (
+        TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
+        .for_class(0, weight=class0_weight)
+        .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .for_class(1, weight=class1_weight)
+        .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .for_class(2, weight=class2_weight)
+        .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
+    )
+
+    # Build with deterministic class counts
+    deterministic_dataset = builder.build(deterministic_class_counts=True)
+
+    # Build with probabilistic class counts (the default)
+    probabilistic_dataset = builder.build(deterministic_class_counts=False)
+
+    # Verify total sample counts
+    assert len(deterministic_dataset["y"]) == n_samples, (
+        f"Deterministic dataset should have {n_samples} samples, "
+        f"got {len(deterministic_dataset['y'])}"
+    )
+    assert len(probabilistic_dataset["y"]) == n_samples, (
+        f"Probabilistic dataset should have {n_samples} samples, "
+        f"got {len(probabilistic_dataset['y'])}"
+    )
+
+    # Get class counts for both datasets
+    deterministic_classes, deterministic_counts = np.unique(
+        deterministic_dataset["y"], return_counts=True
+    )
+    probabilistic_classes, probabilistic_counts = np.unique(
+        probabilistic_dataset["y"], return_counts=True
+    )
+
+    # Create dictionaries mapping class labels to counts
+    det_count_dict = dict(zip(deterministic_classes, deterministic_counts))
+    prob_count_dict = dict(zip(probabilistic_classes, probabilistic_counts))
+
+    # Verify deterministic counts exactly match expected proportions
+    assert det_count_dict[0] == expected_class0, (
+        f"Expected exactly {expected_class0} samples for class 0 with deterministic sampling, "
+        f"got {det_count_dict[0]}"
+    )
+    assert det_count_dict[1] == expected_class1, (
+        f"Expected exactly {expected_class1} samples for class 1 with deterministic sampling, "
+        f"got {det_count_dict[1]}"
+    )
+    assert det_count_dict[2] == expected_class2, (
+        f"Expected exactly {expected_class2} samples for class 2 with deterministic sampling, "
+        f"got {det_count_dict[2]}"
+    )
+
+    # For probabilistic counts, we can't test exact values since they're random
+    # Instead, verify that all classes are present and the distribution seems reasonable
+    assert len(probabilistic_classes) == 3, (
+        f"Expected all 3 classes to be present with probabilistic sampling, "
+        f"got {len(probabilistic_classes)}"
+    )
+
+    # Optional: Run multiple probabilistic builds to verify the distribution varies
+    # Note: This is a statistical test, so there's a tiny chance it could fail randomly
+    counts_vary = False
+    for _ in range(5):
+        another_dataset = builder.build(deterministic_class_counts=False)
+        another_classes, another_counts = np.unique(
+            another_dataset["y"], return_counts=True
+        )
+        another_count_dict = dict(zip(another_classes, another_counts))
+
+        # If any count differs from our first probabilistic sample, we've shown variation
+        if any(another_count_dict[i] != prob_count_dict[i] for i in range(3)):
+            counts_vary = True
+            break
+
+    assert counts_vary, (
+        "Probabilistic sampling should produce varying class counts across multiple runs"
+    )
