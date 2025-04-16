@@ -1092,7 +1092,9 @@ def auc_pr_score(
                     unique_precisions = unique_precisions[sort_idx]
 
                     # Calculate AUC using the trapezoidal rule
-                    auc = np.trapz(unique_precisions, unique_recalls)
+                    auc = np.trapz(
+                        unique_precisions, unique_recalls
+                    )  # TODO: replace with np.trapezoidal if downstream integration permits
                 else:
                     # Handle edge case with only one threshold
                     auc = precision_sorted[0]

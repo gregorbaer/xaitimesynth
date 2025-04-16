@@ -4,37 +4,55 @@ import numpy as np
 
 
 def generate_constant(
-    n_timesteps: int, rng: np.random.RandomState, value: float = 0.0, **kwargs
+    n_timesteps: int,
+    rng: np.random.RandomState,
+    length: Optional[int] = None,
+    value: float = 0.0,
+    **kwargs,
 ) -> np.ndarray:
     """Generate a constant signal.
 
     Args:
         n_timesteps (int): Length of time series.
         rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of feature in timesteps. If None, uses n_timesteps.
         value (float): Constant value.
         **kwargs: Additional parameters.
 
     Returns:
         np.ndarray: Constant signal vector.
     """
-    return np.full(n_timesteps, value)
+    # If length is not provided, use the entire time series length
+    if length is None:
+        length = n_timesteps
+
+    return np.full(length, value)
 
 
 def generate_random_walk(
-    n_timesteps: int, rng: np.random.RandomState, step_size: float = 0.1, **kwargs
+    n_timesteps: int,
+    rng: np.random.RandomState,
+    length: Optional[int] = None,
+    step_size: float = 0.1,
+    **kwargs,
 ) -> np.ndarray:
     """Generate a random walk signal.
 
     Args:
         n_timesteps (int): Length of time series.
         rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of feature in timesteps. If None, uses n_timesteps.
         step_size (float): Standard deviation of random steps.
         **kwargs: Additional parameters.
 
     Returns:
         np.ndarray: Random walk signal vector.
     """
-    steps = rng.normal(0, step_size, n_timesteps)
+    # If length is not provided, use the entire time series length
+    if length is None:
+        length = n_timesteps
+
+    steps = rng.normal(0, step_size, length)
     return np.cumsum(steps)
 
 
@@ -75,6 +93,7 @@ def generate_autoregressive(
 def generate_gaussian(
     n_timesteps: int,
     rng: np.random.RandomState,
+    length: Optional[int] = None,
     mu: float = 0.0,
     sigma: float = 0.1,
     **kwargs,
@@ -84,6 +103,7 @@ def generate_gaussian(
     Args:
         n_timesteps (int): Length of time series.
         rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of feature in timesteps. If None, uses n_timesteps.
         mu (float): Mean of the Gaussian distribution.
         sigma (float): Standard deviation of the Gaussian distribution.
         **kwargs: Additional parameters.
@@ -91,12 +111,17 @@ def generate_gaussian(
     Returns:
         np.ndarray: Gaussian noise vector.
     """
-    return rng.normal(mu, sigma, n_timesteps)
+    # If length is not provided, use the entire time series length
+    if length is None:
+        length = n_timesteps
+
+    return rng.normal(mu, sigma, length)
 
 
 def generate_uniform(
     n_timesteps: int,
     rng: np.random.RandomState,
+    length: Optional[int] = None,
     low: float = -0.1,
     high: float = 0.1,
     **kwargs,
@@ -106,6 +131,7 @@ def generate_uniform(
     Args:
         n_timesteps (int): Length of time series.
         rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of feature in timesteps. If None, uses n_timesteps.
         low (float): Lower bound of the uniform distribution.
         high (float): Upper bound of the uniform distribution.
         **kwargs: Additional parameters.
@@ -113,12 +139,17 @@ def generate_uniform(
     Returns:
         np.ndarray: Uniform noise vector.
     """
-    return rng.uniform(low, high, n_timesteps)
+    # If length is not provided, use the entire time series length
+    if length is None:
+        length = n_timesteps
+
+    return rng.uniform(low, high, length)
 
 
 def generate_seasonal(
     n_timesteps: int,
     rng: np.random.RandomState,
+    length: Optional[int] = None,
     period: int = 10,
     amplitude: float = 1.0,
     **kwargs,
@@ -128,6 +159,7 @@ def generate_seasonal(
     Args:
         n_timesteps (int): Length of time series.
         rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of feature in timesteps. If None, uses n_timesteps.
         period (int): Length of seasonal period.
         amplitude (float): Amplitude of seasonal pattern.
         **kwargs: Additional parameters.
@@ -135,7 +167,11 @@ def generate_seasonal(
     Returns:
         np.ndarray: Seasonal signal vector.
     """
-    t = np.arange(n_timesteps)
+    # If length is not provided, use the entire time series length
+    if length is None:
+        length = n_timesteps
+
+    t = np.arange(length)
     return amplitude * np.sin(2 * np.pi * t / period)
 
 

@@ -52,6 +52,50 @@ It's important to understand the different roles of the two function types in th
 
 This is why it's important to provide complete docstrings for both functions - they serve different audiences and use cases.
 
+## Design Choices
+
+The generator/component architecture follows specific design principles that enable flexibility across different roles:
+
+### Standardized Function Signatures
+
+All generator functions follow this consistent signature pattern:
+```python
+def generate_xxx(
+    n_timesteps: int,
+    rng: np.random.RandomState,
+    length: Optional[int] = None,
+    ...other parameters...
+) -> np.ndarray:
+```
+
+#### Why include `rng` in every generator?
+
+Even for deterministic generators like `constant` that don't use randomness:
+
+1. **Uniform API**: A consistent interface makes generators interchangeable and simplifies internal systems
+2. **Future-proofing**: Enables adding random variations to any component later
+3. **Generic dispatch**: The internal `generate_component` function can call any generator without special cases
+
+#### Why include `length` in every generator?
+
+1. **Role flexibility**: Components can be used as signals (full length) or features (partial length)
+2. **Generic feature creation**: The builder can request specific lengths for localized patterns
+3. **Adapter pattern**: Each generator adapts to the required length with the logic:
+   ```python
+   if length is None:
+       length = n_timesteps
+   ```
+
+### Separation of Concerns
+
+The system separates the "what" from the "how":
+
+- **Component functions** (`components.py`): Define what the user wants, with simple parameters
+- **Generator functions** (`generators.py`): Define how to generate the actual data
+- **Builder** (`builder.py`): Handles composition, positioning, and combining components
+
+This separation makes the API user-friendly while maintaining internal flexibility.
+
 ## Step 1: Add the Generator Function
 
 First, add your generator function to generators.py. Follow this function signature pattern:
