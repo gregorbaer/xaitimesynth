@@ -912,7 +912,9 @@ def auc_roc_score(
                 fpr_values = np.array(fpr_values)
 
                 # Calculate AUC using the trapezoidal rule
-                auc = np.trapezoid(tpr_values, fpr_values)
+                auc = np.trapz(
+                    tpr_values, fpr_values
+                )  # TODO: replace with np.trapezoidal if downstream integration permits
                 # Handle special case where fpr_values might not be monotonically increasing
                 if np.any(np.diff(fpr_values) < 0):
                     # Sort points by fpr
@@ -931,7 +933,170 @@ def auc_roc_score(
                             mask = fpr_sorted == fpr
                             unique_tprs[k] = np.max(tpr_sorted[mask])
 
-                        auc = np.trapezoid(unique_tprs, unique_fprs)
+                        auc = np.trapz(
+                            unique_tprs, unique_fprs
+                        )  # TODO: replace with np.trapezoidal if downstream integration permits
+            # Store result based on average method
+            if average == "per_sample_dimension":
+                results[(sample_idx, dim_idx)] = auc
+            elif average == "per_sample":
+                results[sample_idx] += auc / n_dimensions
+            elif average == "per_dimension":
+                results[dim_idx] += auc / n_samples
+            else:
+                results += auc / (n_samples * n_dimensions)
+
+    return results
+
+
+def auc_pr_score(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: Optional[str] = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Calculate AUC-PR score (Area Under the Precision-Recall Curve) for feature attributions.
+
+    AUC-PR measures the area under the precision-recall curve, which shows the
+    trade-off between precision and recall at different attribution thresholds.
+    This metric is particularly useful for imbalanced data where the positive class
+    (ground truth features) is sparse. A score of 1.0 indicates perfect ranking.
+
+    Args:
+        attributions (np.ndarray): Feature attribution values. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate AUC-PR for.
+            If None, uses all feature masks regardless of class.
+        average (Optional[str]): Method for averaging:
+            - 'macro': Average AUC-PR across samples and dimensions
+            - 'per_sample': Return AUC-PR for each sample (averaged across dimensions)
+            - 'per_dimension': Return AUC-PR for each dimension (averaged across samples)
+            - 'per_sample_dimension': Return AUC-PR for each sample-dimension pair
+            - None: Return overall AUC-PR (all samples and dimensions combined)
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            AUC-PR score(s) depending on the averaging method.
+    """
+    # Validate and prepare inputs (pass None for threshold since we don't binarize here)
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            None,
+            class_label,
+            allow_continuous=True,
+        )
+    )
+
+    # Extract needed dimensions
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+
+    # Initialize results container based on average method
+    if average == "per_sample_dimension":
+        results = {}
+    elif average == "per_sample":
+        results = {sample_idx: 0.0 for sample_idx in sample_indices}
+    elif average == "per_dimension":
+        results = {dim_idx: 0.0 for dim_idx in dim_indices}
+    else:
+        # For 'macro' or None, initialize a single result
+        results = 0.0
+
+    # Calculate AUC-PR for each sample and dimension
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and ground truth for this sample and dimension
+            attribution = attributions[i, :, j]
+            mask = ground_truth_by_dim[dim_idx][i]
+
+            # Skip if all ground truth values are the same (AUC-PR undefined)
+            if np.all(mask) or not np.any(mask):
+                # For AUC-PR, if all ground truth is True, PR is perfect (1.0)
+                # If no ground truth, the baseline is 0.0
+                auc = 1.0 if np.all(mask) else 0.0
+            else:
+                # Calculate precision and recall at each possible threshold
+                # Use unique attribution values as thresholds for efficiency
+                thresholds = np.unique(attribution)
+
+                # Add one threshold above the maximum to ensure we capture all points
+                if thresholds.size > 0:
+                    thresholds = np.append(thresholds, thresholds.max() + 1)
+
+                # Count total positive examples in ground truth
+                n_pos = np.sum(mask)
+
+                # Initialize lists for precision and recall values
+                precision_values = []
+                recall_values = []
+
+                # Calculate precision-recall pairs at each threshold
+                for threshold in sorted(thresholds, reverse=True):
+                    # Get predictions at this threshold
+                    pred_pos = attribution >= threshold
+
+                    # Calculate TP, FP
+                    tp = np.sum(pred_pos & mask)
+                    fp = np.sum(pred_pos & ~mask)
+
+                    # Calculate precision and recall
+                    precision = tp / (tp + fp) if (tp + fp) > 0 else 1.0
+                    recall = tp / n_pos if n_pos > 0 else 0.0
+
+                    precision_values.append(precision)
+                    recall_values.append(recall)
+
+                # Convert to numpy arrays
+                precision_values = np.array(precision_values)
+                recall_values = np.array(recall_values)
+
+                # Sort points by recall (for proper AUC calculation)
+                sort_idx = np.argsort(recall_values)
+                recall_sorted = recall_values[sort_idx]
+                precision_sorted = precision_values[sort_idx]
+
+                # AUC-PR needs to handle duplicate recall values
+                # When multiple precision values exist for a recall value, keep the max
+                if len(recall_sorted) > 1:
+                    unique_recalls, unique_indices = np.unique(
+                        recall_sorted, return_index=True
+                    )
+                    unique_precisions = np.zeros_like(unique_recalls)
+
+                    for k, recall in enumerate(unique_recalls):
+                        mask = recall_sorted == recall
+                        unique_precisions[k] = np.max(precision_sorted[mask])
+
+                    # Add (0, 1) point if not present (precision=1 at recall=0)
+                    if unique_recalls[0] != 0:
+                        unique_recalls = np.append([0], unique_recalls)
+                        unique_precisions = np.append([1.0], unique_precisions)
+
+                    # Sort by recall to ensure correct AUC calculation
+                    sort_idx = np.argsort(unique_recalls)
+                    unique_recalls = unique_recalls[sort_idx]
+                    unique_precisions = unique_precisions[sort_idx]
+
+                    # Calculate AUC using the trapezoidal rule
+                    auc = np.trapz(unique_precisions, unique_recalls)
+                else:
+                    # Handle edge case with only one threshold
+                    auc = precision_sorted[0]
+
             # Store result based on average method
             if average == "per_sample_dimension":
                 results[(sample_idx, dim_idx)] = auc

@@ -1054,3 +1054,133 @@ def test_nac_score():
     assert -0.3 <= nac_per_dim[1] <= 0.3, (
         f"Dimension 1 should have NAC around 0, got {nac_per_dim[1]}"
     )
+
+
+def test_auc_pr_score():
+    """Test Area Under the Precision-Recall Curve (AUC-PR) score.
+
+    This test verifies that the AUC-PR score correctly discriminates between
+    good, random, and poor attribution rankings. The test evaluates perfect
+    attribution (high score), random attribution (mid-range score), and inverse
+    attribution (low score), as well as different averaging methods.
+    """
+    # Create a simple dataset with a clear feature at known position
+    dataset = (
+        TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
+        .for_class(1)
+        .add_signal(gaussian())
+        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .build()
+    )
+
+    # Get the feature mask and find its center
+    feature_key = next(k for k in dataset["feature_masks"].keys())
+    mask = dataset["feature_masks"][feature_key][0]
+    feature_start = np.argmax(mask)
+    feature_end = len(mask) - np.argmax(mask[::-1])
+    feature_center = feature_start + (feature_end - feature_start) // 2
+
+    n_timesteps = dataset["metadata"]["n_timesteps"]
+    n_dimensions = dataset["metadata"]["n_dimensions"]
+
+    # Perfect ranking case: attribution values highest at feature location
+    perfect_attr = np.zeros((1, n_timesteps, n_dimensions))
+    for i in range(n_timesteps):
+        # Distance from center, normalized to 0-1 range
+        distance = abs(i - feature_center) / (n_timesteps // 2)
+        perfect_attr[0, i, 0] = max(0, 1 - distance)  # Linear decay from center
+
+    # Random case: attribution values randomly distributed
+    np.random.seed(42)  # For reproducibility
+    random_attr = np.random.rand(1, n_timesteps, n_dimensions)
+
+    # Inverse case: attribution values lowest at feature location
+    inverse_attr = np.zeros((1, n_timesteps, n_dimensions))
+    for i in range(n_timesteps):
+        # Distance from center, normalized to 0-1 range
+        distance = abs(i - feature_center) / (n_timesteps // 2)
+        inverse_attr[0, i, 0] = min(1, distance)  # Linear increase with distance
+
+    # Import auc_pr_score
+    from xaitimesynth.metrics import auc_pr_score
+
+    # Calculate AUC-PR scores
+    perfect_score = auc_pr_score(perfect_attr, dataset, sample_indices=[0])
+    random_score = auc_pr_score(random_attr, dataset, sample_indices=[0])
+    inverse_score = auc_pr_score(inverse_attr, dataset, sample_indices=[0])
+
+    # Perfect ranking should have high AUC-PR (close to 1.0)
+    assert perfect_score > 0.90, (
+        f"Perfect ranking should have AUC-PR > 0.90, got {perfect_score}"
+    )
+
+    # Random ranking should have AUC-PR roughly around the positive class proportion
+    assert 0.2 <= random_score <= 0.8, (
+        f"Random ranking should have AUC-PR in a reasonable range, got {random_score}"
+    )
+
+    # Inverse ranking should have low AUC-PR (worse than random)
+    assert inverse_score < random_score, (
+        f"Inverse ranking should have AUC-PR < random ({random_score}), got {inverse_score}"
+    )
+
+    # Test different average methods
+    perfect_per_dim = auc_pr_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_dimension"
+    )
+    perfect_per_sample = auc_pr_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_sample"
+    )
+    perfect_per_sample_dim = auc_pr_score(
+        perfect_attr, dataset, sample_indices=[0], average="per_sample_dimension"
+    )
+
+    # All average methods should maintain high score for perfect attribution
+    if isinstance(perfect_per_dim, dict):
+        assert perfect_per_dim[0] > 0.90, (
+            f"per_dimension AUC-PR should be > 0.90 for perfect ranking, got {perfect_per_dim[0]}"
+        )
+    else:
+        assert perfect_per_dim > 0.90, (
+            f"per_dimension AUC-PR should be > 0.90 for perfect ranking, got {perfect_per_dim}"
+        )
+    assert perfect_per_sample[0] > 0.90, (
+        "per_sample AUC-PR should be > 0.90 for perfect ranking"
+    )
+    assert perfect_per_sample_dim[(0, 0)] > 0.90, (
+        "per_sample_dimension AUC-PR should be > 0.90 for perfect ranking"
+    )
+
+    # Test with sparse features - create a dataset with a small feature
+    sparse_dataset = (
+        TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
+        .for_class(1)
+        .add_signal(gaussian())
+        .add_feature(
+            level_change(amplitude=1.0), start_pct=0.45, end_pct=0.5
+        )  # Small feature
+        .build()
+    )
+
+    # Create perfect attribution for the sparse feature
+    sparse_mask = sparse_dataset["feature_masks"][
+        next(k for k in sparse_dataset["feature_masks"].keys())
+    ][0]
+    sparse_perfect_attr = np.zeros((1, n_timesteps, n_dimensions))
+
+    # Set high values at feature locations and small values elsewhere
+    for i in range(n_timesteps):
+        if sparse_mask[i]:
+            sparse_perfect_attr[0, i, 0] = 1.0
+        else:
+            sparse_perfect_attr[0, i, 0] = 0.1
+
+    # Calculate AUC-PR for sparse case
+    sparse_auc_pr = auc_pr_score(
+        sparse_perfect_attr, sparse_dataset, sample_indices=[0]
+    )
+
+    # Even with sparse features, perfect attribution should yield high AUC-PR
+    assert sparse_auc_pr > 0.90, (
+        f"For sparse features with good attribution, AUC-PR should be high, got {sparse_auc_pr}"
+    )
