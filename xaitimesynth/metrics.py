@@ -1110,3 +1110,248 @@ def auc_pr_score(
                 results += auc / (n_samples * n_dimensions)
 
     return results
+
+
+def correlation_score(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: Optional[str] = "macro",
+    feature_source: str = "isolated",
+    absolute: bool = True,
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Calculate correlation coefficient between attribution values and ground truth features.
+
+    This metric measures how well attribution values correlate with ground truth feature values
+    in regions where ground truth features exist. Higher correlation coefficients indicate that
+    the attribution values follow a similar pattern to the feature values.
+
+    Args:
+        attributions (np.ndarray): Feature attribution values. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate correlation for.
+            If None, uses all feature masks regardless of class.
+        average (Optional[str]): Method for averaging:
+            - 'macro': Average correlation across samples and dimensions
+            - 'per_sample': Return correlation for each sample (averaged across dimensions)
+            - 'per_dimension': Return correlation for each dimension (averaged across samples)
+            - 'per_sample_dimension': Return correlation for each sample-dimension pair
+        feature_source (str): Source of feature values to correlate against:
+            - 'isolated': Use values from isolated feature components (dataset["components"][i].features)
+            - 'aggregated': Use values from the aggregated time series (dataset["X"])
+        absolute (bool): If True, returns the absolute value of the correlation coefficient,
+            measuring strength of correlation regardless of direction. If False, returns
+            the raw correlation coefficient with sign. Default is True.
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            Correlation coefficient(s) depending on the averaging method.
+    """
+    # Validate and prepare inputs (pass None for threshold since we don't binarize)
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            None,
+            class_label,
+            allow_continuous=True,
+        )
+    )
+
+    # Extract needed dimensions
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+    n_timesteps = attributions.shape[1]
+
+    # Initialize results container based on average method
+    if average == "per_sample_dimension":
+        results = {}
+    elif average == "per_sample":
+        results = {sample_idx: 0.0 for sample_idx in sample_indices}
+    elif average == "per_dimension":
+        results = {dim_idx: 0.0 for dim_idx in dim_indices}
+    else:
+        # For 'macro' or None, initialize a single result
+        results = 0.0
+
+    # Helper function to calculate correlation safely
+    def calculate_correlation(
+        attr_values: np.ndarray, feat_values: np.ndarray
+    ) -> float:
+        """Calculate correlation between two arrays, handling edge cases safely.
+
+        Args:
+            attr_values: Attribution values
+            feat_values: Feature values
+
+        Returns:
+            float: Correlation coefficient (raw, not absolute)
+        """
+        # Need at least 2 points for correlation
+        if len(attr_values) < 2:
+            return 0.0
+
+        # Handle cases with zero standard deviation
+        attr_std = np.std(attr_values)
+        feat_std = np.std(feat_values)
+
+        if attr_std == 0 and feat_std == 0:
+            # If both arrays are constant with the same value
+            if np.allclose(attr_values[0], feat_values[0]):
+                return 1.0
+            # If both arrays are constant with opposite signs but same magnitude
+            elif np.allclose(attr_values[0], -feat_values[0]):
+                return -1.0
+            # If both arrays are constant with different values
+            else:
+                return 0.0
+        elif attr_std == 0 or feat_std == 0:
+            # If only one array is constant
+            return 0.0
+
+        # Calculate correlation using normalized values
+        attr_norm = (attr_values - np.mean(attr_values)) / attr_std
+        feat_norm = (feat_values - np.mean(feat_values)) / feat_std
+        corr = np.mean(attr_norm * feat_norm)
+
+        return corr  # Return raw correlation, don't apply absolute here
+
+    # Get the data format from metadata
+    data_format = dataset.get("metadata", {}).get("data_format", "channels_first")
+
+    # For aggregated time series option, get the X data
+    if feature_source == "aggregated":
+        X = dataset["X"]
+        # Ensure X is in channels_last format for consistent processing
+        if data_format == "channels_first":
+            # Convert from [batch, channels, time] to [batch, time, channels]
+            X = np.transpose(X, (0, 2, 1))
+
+    # Check if components are available for isolated features
+    has_components = "components" in dataset and len(dataset["components"]) > 0
+
+    # Track raw correlation values before applying absolute value
+    raw_correlations = {}
+
+    # Calculate correlation for each sample and dimension
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and ground truth mask for this sample and dimension
+            attribution = attributions[i, :, j]
+            mask = ground_truth_by_dim[dim_idx][i]
+
+            # Skip if no ground truth regions
+            if not np.any(mask):
+                corr = 0.0
+            else:
+                if feature_source == "isolated" and has_components:
+                    # Get sample components
+                    sample_components = dataset["components"][sample_idx]
+
+                    if (
+                        hasattr(sample_components, "features")
+                        and sample_components.features
+                    ):
+                        # Extract feature values at masked positions
+                        valid_attr_values = []
+                        valid_feat_values = []
+
+                        # Find features for this dimension
+                        for (
+                            feature_name,
+                            feature_values,
+                        ) in sample_components.features.items():
+                            # Check if feature belongs to this dimension
+                            dim_match = f"_dim{dim_idx}" in feature_name or (
+                                dim_idx == 0 and "_dim" not in feature_name
+                            )
+
+                            if dim_match:
+                                # Extract paired values at mask positions
+                                for t in range(n_timesteps):
+                                    if mask[t] and not np.isnan(feature_values[t]):
+                                        if not valid_attr_values or t not in [
+                                            idx for idx, _ in valid_attr_values
+                                        ]:
+                                            valid_attr_values.append(
+                                                (t, attribution[t])
+                                            )
+                                            valid_feat_values.append(feature_values[t])
+
+                        if len(valid_attr_values) >= 2:
+                            # Extract just the values, not the indices
+                            attr_vals = np.array([v for _, v in valid_attr_values])
+                            feat_vals = np.array(valid_feat_values)
+                            corr = calculate_correlation(attr_vals, feat_vals)
+                        else:
+                            corr = 0.0  # Not enough points for correlation
+                    else:
+                        corr = 0.0  # No features found
+                else:
+                    # Use aggregated time series values in feature regions
+                    attr_values = attribution[mask]
+                    feat_values = X[sample_idx, mask, dim_idx]
+
+                    # Filter out NaN values
+                    valid_indices = ~np.isnan(feat_values)
+                    if np.sum(valid_indices) >= 2:
+                        corr = calculate_correlation(
+                            attr_values[valid_indices], feat_values[valid_indices]
+                        )
+                    else:
+                        corr = 0.0  # Not enough valid points
+
+            # Store raw correlation for this sample-dimension pair
+            raw_correlations[(sample_idx, dim_idx)] = corr
+
+            # Apply absolute if requested for per_sample_dimension results
+            if absolute:
+                corr = abs(corr)
+
+            # Store result based on average method
+            if average == "per_sample_dimension":
+                results[(sample_idx, dim_idx)] = corr
+            elif average == "per_sample":
+                results[sample_idx] += corr / n_dimensions
+            elif average == "per_dimension":
+                results[dim_idx] += corr / n_samples
+            else:
+                results += corr / (n_samples * n_dimensions)
+
+    # For other averaging methods, now compute the final results with absolute if needed
+    if absolute and average != "per_sample_dimension":
+        if average == "per_sample":
+            # Recalculate using absolute values of raw correlations
+            for sample_idx in results.keys():
+                results[sample_idx] = 0.0
+                for j, dim_idx in enumerate(dim_indices):
+                    corr = abs(raw_correlations.get((sample_idx, dim_idx), 0.0))
+                    results[sample_idx] += corr / n_dimensions
+
+        elif average == "per_dimension":
+            # Recalculate using absolute values of raw correlations
+            for dim_idx in results.keys():
+                results[dim_idx] = 0.0
+                for i, sample_idx in enumerate(sample_indices):
+                    corr = abs(raw_correlations.get((sample_idx, dim_idx), 0.0))
+                    results[dim_idx] += corr / n_samples
+
+        else:  # "macro" or None
+            # Recalculate the overall average using absolute values
+            results = 0.0
+            for (sample_idx, dim_idx), corr in raw_correlations.items():
+                results += abs(corr) / (n_samples * n_dimensions)
+
+    return results
