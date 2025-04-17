@@ -418,3 +418,62 @@ def test_clone() -> None:
     assert dataset2["X"].shape == (30, 1, 50), (
         "Cloned dataset should have shape (30, 1, 50)"
     )
+
+
+def test_build_shuffle_all_parts() -> None:
+    """Test that all dataset parts are shuffled consistently when shuffle=True.
+
+    Verifies that X, y, components, and feature_masks are shuffled in the same order.
+    Also checks that unshuffled output is grouped by class, while shuffled is not.
+    Uses deterministic_class_counts=True to ensure class grouping in unshuffled output.
+    """
+    builder = (
+        TimeSeriesBuilder(n_timesteps=10, n_samples=10, random_state=123)
+        .for_class(0)
+        .add_signal({"type": "random_walk"})
+        .for_class(1)
+        .add_signal({"type": "random_walk"})
+        .add_feature({"type": "shapelet"}, start_pct=0.2, end_pct=0.4)
+    )
+    ds_shuffled = builder.clone(random_state=123).build(
+        shuffle=True, deterministic_class_counts=True
+    )
+    ds_unshuffled = builder.clone(random_state=123).build(
+        shuffle=False, deterministic_class_counts=True
+    )
+
+    # y should be grouped by class in unshuffled, not in shuffled
+    n0 = np.sum(ds_unshuffled["y"] == 0)
+    assert np.all(ds_unshuffled["y"][:n0] == 0) and np.all(
+        ds_unshuffled["y"][n0:] == 1
+    ), f"Unshuffled y should be grouped by class, got {ds_unshuffled['y']}"
+    assert not np.all(ds_shuffled["y"][:n0] == 0), (
+        "Shuffled y should not be grouped by class"
+    )
+
+    # Find the permutation that maps unshuffled to shuffled efficiently
+    # For each row in ds_shuffled['X'], find its index in ds_unshuffled['X']
+    perm = []
+    for x in ds_shuffled["X"]:
+        matches = np.where(np.all(np.isclose(ds_unshuffled["X"], x), axis=(1, 2)))[0]
+        assert len(matches) == 1, (
+            "Each sample in shuffled X should match exactly one in unshuffled X"
+        )
+        perm.append(matches[0])
+    perm = np.array(perm)
+
+    # Check y
+    assert np.array_equal(ds_shuffled["y"], ds_unshuffled["y"][perm]), (
+        "y not shuffled consistently"
+    )
+    # Check components
+    for i, comp in enumerate(ds_shuffled["components"]):
+        orig = ds_unshuffled["components"][perm[i]]
+        assert np.allclose(comp.aggregated, orig.aggregated), (
+            f"components not shuffled consistently at index {i}"
+        )
+    # Check feature_masks
+    for key in ds_shuffled["feature_masks"]:
+        assert np.array_equal(
+            ds_shuffled["feature_masks"][key], ds_unshuffled["feature_masks"][key][perm]
+        ), f"feature_masks for {key} not shuffled consistently"

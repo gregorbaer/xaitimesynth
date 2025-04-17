@@ -592,6 +592,7 @@ class TimeSeriesBuilder:
         self,
         return_components: bool = True,
         deterministic_class_counts: bool = False,
+        shuffle: bool = True,
     ) -> Dict[str, Any]:
         """Build the dataset based on the configured class definitions.
 
@@ -605,6 +606,9 @@ class TimeSeriesBuilder:
             deterministic_class_counts (bool): If True, class counts will be determined exactly
                 by the weights rather than using multinomial sampling. This ensures exact class
                 proportions. Default is False (uses multinomial sampling).
+            shuffle (bool): Whether to shuffle the samples across classes. If True (default),
+                samples will be randomly ordered. If False, samples will be grouped by class
+                in the order classes were defined.
 
         Returns:
             Dict[str, Any]: Dictionary containing the generated dataset with keys:
@@ -971,6 +975,24 @@ class TimeSeriesBuilder:
 
                 sample_idx += 1
 
+        # Shuffle the dataset if requested
+        if shuffle:
+            # Generate shuffled indices based on the random state
+            indices = np.arange(self.n_samples)
+            self.rng.shuffle(indices)
+
+            # Shuffle X and y arrays
+            X = X[indices]
+            y = y[indices]
+
+            # Shuffle components if they were returned
+            if return_components:
+                all_components = [all_components[i] for i in indices]
+
+            # Shuffle feature masks
+            for key in feature_masks:
+                feature_masks[key] = feature_masks[key][indices]
+
         # Convert the tensor format if needed (from channels_last to channels_first)
         if self.data_format == "channels_first":
             # Transpose from [n_samples, n_timesteps, n_dimensions] to [n_samples, n_dimensions, n_timesteps]
@@ -990,6 +1012,7 @@ class TimeSeriesBuilder:
                 "normalization_kwargs": self.normalization_kwargs,
                 "random_state": self.random_state,
                 "data_format": self.data_format,
+                "shuffled": shuffle,
             },
         }
 
