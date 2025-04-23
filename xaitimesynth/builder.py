@@ -81,7 +81,7 @@ class TimeSeriesBuilder:
         rng (np.random.RandomState): Random number generator.
         feature_fill_value: Value used for non-existent features (default: np.nan).
         foundation_fill_value: Value used for foundation when none exists (default: 0.0).
-        noise_fill_value: Value used for noise when none exists (default: 0.0).
+        noise_fill_value: Value used for noise when none exists (default: np.nan).
         class_definitions (list): List of class definitions with components.
         current_class (dict): Current class being configured.
         data_format (str): Format of the output tensor data. Either 'channels_last'
@@ -99,7 +99,7 @@ class TimeSeriesBuilder:
         normalization_kwargs: Optional[Dict[str, Any]] = {},
         feature_fill_value: Any = np.nan,
         foundation_fill_value: Any = 0.0,
-        noise_fill_value: Any = 0.0,
+        noise_fill_value: Any = np.nan,
         data_format: str = "channels_first",
     ):
         """Initialize the time series builder.
@@ -118,8 +118,7 @@ class TimeSeriesBuilder:
             foundation_fill_value: Value used for foundation when none exists. Default is 0.0.
                 Foundation typically affects the entire time series, so zeros represent
                 "no contribution" rather than "doesn't exist".
-            noise_fill_value: Value used for noise when none exists. Default is 0.0.
-                Similar to foundation, zeros indicate "no contribution".
+            noise_fill_value: Value used for noise when none exists. Default is np.nan.
             data_format (str): Format of the output tensor data.
                 'channels_last': [batch, time_steps, channels] (original XAITimeSynth format)
                 'channels_first': [batch, channels, time_steps] (PyTorch/tsai format)
@@ -206,7 +205,7 @@ class TimeSeriesBuilder:
         self,
         component: Dict[str, Any],
         role: str = "foundation",
-        dim: Optional[List[int]] = [0],
+        dim: Optional[List[int]] = None,
         shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
@@ -218,7 +217,7 @@ class TimeSeriesBuilder:
             component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
             role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
             dim (List[int]): List of dimension indices where this signal should be applied.
-                Default is [0] (creates univariate time series if all components have dim=[0]).
+                If None, the signal will be added to all dimensions. Default is None.
             shared_randomness (bool): If True, the same random pattern will be used across all
                 specified dimensions. If False, each dimension gets its own random pattern
                 (for stochastic components). Default is False.
@@ -235,6 +234,8 @@ class TimeSeriesBuilder:
         if role not in ("foundation", "noise"):
             raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
+        if dim is None:
+            dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
         # If shared_randomness is True or only one dimension, store a single component
@@ -260,7 +261,7 @@ class TimeSeriesBuilder:
         self,
         component: Dict[str, Any],
         role: str = "foundation",
-        dim: Optional[List[int]] = [0],
+        dim: Optional[List[int]] = None,
         shared_randomness: bool = False,
         start_pct: Optional[float] = None,
         end_pct: Optional[float] = None,
@@ -279,7 +280,7 @@ class TimeSeriesBuilder:
             component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
             role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
             dim (List[int]): List of dimension indices where this signal should be applied.
-                Default is [0] (creates univariate time series if all components have dim=[0]).
+                If None, the signal will be added to all dimensions. Default is None.
             shared_randomness (bool): If True, the same random pattern will be used across all
                 specified dimensions. If False, each dimension gets its own random pattern
                 (for stochastic components). Default is False.
@@ -304,6 +305,8 @@ class TimeSeriesBuilder:
         if role not in ("foundation", "noise"):
             raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
+        if dim is None:
+            dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
         # Explicitly validate location parameters based on random_location setting
@@ -378,7 +381,7 @@ class TimeSeriesBuilder:
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
         random_location: bool = False,
-        dim: Optional[List[int]] = [0],
+        dim: Optional[List[int]] = None,
         shared_location: bool = True,
         shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
@@ -398,7 +401,7 @@ class TimeSeriesBuilder:
             random_location (bool): Whether to place the feature at a random location.
                 Default is False (fixed position).
             dim (List[int]): List of dimension indices where this feature should be applied.
-                Default is [0] (creates univariate time series if all components have dim=[0]).
+                If None, the feature will be added to all dimensions. Default is None.
             shared_location (bool): If True and random_location is True, the same random
                 location will be used across all dimensions. If False, each dimension gets
                 its own random location. Default is True.
@@ -415,6 +418,8 @@ class TimeSeriesBuilder:
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
 
+        if dim is None:
+            dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
         # Create feature definition
@@ -591,7 +596,7 @@ class TimeSeriesBuilder:
     def build(
         self,
         return_components: bool = True,
-        deterministic_class_counts: bool = False,
+        deterministic_class_counts: bool = True,
         shuffle: bool = True,
     ) -> Dict[str, Any]:
         """Build the dataset based on the configured class definitions.
@@ -605,7 +610,7 @@ class TimeSeriesBuilder:
                 Useful for visualization and analysis. Default is True.
             deterministic_class_counts (bool): If True, class counts will be determined exactly
                 by the weights rather than using multinomial sampling. This ensures exact class
-                proportions. Default is False (uses multinomial sampling).
+                proportions. Default is True.
             shuffle (bool): Whether to shuffle the samples across classes. If True (default),
                 samples will be randomly ordered. If False, samples will be grouped by class
                 in the order classes were defined.
