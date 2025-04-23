@@ -15,5 +15,7 @@ setup(
         "ipykernel",
         "ipywidgets",
         "ruff",
+        "pytest",
+        "pyyaml",
     ],
 )
