@@ -802,6 +802,7 @@ def auc_roc_score(
     dim_indices: Optional[List[int]] = None,
     class_label: Optional[int] = None,
     average: Optional[str] = "macro",
+    normalize: bool = False,
 ) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
     """Calculate AUC-ROC score for feature attributions.
 
@@ -832,6 +833,8 @@ def auc_roc_score(
             - 'per_dimension': Return AUC-ROC for each dimension (averaged across samples)
             - 'per_sample_dimension': Return AUC-ROC for each sample-dimension pair
             - None: Return overall AUC-ROC (all samples and dimensions combined)
+        normalize (bool): If True, normalize the score to represent relative improvement
+            over random (0.5). Calculated as (AUC-ROC - 0.5) / 0.5. Default is False.
 
     Returns:
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
@@ -934,6 +937,14 @@ def auc_roc_score(
                         auc = np.trapz(
                             unique_tprs, unique_fprs
                         )  # TODO: replace with np.trapezoidal if downstream integration permits
+
+            # Normalize if requested
+            if normalize:
+                # Normalize relative to random baseline (0.5)
+                # (AUC - 0.5) / (1.0 - 0.5) = (AUC - 0.5) / 0.5
+                # This handles the case auc == 0.5 correctly (results in 0.0)
+                auc = (auc - 0.5) / 0.5
+
             # Store result based on average method
             if average == "per_sample_dimension":
                 results[(sample_idx, dim_idx)] = auc
@@ -954,6 +965,7 @@ def auc_pr_score(
     dim_indices: Optional[List[int]] = None,
     class_label: Optional[int] = None,
     average: Optional[str] = "macro",
+    normalize: bool = False,
 ) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
     """Calculate AUC-PR score (Area Under the Precision-Recall Curve) for feature attributions.
 
@@ -961,6 +973,8 @@ def auc_pr_score(
     trade-off between precision and recall at different attribution thresholds.
     This metric is particularly useful for imbalanced data where the positive class
     (ground truth features) is sparse. A score of 1.0 indicates perfect ranking.
+    The baseline (random) score is equal to the prevalence (fraction of timesteps
+    covered by the ground truth mask) of the positive class.
 
     Intuition: Measures precision-recall trade-off across thresholds, particularly useful for imbalanced data with sparse features.
     Answers: How well do my attributions maintain precision while finding all important timesteps?
@@ -984,6 +998,9 @@ def auc_pr_score(
             - 'per_dimension': Return AUC-PR for each dimension (averaged across samples)
             - 'per_sample_dimension': Return AUC-PR for each sample-dimension pair
             - None: Return overall AUC-PR (all samples and dimensions combined)
+        normalize (bool): If True, normalize the score to represent relative improvement
+            over random (prevalence). Calculated as (AUC-PR - prevalence) / (1 - prevalence).
+            Returns 0 if prevalence is 1 (to avoid division by zero). Default is False.
 
     Returns:
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
@@ -1028,11 +1045,16 @@ def auc_pr_score(
             attribution = attributions[i, :, j]
             mask = masks[i, :, j]
 
+            # Calculate prevalence (positive class fraction)
+            n_pos = np.sum(mask)
+            n_total = mask.size
+            prevalence = n_pos / n_total if n_total > 0 else 0.0
+
             # Skip if all ground truth values are the same (AUC-PR undefined)
-            if np.all(mask) or not np.any(mask):
-                # For AUC-PR, if all ground truth is True, PR is perfect (1.0)
-                # If no ground truth, the baseline is 0.0
-                auc = 1.0 if np.all(mask) else 0.0
+            if n_pos == n_total or n_pos == 0:
+                # If all ground truth is True, raw AUC-PR is 1.0
+                # If no ground truth, raw AUC-PR is 0.0 (or undefined, treat as 0)
+                auc = 1.0 if n_pos == n_total else 0.0
             else:
                 # Calculate precision and recall at each possible threshold
                 # Use unique attribution values as thresholds for efficiency
@@ -1103,6 +1125,17 @@ def auc_pr_score(
                 else:
                     # Handle edge case with only one threshold
                     auc = precision_sorted[0]
+
+            # Normalize if requested
+            if normalize:
+                # Avoid division by zero; max improvement is not well-defined
+                if prevalence == 1.0:
+                    auc = 0.0
+                else:
+                    # Normalize relative to random baseline (prevalence)
+                    # (AUC - prevalence) / (1.0 - prevalence)
+                    # This handles auc == prevalence correctly (results in 0.0)
+                    auc = (auc - prevalence) / (1.0 - prevalence)
 
             # Store result based on average method
             if average == "per_sample_dimension":
