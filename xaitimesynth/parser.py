@@ -73,7 +73,16 @@ def _create_single_builder_from_dict(
             # Extract common and segment-specific arguments
             role = signal_config.get("role", "foundation")
             dim = signal_config.get("dimensions")  # None if not present or null
-            shared_randomness = signal_config.get("shared_randomness", False)
+
+            # Default shared_randomness based on whether dimensions are specified.
+            # If dim is None, default to True (apply same component across all dims).
+            # If dim is specified, default to False (apply potentially different
+            # randomness per specified dim, unless overridden in config).
+            if dim is None:
+                shared_randomness = signal_config.get("shared_randomness", True)
+            else:
+                shared_randomness = signal_config.get("shared_randomness", False)
+
             start_pct = signal_config.get("start_pct")
             end_pct = signal_config.get("end_pct")
             length_pct = signal_config.get("length_pct")
@@ -415,10 +424,18 @@ def load_builders_from_config(
             )
             continue
 
+        # Check if the dictionary looks like a dataset config (must have 'classes')
+        if "classes" not in single_dataset_config:
+            print(
+                f"Warning: Configuration for '{name}' does not contain a 'classes' key. Skipping."
+            )
+            continue
+
         try:
             builders[name] = _create_single_builder_from_dict(single_dataset_config)
         except (ValueError, AttributeError) as e:
             print(f"Error creating builder for dataset '{name}': {e}")
-            raise
+            # Re-raise the exception after printing the context
+            raise ValueError(f"Error processing dataset '{name}': {e}") from e
 
     return builders
