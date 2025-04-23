@@ -300,135 +300,6 @@ def _validate_and_prepare_inputs(
     return attributions, ground_truth_by_dim, sample_indices, dim_indices
 
 
-def _validate_attribution_and_extract_feature_masks(
-    attribution, dataset, sample_indices=None, class_label=None, threshold=None
-):
-    """Validate attribution and extract relevant feature masks.
-
-    Helper function to avoid code duplication between different metrics.
-
-    Args:
-        attribution (np.ndarray): Attribution array with shape [batch_size, time_steps, channels]
-            or [batch_size, channels, time_steps] depending on the data_format.
-            Values can be boolean or continuous (if threshold is provided).
-        dataset (dict): Dataset dictionary from TimeSeriesBuilder.build().
-        sample_indices (list, optional): Indices of samples to evaluate.
-            If None, all samples are used.
-        class_label (int, optional): Class label to consider for evaluation.
-            If None, uses the actual class labels from dataset["y"].
-        threshold (float, optional): Threshold for converting continuous attributions
-            to binary. If None, attribution must already be binary (boolean).
-
-    Returns:
-        tuple:
-            - Binary attribution array normalized to channels_last format for processing
-            - Dictionary of relevant feature masks
-            - List of validated sample indices
-            - Data format from dataset metadata
-
-    Raises:
-        ValueError: If attribution has wrong shape or is not binary when threshold=None.
-    """
-    # Extract data format from metadata or assume default
-    data_format = dataset.get("metadata", {}).get("data_format", "channels_last")
-
-    # Handle sample indices
-    if sample_indices is None:
-        sample_indices = np.arange(len(dataset["y"]))
-    else:
-        # Validate sample indices
-        max_idx = len(dataset["y"]) - 1
-        for idx in sample_indices:
-            if idx < 0 or idx > max_idx:
-                raise ValueError(f"Sample index {idx} out of range (0 to {max_idx}).")
-
-    # Get metadata
-    n_timesteps = dataset["metadata"]["n_timesteps"]
-    n_dimensions = dataset["metadata"]["n_dimensions"]
-
-    # Instead of validating strictly, try to infer the format of the attribution
-    # and convert if necessary
-
-    # Check if the attribution could be in channels_last format [batch, time, channels]
-    if (
-        len(attribution.shape) == 3
-        and attribution.shape[1] == n_timesteps
-        and attribution.shape[2] == n_dimensions
-    ):
-        # Attribution is already in channels_last format
-        attribution_internal = attribution
-
-    # Check if the attribution could be in channels_first format [batch, channels, time]
-    elif (
-        len(attribution.shape) == 3
-        and attribution.shape[1] == n_dimensions
-        and attribution.shape[2] == n_timesteps
-    ):
-        # Need to transpose to channels_last for internal processing
-        attribution_internal = np.transpose(attribution, (0, 2, 1))
-
-    # If either dimension is 1, try to reshape
-    elif len(attribution.shape) == 3 and (
-        attribution.shape[1] == 1 or attribution.shape[2] == 1
-    ):
-        if attribution.shape[1] == 1:  # [batch, 1, any]
-            # Reshape to [batch, any, 1]
-            attribution_internal = attribution.transpose(0, 2, 1)
-        elif attribution.shape[2] == 1:  # [batch, any, 1]
-            # Keep as is
-            attribution_internal = attribution
-
-        # Check if the resulting shape matches expected dimensions
-        if (
-            attribution_internal.shape[1] == n_timesteps
-            and attribution_internal.shape[2] == n_dimensions
-        ):
-            pass  # Shape is now correct
-        elif (
-            attribution_internal.shape[1] == n_dimensions
-            and attribution_internal.shape[2] == n_timesteps
-        ):
-            # Need to transpose again
-            attribution_internal = np.transpose(attribution_internal, (0, 2, 1))
-        else:
-            raise ValueError(
-                f"Attribution shape {attribution.shape} cannot be reshaped to match "
-                f"dataset with dimensions {n_dimensions} and timesteps {n_timesteps}."
-            )
-    else:
-        raise ValueError(
-            f"Attribution shape {attribution.shape} doesn't match dataset with "
-            f"{n_dimensions} dimensions and {n_timesteps} timesteps. "
-            f"Expected either [batch, {n_timesteps}, {n_dimensions}] (channels_last) or "
-            f"[batch, {n_dimensions}, {n_timesteps}] (channels_first)."
-        )
-
-    # Convert continuous attributions to binary if threshold provided
-    if threshold is not None:
-        binary_attribution = attribution_internal >= threshold
-    else:
-        # Ensure attribution is binary
-        if not np.issubdtype(attribution_internal.dtype, np.bool_):
-            raise ValueError(
-                "Attribution must be boolean type when no threshold was provided."
-            )
-        binary_attribution = attribution_internal
-
-    # Extract feature masks for relevant samples
-    feature_masks = {}
-    for key, mask in dataset["feature_masks"].items():
-        # Only include masks for relevant class
-        if class_label is not None:
-            class_str = f"class_{class_label}_"
-            if not key.startswith(class_str):
-                continue
-
-        # Only include samples from sample_indices
-        feature_masks[key] = mask[sample_indices]
-
-    return binary_attribution, feature_masks, sample_indices, data_format
-
-
 def precision_score(
     attribution: np.ndarray,
     dataset: Dict[str, Any],
@@ -442,6 +313,9 @@ def precision_score(
 
     Measures how many of the attributed timesteps are actually within ground truth features.
     Precision = TP / (TP + FP)
+
+    Intuition: Measures how many of the timesteps highlighted by attribution are actually important.
+    Answers: When my method highlights a time location, how often is it truly important?
 
     Args:
         attribution (np.ndarray): Attribution array. Can be:
@@ -561,6 +435,9 @@ def recall_score(
     Measures how much of the ground truth feature is captured by the attribution.
     Recall = TP / (TP + FN)
 
+    Intuition: Measures what fraction of truly important timesteps were identified by the attribution.
+    Answers: What percentage of important features did my method successfully detect?
+
     Args:
         attribution (np.ndarray): Attribution array. Can be:
             - 1D array (n_timesteps,): Single sample, single dimension
@@ -678,6 +555,9 @@ def f1_score(
 
     F1 score is the harmonic mean of precision and recall:
     F1 = 2 * (precision * recall) / (precision + recall)
+
+    Intuition: Harmonic mean of precision and recall, balancing the trade-off between finding all important regions and avoiding false positives.
+    Answers: How well does my method balance both finding all important features and being precise?
 
     Args:
         attribution (np.ndarray): Attribution array. Can be:
@@ -809,6 +689,9 @@ def nac_score(
     important features receive significantly higher attribution scores than would be expected
     by chance.
 
+    Intuition: Measures if important regions receive statistically higher attribution values than would be expected by chance.
+    Answers: Are my attribution values significantly elevated in the regions that matter?
+
     Args:
         attributions (np.ndarray): Feature attribution values. Can be:
             - 1D array (n_timesteps,): Single sample, single dimension
@@ -926,6 +809,9 @@ def auc_roc_score(
     important and non-important features across all possible threshold values.
     A score of 0.5 indicates random performance, while 1.0 indicates perfect
     discrimination.
+
+    Intuition: Measures discrimination ability across all possible threshold values, with 0.5 indicating random performance.
+    Answers: How well can my attributions separate important from unimportant timesteps?
 
     Args:
         attributions (np.ndarray): Feature attribution values. Can be:
@@ -1075,6 +961,9 @@ def auc_pr_score(
     trade-off between precision and recall at different attribution thresholds.
     This metric is particularly useful for imbalanced data where the positive class
     (ground truth features) is sparse. A score of 1.0 indicates perfect ranking.
+
+    Intuition: Measures precision-recall trade-off across thresholds, particularly useful for imbalanced data with sparse features.
+    Answers: How well do my attributions maintain precision while finding all important timesteps?
 
     Args:
         attributions (np.ndarray): Feature attribution values. Can be:
@@ -1243,6 +1132,9 @@ def correlation_score(
     This metric measures how well attribution values correlate with ground truth feature values
     in regions where ground truth features exist. Higher correlation coefficients indicate that
     the attribution values follow a similar pattern to the feature values.
+
+    Intuition (absolute=True): Measures how well attribution values align with the pattern of ground truth features, regardless of direction.
+    Answers (absolute=True): Do my attributions follow the same pattern as the ground truth, even if the relationship is inverse?
 
     Args:
         attributions (np.ndarray): Feature attribution values. Can be:
