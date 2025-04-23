@@ -47,6 +47,7 @@ from .components import (
 )
 from .data_structures import TimeSeriesComponents
 from .functions import normalize
+from .parser import load_builders_from_config
 from .registry import (
     get_component_parameters,
     list_components,
@@ -63,7 +64,24 @@ from .visualization import (
 )
 
 __all__ = [  # Export all the imported names
+    # Classes and Functions
     "TimeSeriesBuilder",
+    "load_builders_from_config",
+    "TimeSeriesComponents",
+    "normalize",
+    "get_component_parameters",
+    "list_components",
+    "list_feature_components",
+    "list_signal_components",
+    "register_component",
+    "register_component_generator",
+    # Visualization Functions
+    "plot_class_comparison",
+    "plot_component",
+    "plot_components",
+    "plot_sample",
+    "plot_timeseries",
+    # Data Generation Components
     "autoregressive",
     "constant",
     "ecg_like",
@@ -78,19 +96,6 @@ __all__ = [  # Export all the imported names
     "trend",
     "trough",
     "uniform",
-    "TimeSeriesComponents",
-    "normalize",
-    "get_component_parameters",
-    "list_components",
-    "list_feature_components",
-    "list_signal_components",
-    "register_component",
-    "register_component_generator",
-    "plot_class_comparison",
-    "plot_component",
-    "plot_components",
-    "plot_sample",
-    "plot_timeseries",
 ]
 
 # Register standard components
