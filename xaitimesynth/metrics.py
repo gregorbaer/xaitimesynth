@@ -162,12 +162,26 @@ def _validate_and_prepare_inputs(
                 "to compare against."
             )
 
-    # Case 3: attributions is (n_samples, n_timesteps, n_dimensions) - already in correct format
+    # Case 3: attributions is (n_samples, n_timesteps, n_dimensions) or (n_samples, n_dimensions, n_timesteps)
     elif len(attribution_shape) == 3:
-        if attribution_shape[1] != n_timesteps:
+        # We need to infer the format based on the attribution shape, NOT the dataset format
+        # This is because attributions might be provided in a different format than the dataset
+
+        # Check if attribution has correct shape for channels_last format [batch, time, channels]
+        if attribution_shape[1] == n_timesteps and attribution_shape[2] <= n_dimensions:
+            # Attribution is in channels_last format - no conversion needed
+            pass
+        # Check if attribution has correct shape for channels_first format [batch, channels, time]
+        elif (
+            attribution_shape[2] == n_timesteps and attribution_shape[1] <= n_dimensions
+        ):
+            # Convert from channels_first to channels_last for internal processing
+            attributions = np.transpose(attributions, (0, 2, 1))
+        else:
             raise ValueError(
-                f"Attribution middle dimension ({attribution_shape[1]}) does not match dataset timesteps ({n_timesteps}). "
-                f"The time dimension of attributions must match the dataset."
+                f"Attribution shape {attribution_shape} doesn't match dataset dimensions. "
+                f"Expected either [batch, {n_timesteps}, {n_dimensions}] (channels_last) or "
+                f"[batch, {n_dimensions}, {n_timesteps}] (channels_first)."
             )
 
         # For 3D attributions, we can use default sample_indices
@@ -186,7 +200,7 @@ def _validate_and_prepare_inputs(
         raise ValueError(
             f"Unsupported attribution shape: {attribution_shape}. "
             f"Expected 1D (n_timesteps,), 2D (n_timesteps, n_dimensions), or "
-            f"3D (n_samples, n_timesteps, n_dimensions)."
+            f"3D (n_samples, n_timesteps, n_dimensions) or (n_samples, n_dimensions, n_timesteps) with appropriate data_format."
         )
 
     # Set default dimension indices if not provided
@@ -416,30 +430,34 @@ def _validate_attribution_and_extract_feature_masks(
 
 
 def precision_score(
-    attribution,
-    dataset,
-    sample_indices=None,
-    class_label=None,
-    threshold=None,
-    average="macro",
-):
+    attribution: np.ndarray,
+    dataset: Dict[str, Any],
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    threshold: Optional[float] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
     """Calculate precision score for attribution against ground truth.
 
     Measures how many of the attributed timesteps are actually within ground truth features.
     Precision = TP / (TP + FP)
 
     Args:
-        attribution (np.ndarray): Attribution array with shape depending on data_format:
-            - 'channels_last': [batch_size, time_steps, channels]
-            - 'channels_first': [batch_size, channels, time_steps]
-            Values can be boolean or continuous (if threshold is provided).
-        dataset (dict): Dataset dictionary from TimeSeriesBuilder.build().
-        sample_indices (list, optional): Indices of samples to evaluate.
-            If None, all samples are used.
-        class_label (int, optional): Class label to consider for evaluation.
-            If None, uses the actual class labels from dataset["y"].
-        threshold (float, optional): Threshold for converting continuous attributions
-            to binary. If None, attribution must already be binary (boolean).
+        attribution (np.ndarray): Attribution array. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict[str, Any]): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate precision for.
+            If None, uses all feature masks regardless of class.
+        threshold (Optional[float]): Threshold for binarizing attribution values.
+            If None, attribution must already be binary (boolean).
         average (str): Averaging method for multi-sample/multi-dimension results:
             - "macro": Average over samples and dimensions
             - "per_sample": Return score for each sample (avg across dimensions)
@@ -447,35 +465,48 @@ def precision_score(
             - "per_sample_dimension": Return score for each sample-dimension pair
 
     Returns:
-        float or dict: Precision score(s) based on the specified averaging method.
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            Precision score(s) based on the specified averaging method.
     """
-    # Validate and prepare data
-    binary_attribution, feature_masks, sample_indices, data_format = (
-        _validate_attribution_and_extract_feature_masks(
-            attribution, dataset, sample_indices, class_label, threshold
-        )
+    # Extract data using the enhanced helper function
+    data = _extract_feature_data(
+        attribution,
+        dataset,
+        sample_indices,
+        dim_indices,
+        class_label,
+        threshold,
+        needs_feature_values=False,
     )
+
+    attributions = data["attributions"]
+    masks = data["masks"]
+    sample_indices = data["sample_indices"]
+    dim_indices = data["dim_indices"]
 
     # Calculate precision for each sample-dimension pair
     results = {}
     for i, sample_idx in enumerate(sample_indices):
-        # Iterate through dimensions
-        for dim in range(dataset["metadata"]["n_dimensions"]):
-            # Combine all feature masks for this sample & dimension
-            combined_mask = np.zeros(dataset["metadata"]["n_timesteps"], dtype=bool)
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and mask for this sample and dimension
+            attr_values = attributions[i, :, j]
+            mask_values = masks[i, :, j]
 
-            for key, masks in feature_masks.items():
-                # Check if mask is relevant for this dimension
-                if f"_dim{dim}" in key or (
-                    dim == 0 and "_dim" not in key
-                ):  # Support legacy format
-                    combined_mask |= masks[i]
+            # Ensure attr_values is boolean for bitwise operations
+            if not np.issubdtype(attr_values.dtype, np.bool_):
+                if threshold is not None:
+                    attr_values = attr_values >= threshold
+                else:
+                    raise ValueError(
+                        "Attribution values must be boolean when no threshold is provided. "
+                        "Please provide a threshold or convert to boolean values."
+                    )
 
             # Calculate true positives: attribution AND ground truth
-            true_positives = np.sum(binary_attribution[i, :, dim] & combined_mask)
+            true_positives = np.sum(attr_values & mask_values)
 
             # Calculate false positives: attribution AND NOT ground truth
-            false_positives = np.sum(binary_attribution[i, :, dim] & ~combined_mask)
+            false_positives = np.sum(attr_values & ~mask_values)
 
             # Calculate precision
             if (true_positives + false_positives) > 0:
@@ -484,23 +515,32 @@ def precision_score(
                 precision = 0  # Undefined precision, set to 0 by convention
 
             # Store result for this sample-dimension pair
-            results[(sample_idx, dim)] = precision
+            results[(sample_idx, dim_idx)] = precision
 
     # Average results based on the specified method
     if average == "macro":
-        return np.mean(list(results.values()))
+        return np.mean(list(results.values())) if results else 0.0
     elif average == "per_sample":
         sample_results = {}
         for sample_idx in sample_indices:
             sample_dims = [(s, d) for (s, d) in results.keys() if s == sample_idx]
-            sample_results[sample_idx] = np.mean([results[k] for k in sample_dims])
+            sample_results[sample_idx] = (
+                np.mean([results[k] for k in sample_dims]) if sample_dims else 0.0
+            )
         return sample_results
     elif average == "per_dimension":
         dim_results = {}
-        for dim in range(dataset["metadata"]["n_dimensions"]):
-            dim_samples = [(s, d) for (s, d) in results.keys() if d == dim]
-            dim_results[dim] = np.mean([results[k] for k in dim_samples])
-        return list(dim_results.values()) if len(dim_results) > 1 else dim_results[0]
+        for dim_idx in dim_indices:
+            dim_samples = [(s, d) for (s, d) in results.keys() if d == dim_idx]
+            dim_results[dim_idx] = (
+                np.mean([results[k] for k in dim_samples]) if dim_samples else 0.0
+            )
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
     elif average == "per_sample_dimension":
         return results
     else:
@@ -508,30 +548,34 @@ def precision_score(
 
 
 def recall_score(
-    attribution,
-    dataset,
-    sample_indices=None,
-    class_label=None,
-    threshold=None,
-    average="macro",
-):
+    attribution: np.ndarray,
+    dataset: Dict[str, Any],
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    threshold: Optional[float] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
     """Calculate recall score for attribution against ground truth.
 
     Measures how much of the ground truth feature is captured by the attribution.
     Recall = TP / (TP + FN)
 
     Args:
-        attribution (np.ndarray): Attribution array with shape depending on data_format:
-            - 'channels_last': [batch_size, time_steps, channels]
-            - 'channels_first': [batch_size, channels, time_steps]
-            Values can be boolean or continuous (if threshold is provided).
-        dataset (dict): Dataset dictionary from TimeSeriesBuilder.build().
-        sample_indices (list, optional): Indices of samples to evaluate.
-            If None, all samples are used.
-        class_label (int, optional): Class label to consider for evaluation.
-            If None, uses the actual class labels from dataset["y"].
-        threshold (float, optional): Threshold for converting continuous attributions
-            to binary. If None, attribution must already be binary (boolean).
+        attribution (np.ndarray): Attribution array. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict[str, Any]): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate recall for.
+            If None, uses all feature masks regardless of class.
+        threshold (Optional[float]): Threshold for binarizing attribution values.
+            If None, attribution must already be binary (boolean).
         average (str): Averaging method for multi-sample/multi-dimension results:
             - "macro": Average over samples and dimensions
             - "per_sample": Return score for each sample (avg across dimensions)
@@ -539,35 +583,48 @@ def recall_score(
             - "per_sample_dimension": Return score for each sample-dimension pair
 
     Returns:
-        float or dict: Recall score(s) based on the specified averaging method.
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            Recall score(s) based on the specified averaging method.
     """
-    # Validate and prepare data
-    binary_attribution, feature_masks, sample_indices, data_format = (
-        _validate_attribution_and_extract_feature_masks(
-            attribution, dataset, sample_indices, class_label, threshold
-        )
+    # Extract data using the enhanced helper function
+    data = _extract_feature_data(
+        attribution,
+        dataset,
+        sample_indices,
+        dim_indices,
+        class_label,
+        threshold,
+        needs_feature_values=False,
     )
+
+    attributions = data["attributions"]
+    masks = data["masks"]
+    sample_indices = data["sample_indices"]
+    dim_indices = data["dim_indices"]
 
     # Calculate recall for each sample-dimension pair
     results = {}
     for i, sample_idx in enumerate(sample_indices):
-        # Iterate through dimensions
-        for dim in range(dataset["metadata"]["n_dimensions"]):
-            # Combine all feature masks for this sample & dimension
-            combined_mask = np.zeros(dataset["metadata"]["n_timesteps"], dtype=bool)
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and mask for this sample and dimension
+            attr_values = attributions[i, :, j]
+            mask_values = masks[i, :, j]
 
-            for key, masks in feature_masks.items():
-                # Check if mask is relevant for this dimension
-                if f"_dim{dim}" in key or (
-                    dim == 0 and "_dim" not in key
-                ):  # Support legacy format
-                    combined_mask |= masks[i]
+            # Ensure attr_values is boolean for bitwise operations
+            if not np.issubdtype(attr_values.dtype, np.bool_):
+                if threshold is not None:
+                    attr_values = attr_values >= threshold
+                else:
+                    raise ValueError(
+                        "Attribution values must be boolean when no threshold is provided. "
+                        "Please provide a threshold or convert to boolean values."
+                    )
 
             # Calculate true positives: attribution AND ground truth
-            true_positives = np.sum(binary_attribution[i, :, dim] & combined_mask)
+            true_positives = np.sum(attr_values & mask_values)
 
             # Calculate false negatives: NOT attribution AND ground truth
-            false_negatives = np.sum((~binary_attribution[i, :, dim]) & combined_mask)
+            false_negatives = np.sum((~attr_values) & mask_values)
 
             # Calculate recall
             if (true_positives + false_negatives) > 0:
@@ -576,23 +633,32 @@ def recall_score(
                 recall = 0  # No ground truth, set to 0 by convention
 
             # Store result for this sample-dimension pair
-            results[(sample_idx, dim)] = recall
+            results[(sample_idx, dim_idx)] = recall
 
     # Average results based on the specified method
     if average == "macro":
-        return np.mean(list(results.values()))
+        return np.mean(list(results.values())) if results else 0.0
     elif average == "per_sample":
         sample_results = {}
         for sample_idx in sample_indices:
             sample_dims = [(s, d) for (s, d) in results.keys() if s == sample_idx]
-            sample_results[sample_idx] = np.mean([results[k] for k in sample_dims])
+            sample_results[sample_idx] = (
+                np.mean([results[k] for k in sample_dims]) if sample_dims else 0.0
+            )
         return sample_results
     elif average == "per_dimension":
         dim_results = {}
-        for dim in range(dataset["metadata"]["n_dimensions"]):
-            dim_samples = [(s, d) for (s, d) in results.keys() if d == dim]
-            dim_results[dim] = np.mean([results[k] for k in dim_samples])
-        return list(dim_results.values()) if len(dim_results) > 1 else dim_results[0]
+        for dim_idx in dim_indices:
+            dim_samples = [(s, d) for (s, d) in results.keys() if d == dim_idx]
+            dim_results[dim_idx] = (
+                np.mean([results[k] for k in dim_samples]) if dim_samples else 0.0
+            )
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
     elif average == "per_sample_dimension":
         return results
     else:
@@ -600,30 +666,34 @@ def recall_score(
 
 
 def f1_score(
-    attribution,
-    dataset,
-    sample_indices=None,
-    class_label=None,
-    threshold=None,
-    average="macro",
-):
+    attribution: np.ndarray,
+    dataset: Dict[str, Any],
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    threshold: Optional[float] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
     """Calculate F1 score for attribution against ground truth.
 
     F1 score is the harmonic mean of precision and recall:
     F1 = 2 * (precision * recall) / (precision + recall)
 
     Args:
-        attribution (np.ndarray): Attribution array with shape depending on data_format:
-            - 'channels_last': [batch_size, time_steps, channels]
-            - 'channels_first': [batch_size, channels, time_steps]
-            Values can be boolean or continuous (if threshold is provided).
-        dataset (dict): Dataset dictionary from TimeSeriesBuilder.build().
-        sample_indices (list, optional): Indices of samples to evaluate.
-            If None, all samples are used.
-        class_label (int, optional): Class label to consider for evaluation.
-            If None, uses the actual class labels from dataset["y"].
-        threshold (float, optional): Threshold for converting continuous attributions
-            to binary. If None, attribution must already be binary (boolean).
+        attribution (np.ndarray): Attribution array. Can be:
+            - 1D array (n_timesteps,): Single sample, single dimension
+            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
+            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
+        dataset (Dict[str, Any]): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+            For 1D or 2D attributions (single sample), you must specify which sample
+            to compare against. For 3D attributions, defaults to all samples.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+            If None, uses all dimensions available in the attribution array.
+        class_label (Optional[int]): Class label to calculate F1 score for.
+            If None, uses all feature masks regardless of class.
+        threshold (Optional[float]): Threshold for binarizing attribution values.
+            If None, attribution must already be binary (boolean).
         average (str): Averaging method for multi-sample/multi-dimension results:
             - "macro": Average over samples and dimensions
             - "per_sample": Return score for each sample (avg across dimensions)
@@ -631,58 +701,92 @@ def f1_score(
             - "per_sample_dimension": Return score for each sample-dimension pair
 
     Returns:
-        float or dict: F1 score(s) based on the specified averaging method.
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            F1 score(s) based on the specified averaging method.
     """
-    # Calculate precision and recall first
-    precision_results = precision_score(
+    # Extract data using the enhanced helper function
+    data = _extract_feature_data(
         attribution,
         dataset,
         sample_indices,
+        dim_indices,
         class_label,
         threshold,
-        "per_sample_dimension",
-    )
-    recall_results = recall_score(
-        attribution,
-        dataset,
-        sample_indices,
-        class_label,
-        threshold,
-        "per_sample_dimension",
+        needs_feature_values=False,
     )
 
-    # Calculate F1 for each sample-dimension pair
+    attributions = data["attributions"]
+    masks = data["masks"]
+    sample_indices = data["sample_indices"]
+    dim_indices = data["dim_indices"]
+
+    # Calculate F1 score for each sample-dimension pair
     results = {}
-    for key in precision_results.keys():
-        precision_val = precision_results[key]
-        recall_val = recall_results[key]
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            # Get attribution and mask for this sample and dimension
+            attr_values = attributions[i, :, j]
+            mask_values = masks[i, :, j]
 
-        # Calculate F1 score
-        if precision_val + recall_val > 0:
-            f1 = 2 * (precision_val * recall_val) / (precision_val + recall_val)
-        else:
-            f1 = 0  # Both precision and recall are 0
+            # Ensure attr_values is boolean for bitwise operations
+            if not np.issubdtype(attr_values.dtype, np.bool_):
+                if threshold is not None:
+                    attr_values = attr_values >= threshold
+                else:
+                    raise ValueError(
+                        "Attribution values must be boolean when no threshold is provided. "
+                        "Please provide a threshold or convert to boolean values."
+                    )
 
-        results[key] = f1
+            # Calculate true positives, false positives, and false negatives
+            true_positives = np.sum(attr_values & mask_values)
+            false_positives = np.sum(attr_values & ~mask_values)
+            false_negatives = np.sum((~attr_values) & mask_values)
+
+            # Calculate precision and recall
+            if (true_positives + false_positives) > 0:
+                precision = true_positives / (true_positives + false_positives)
+            else:
+                precision = 0.0
+
+            if (true_positives + false_negatives) > 0:
+                recall = true_positives / (true_positives + false_negatives)
+            else:
+                recall = 0.0
+
+            # Calculate F1 score
+            if precision + recall > 0:
+                f1 = 2 * (precision * recall) / (precision + recall)
+            else:
+                f1 = 0.0  # Both precision and recall are 0
+
+            # Store result for this sample-dimension pair
+            results[(sample_idx, dim_idx)] = f1
 
     # Average results based on the specified method
     if average == "macro":
-        return np.mean(list(results.values()))
+        return np.mean(list(results.values())) if results else 0.0
     elif average == "per_sample":
         sample_results = {}
-        sample_indices = set(s for (s, _) in results.keys())
         for sample_idx in sample_indices:
             sample_dims = [(s, d) for (s, d) in results.keys() if s == sample_idx]
-            sample_results[sample_idx] = np.mean([results[k] for k in sample_dims])
+            sample_results[sample_idx] = (
+                np.mean([results[k] for k in sample_dims]) if sample_dims else 0.0
+            )
         return sample_results
     elif average == "per_dimension":
         dim_results = {}
-        n_dimensions = max(d for (_, d) in results.keys()) + 1
-        for dim in range(n_dimensions):
-            dim_samples = [(s, d) for (s, d) in results.keys() if d == dim]
-            if dim_samples:
-                dim_results[dim] = np.mean([results[k] for k in dim_samples])
-        return list(dim_results.values()) if len(dim_results) > 1 else dim_results[0]
+        for dim_idx in dim_indices:
+            dim_samples = [(s, d) for (s, d) in results.keys() if d == dim_idx]
+            dim_results[dim_idx] = (
+                np.mean([results[k] for k in dim_samples]) if dim_samples else 0.0
+            )
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
     elif average == "per_sample_dimension":
         return results
     else:
@@ -731,18 +835,22 @@ def nac_score(
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
             NAC score(s) depending on the averaging method.
     """
-    # Validate and prepare inputs (pass None for threshold since we don't binarize here)
-    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
-        _validate_and_prepare_inputs(
-            attributions,
-            dataset,
-            sample_indices,
-            dim_indices,
-            None,
-            class_label,
-            allow_continuous=True,
-        )
+    # Extract data using the enhanced helper function - NAC needs continuous values
+    data = _extract_feature_data(
+        attributions,
+        dataset,
+        sample_indices,
+        dim_indices,
+        class_label,
+        threshold=None,  # No thresholding for NAC
+        needs_feature_values=False,  # NAC only needs masks, not feature values
+        allow_continuous=True,
     )
+
+    attributions = data["attributions"]
+    masks = data["masks"]
+    sample_indices = data["sample_indices"]
+    dim_indices = data["dim_indices"]
 
     # Extract needed dimensions
     n_samples = len(sample_indices)
@@ -762,9 +870,9 @@ def nac_score(
     # Calculate NAC for each sample and dimension
     for i, sample_idx in enumerate(sample_indices):
         for j, dim_idx in enumerate(dim_indices):
-            # Get attribution and ground truth for this sample and dimension
+            # Get attribution and mask for this sample and dimension
             attribution = attributions[i, :, j]
-            mask = ground_truth_by_dim[dim_idx][i]
+            mask = masks[i, :, j]
 
             # Select regions based on ground_truth_only parameter
             if ground_truth_only:
@@ -843,18 +951,22 @@ def auc_roc_score(
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
             AUC-ROC score(s) depending on the averaging method.
     """
-    # Validate and prepare inputs (pass None for threshold since we don't binarize here)
-    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
-        _validate_and_prepare_inputs(
-            attributions,
-            dataset,
-            sample_indices,
-            dim_indices,
-            None,
-            class_label,
-            allow_continuous=True,
-        )
+    # Extract data using the enhanced helper function - AUC-ROC needs continuous values
+    data = _extract_feature_data(
+        attributions,
+        dataset,
+        sample_indices,
+        dim_indices,
+        class_label,
+        threshold=None,  # No thresholding for AUC-ROC
+        needs_feature_values=False,  # AUC-ROC only needs masks, not feature values
+        allow_continuous=True,
     )
+
+    attributions = data["attributions"]
+    masks = data["masks"]
+    sample_indices = data["sample_indices"]
+    dim_indices = data["dim_indices"]
 
     # Extract needed dimensions
     n_samples = len(sample_indices)
@@ -874,9 +986,9 @@ def auc_roc_score(
     # Calculate AUC-ROC for each sample and dimension
     for i, sample_idx in enumerate(sample_indices):
         for j, dim_idx in enumerate(dim_indices):
-            # Get attribution and ground truth for this sample and dimension
+            # Get attribution and mask for this sample and dimension
             attribution = attributions[i, :, j]
-            mask = ground_truth_by_dim[dim_idx][i]
+            mask = masks[i, :, j]
 
             # Skip if all ground truth values are the same (AUC-ROC undefined)
             if np.all(mask) or not np.any(mask):
@@ -988,18 +1100,22 @@ def auc_pr_score(
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
             AUC-PR score(s) depending on the averaging method.
     """
-    # Validate and prepare inputs (pass None for threshold since we don't binarize here)
-    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
-        _validate_and_prepare_inputs(
-            attributions,
-            dataset,
-            sample_indices,
-            dim_indices,
-            None,
-            class_label,
-            allow_continuous=True,
-        )
+    # Extract data using the enhanced helper function - AUC-PR needs continuous values
+    data = _extract_feature_data(
+        attributions,
+        dataset,
+        sample_indices,
+        dim_indices,
+        class_label,
+        threshold=None,  # No thresholding for AUC-PR
+        needs_feature_values=False,  # AUC-PR only needs masks, not feature values
+        allow_continuous=True,
     )
+
+    attributions = data["attributions"]
+    masks = data["masks"]
+    sample_indices = data["sample_indices"]
+    dim_indices = data["dim_indices"]
 
     # Extract needed dimensions
     n_samples = len(sample_indices)
@@ -1021,7 +1137,7 @@ def auc_pr_score(
         for j, dim_idx in enumerate(dim_indices):
             # Get attribution and ground truth for this sample and dimension
             attribution = attributions[i, :, j]
-            mask = ground_truth_by_dim[dim_idx][i]
+            mask = masks[i, :, j]
 
             # Skip if all ground truth values are the same (AUC-PR undefined)
             if np.all(mask) or not np.any(mask):
@@ -1157,9 +1273,17 @@ def correlation_score(
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
             Correlation coefficient(s) depending on the averaging method.
     """
-    # Extract all necessary data
+    # Extract all necessary data - correlation_score requires feature values
     data = _extract_feature_data(
-        attributions, dataset, sample_indices, dim_indices, class_label, feature_source
+        attributions,
+        dataset,
+        sample_indices,
+        dim_indices,
+        class_label,
+        threshold=None,  # No thresholding for correlation
+        feature_source=feature_source,
+        needs_feature_values=True,  # Correlation needs actual feature values
+        allow_continuous=True,
     )
 
     attr = data["attributions"]
@@ -1252,12 +1376,15 @@ def _extract_feature_data(
     sample_indices: Optional[List[int]] = None,
     dim_indices: Optional[List[int]] = None,
     class_label: Optional[int] = None,
+    threshold: Optional[float] = None,
     feature_source: str = "isolated",
+    needs_feature_values: bool = False,
+    allow_continuous: bool = False,
 ) -> Dict[str, Any]:
     """Extract attribution values, feature values, and masks for metric calculations.
 
     This helper function prepares all necessary data for feature attribution metrics,
-    including extracting ground truth features from appropriate sources.
+    serving as a central extraction point for all metrics in the module.
 
     Args:
         attributions (np.ndarray): Feature attribution values.
@@ -1265,28 +1392,36 @@ def _extract_feature_data(
         sample_indices (Optional[List[int]]): Sample indices to include.
         dim_indices (Optional[List[int]]): Dimension indices to include.
         class_label (Optional[int]): Class label to consider for evaluation.
+        threshold (Optional[float]): Threshold for binarizing attribution values.
         feature_source (str): Source of feature values to extract:
             - "isolated": Use values from isolated feature components.
             - "aggregated": Use values from the aggregated time series.
+        needs_feature_values (bool): If True, extract actual feature values from the dataset.
+            If False, only extract binary masks (more efficient for most metrics).
+        allow_continuous (bool): If True, allow continuous attribution values even without a threshold.
+            Used for metrics like AUC-ROC, AUC-PR, and NAC that work with continuous values.
 
     Returns:
         Dict[str, Any]: Dictionary containing:
             - "attributions": Feature attribution values [n_samples, n_timesteps, n_dimensions]
-            - "feature_values": Ground truth feature values [n_samples, n_timesteps, n_dimensions]
+            - "feature_values": Ground truth feature values if needs_feature_values=True,
+                               otherwise None
             - "masks": Ground truth masks [n_samples, n_timesteps, n_dimensions]
             - "sample_indices": List of sample indices
             - "dim_indices": List of dimension indices
     """
-    # Validate and prepare inputs
+    # We need to set allow_continuous=True here to prevent validation errors
+    # for continuous attributions in _validate_and_prepare_inputs
+    allow_continuous_validation = True
     attributions, ground_truth_by_dim, sample_indices, dim_indices = (
         _validate_and_prepare_inputs(
             attributions,
             dataset,
             sample_indices,
             dim_indices,
-            None,
+            None,  # Don't binarize in _validate_and_prepare_inputs
             class_label,
-            allow_continuous=True,
+            allow_continuous=allow_continuous_validation,
         )
     )
 
@@ -1296,7 +1431,6 @@ def _extract_feature_data(
 
     # Create output arrays
     masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
-    feature_values = np.full((n_samples, n_timesteps, n_dimensions), np.nan)
 
     # Fill mask array from ground_truth_by_dim
     for j, dim_idx in enumerate(dim_indices):
@@ -1304,53 +1438,78 @@ def _extract_feature_data(
         for i in range(n_samples):
             masks[i, :, j] = dim_mask[i]
 
-    # Fill feature_values based on the source
-    if feature_source == "aggregated":
-        # Get data format from metadata
-        data_format = dataset.get("metadata", {}).get("data_format", "channels_first")
-        X = dataset["X"]
-
-        # Ensure X is in channels_last format
-        if data_format == "channels_first":
-            X = np.transpose(X, (0, 2, 1))
-
-        # Extract values for each sample and dimension
-        for i, sample_idx in enumerate(sample_indices):
-            for j, dim_idx in enumerate(dim_indices):
-                feature_values[i, :, j] = X[sample_idx, :, dim_idx]
-
-    elif (
-        feature_source == "isolated"
-        and "components" in dataset
-        and len(dataset["components"]) > 0
+    # Binarize attributions if threshold is provided
+    if threshold is not None:
+        # Create a binary copy for metrics that need boolean input
+        attributions = _binarize_attributions(attributions, threshold)
+    # For metrics that need boolean values (precision, recall, f1) but don't allow continuous values
+    elif not (allow_continuous or needs_feature_values) and not np.issubdtype(
+        attributions.dtype, np.bool_
     ):
-        # Extract from isolated components
-        for i, sample_idx in enumerate(sample_indices):
-            sample_components = dataset["components"][sample_idx]
-            if hasattr(sample_components, "features") and sample_components.features:
-                # Process each dimension
-                for j, dim_idx in enumerate(dim_indices):
-                    # Initialize with zeros where features will be added
-                    feature_mask = masks[i, :, j]
-                    if np.any(feature_mask):
-                        feature_values[i, feature_mask, j] = 0.0
+        # For metrics that need boolean values but continuous values were provided
+        # without a threshold, raise an error with the original error message pattern
+        # to match existing tests
+        raise ValueError(
+            "Attribution must be boolean type when no threshold was provided."
+        )
 
-                    # Find and combine all features for this dimension
-                    for (
-                        feature_name,
-                        feature_vals,
-                    ) in sample_components.features.items():
-                        dim_match = f"_dim{dim_idx}" in feature_name or (
-                            dim_idx == 0 and "_dim" not in feature_name
-                        )
-                        if dim_match:
-                            # Copy only non-NaN values
-                            valid = ~np.isnan(feature_vals)
-                            if np.any(valid):
-                                # Add feature values (treating NaN as 0)
-                                temp_vals = feature_vals.copy()
-                                temp_vals[~valid] = 0
-                                feature_values[i, valid, j] += temp_vals[valid]
+    # Only extract feature values if needed
+    feature_values = None
+    if needs_feature_values:
+        feature_values = np.full((n_samples, n_timesteps, n_dimensions), np.nan)
+
+        # Fill feature_values based on the source
+        if feature_source == "aggregated":
+            # Get data format from metadata
+            data_format = dataset.get("metadata", {}).get(
+                "data_format", "channels_first"
+            )
+            X = dataset["X"]
+
+            # Ensure X is in channels_last format
+            if data_format == "channels_first":
+                X = np.transpose(X, (0, 2, 1))
+
+            # Extract values for each sample and dimension
+            for i, sample_idx in enumerate(sample_indices):
+                for j, dim_idx in enumerate(dim_indices):
+                    feature_values[i, :, j] = X[sample_idx, :, dim_idx]
+
+        elif (
+            feature_source == "isolated"
+            and "components" in dataset
+            and len(dataset["components"]) > 0
+        ):
+            # Extract from isolated components
+            for i, sample_idx in enumerate(sample_indices):
+                sample_components = dataset["components"][sample_idx]
+                if (
+                    hasattr(sample_components, "features")
+                    and sample_components.features
+                ):
+                    # Process each dimension
+                    for j, dim_idx in enumerate(dim_indices):
+                        # Initialize with zeros where features will be added
+                        feature_mask = masks[i, :, j]
+                        if np.any(feature_mask):
+                            feature_values[i, feature_mask, j] = 0.0
+
+                        # Find and combine all features for this dimension
+                        for (
+                            feature_name,
+                            feature_vals,
+                        ) in sample_components.features.items():
+                            dim_match = f"_dim{dim_idx}" in feature_name or (
+                                dim_idx == 0 and "_dim" not in feature_name
+                            )
+                            if dim_match:
+                                # Copy only non-NaN values
+                                valid = ~np.isnan(feature_vals)
+                                if np.any(valid):
+                                    # Add feature values (treating NaN as 0)
+                                    temp_vals = feature_vals.copy()
+                                    temp_vals[~valid] = 0
+                                    feature_values[i, valid, j] += temp_vals[valid]
 
     return {
         "attributions": attributions,

@@ -704,7 +704,7 @@ def test_error_handling():
         precision_score(attr, dataset, sample_indices=[10])  # Only 2 samples in dataset
 
     # Case 3: Wrong shape attributions
-    with pytest.raises(ValueError, match="cannot be reshaped to match"):
+    with pytest.raises(ValueError, match="doesn't match dataset dimensions"):
         attr = np.zeros((1, 30, 1), dtype=bool)  # Dataset has 20 timesteps
         precision_score(attr, dataset, sample_indices=[0])
 
