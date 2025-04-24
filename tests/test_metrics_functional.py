@@ -852,19 +852,40 @@ def test_auc_roc_score():
     random_score = auc_roc_score(random_attr, dataset, sample_indices=[0])
     inverse_score = auc_roc_score(inverse_attr, dataset, sample_indices=[0])
 
-    # Perfect ranking should have AUC-ROC close to 1.0
+    # Calculate normalized scores
+    perfect_score_norm = auc_roc_score(
+        perfect_attr, dataset, sample_indices=[0], normalize=True
+    )
+    random_score_norm = auc_roc_score(
+        random_attr, dataset, sample_indices=[0], normalize=True
+    )
+    inverse_score_norm = auc_roc_score(
+        inverse_attr, dataset, sample_indices=[0], normalize=True
+    )
+
+    # Assert raw scores
     assert perfect_score > 0.90, (
         f"Perfect ranking should have AUC-ROC > 0.90, got {perfect_score}"
     )
-
-    # Random ranking should have AUC-ROC around 0.5
     assert 0.4 <= random_score <= 0.7, (
         f"Random ranking should have AUC-ROC ≈ 0.5 (0.4-0.7 range), got {random_score}"
     )
-
-    # Inverse ranking should have AUC-ROC close to 0.0
     assert inverse_score < 0.10, (
         f"Inverse ranking should have AUC-ROC < 0.10, got {inverse_score}"
+    )
+
+    # Assert normalized scores
+    # Perfect normalized score should be close to (1.0 - 0.5) / 0.5 = 1.0
+    assert perfect_score_norm > 0.80, (
+        f"Normalized perfect score should be > 0.80, got {perfect_score_norm}"
+    )
+    # Random normalized score should be close to (0.5 - 0.5) / 0.5 = 0.0
+    assert -0.2 <= random_score_norm <= 0.4, (
+        f"Normalized random score should be ≈ 0.0 (-0.2 to 0.4 range), got {random_score_norm}"
+    )
+    # Inverse normalized score should be close to (0.0 - 0.5) / 0.5 = -1.0
+    assert inverse_score_norm < -0.80, (
+        f"Normalized inverse score should be < -0.80, got {inverse_score_norm}"
     )
 
     # Test different average methods
@@ -1099,26 +1120,54 @@ def test_auc_pr_score():
     for i in range(n_timesteps):
         # Distance from center, normalized to 0-1 range
         distance = abs(i - feature_center) / (n_timesteps // 2)
-        inverse_attr[0, i, 0] = min(1, distance)  # Linear increase with distance
+        inverse_attr[0, i, 0] = min(1, distance)  # Higher values further away
 
     # Calculate AUC-PR scores
     perfect_score = auc_pr_score(perfect_attr, dataset, sample_indices=[0])
     random_score = auc_pr_score(random_attr, dataset, sample_indices=[0])
     inverse_score = auc_pr_score(inverse_attr, dataset, sample_indices=[0])
 
-    # Perfect ranking should have high AUC-PR (close to 1.0)
+    # Calculate prevalence for normalization
+    prevalence = np.sum(mask) / mask.size
+
+    # Calculate normalized scores
+    perfect_score_norm = auc_pr_score(
+        perfect_attr, dataset, sample_indices=[0], normalize=True
+    )
+    random_score_norm = auc_pr_score(
+        random_attr, dataset, sample_indices=[0], normalize=True
+    )
+    inverse_score_norm = auc_pr_score(
+        inverse_attr, dataset, sample_indices=[0], normalize=True
+    )
+
+    # Assert raw scores
     assert perfect_score > 0.90, (
         f"Perfect ranking should have AUC-PR > 0.90, got {perfect_score}"
     )
-
     # Random ranking should have AUC-PR roughly around the positive class proportion
-    assert 0.2 <= random_score <= 0.8, (
-        f"Random ranking should have AUC-PR in a reasonable range, got {random_score}"
+    # Allow a wider range due to randomness
+    assert (prevalence * 0.5) <= random_score <= (prevalence * 1.5 + 0.3), (
+        f"Random ranking AUC-PR ({random_score}) should be around prevalence ({prevalence})"
     )
-
     # Inverse ranking should have low AUC-PR (worse than random)
     assert inverse_score < random_score, (
         f"Inverse ranking should have AUC-PR < random ({random_score}), got {inverse_score}"
+    )
+
+    # Assert normalized scores
+    # Perfect normalized score should be close to (1.0 - prevalence) / (1.0 - prevalence) = 1.0
+    assert perfect_score_norm > 0.80, (
+        f"Normalized perfect score should be > 0.80, got {perfect_score_norm}"
+    )
+    # Random normalized score should be close to (prevalence - prevalence) / (1.0 - prevalence) = 0.0
+    # Widen the range slightly to account for randomness
+    assert -0.5 <= random_score_norm <= 0.5, (
+        f"Normalized random score should be ≈ 0.0 (-0.5 to 0.5 range), got {random_score_norm}"
+    )
+    # Inverse normalized score should be significantly lower than perfect, potentially slightly positive
+    assert inverse_score_norm < 0.1, (
+        f"Normalized inverse score should be low (< 0.1), got {inverse_score_norm}"
     )
 
     # Test different average methods
