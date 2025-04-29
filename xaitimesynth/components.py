@@ -189,17 +189,21 @@ def level_change(amplitude: float = 1.0, **kwargs) -> Dict[str, Any]:
     return {"type": "level_change", "amplitude": amplitude, **kwargs}
 
 
-def trend(slope: float = 0.1, **kwargs) -> Dict[str, Any]:
+def trend(
+    slope: float = 0.1, endpoints: Optional[List[float]] = None, **kwargs
+) -> Dict[str, Any]:
     """Create a trend feature component.
 
     Args:
         slope (float): Slope of the trend.
+        endpoints (Optional[List[float]]): List containing [start_value, end_value].
+            If provided, overrides the slope parameter.
         **kwargs: Additional parameters.
 
     Returns:
         Dict[str, Any]: Component definition dictionary.
     """
-    return {"type": "trend", "slope": slope, **kwargs}
+    return {"type": "trend", "slope": slope, "endpoints": endpoints, **kwargs}
 
 
 # TODO: combine peak and trough into one?

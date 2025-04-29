@@ -237,6 +237,7 @@ def generate_trend(
     rng: np.random.RandomState,
     length: int,
     slope: float = 0.1,
+    endpoints: Optional[List[float]] = None,
     **kwargs,
 ) -> np.ndarray:
     """Generate a trend feature.
@@ -246,13 +247,30 @@ def generate_trend(
         rng (np.random.RandomState): Random number generator.
         length (int): Length of feature in timesteps.
         slope (float): Slope of the trend.
+        endpoints (Optional[List[float]]): List containing [start_value, end_value].
+            If provided, overrides the slope parameter.
         **kwargs: Additional parameters.
 
     Returns:
         np.ndarray: Trend feature vector.
     """
     t = np.arange(length)
-    return slope * t
+
+    if endpoints is not None:
+        if len(endpoints) != 2:
+            raise ValueError(
+                "endpoints must be a list of exactly two values: [start_value, end_value]"
+            )
+        start_value, end_value = endpoints
+
+        if length <= 1:
+            return np.full(length, start_value)
+
+        # Create a linear trend from start_value to end_value
+        return np.linspace(start_value, end_value, length)
+    else:
+        # If only slope is provided, create a linear trend starting from 0
+        return slope * t
 
 
 def generate_peak(
