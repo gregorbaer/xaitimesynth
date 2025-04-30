@@ -591,6 +591,68 @@ def generate_ecg_like(
     return full_signal
 
 
+def generate_red_noise(
+    n_timesteps: int,
+    rng: np.random.RandomState,
+    length: Optional[int] = None,
+    mean: float = 0.0,
+    std: float = 1.0,
+    phi: float = 0.9,
+    **kwargs,
+) -> np.ndarray:
+    """Generate a red noise signal using an AR(1) process.
+
+    Uses an Autoregressive model of order 1 (AR(1)):
+    X_t = mean + phi * (X_{t-1} - mean) + epsilon_t
+    where epsilon_t is white noise N(0, sigma_epsilon^2)
+    and sigma_epsilon = std * sqrt(1 - phi^2) to ensure the stationary
+    variance of X_t is std^2.
+
+    Args:
+        n_timesteps (int): Length of the full time series.
+        rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of the component. If None, uses n_timesteps.
+        mean (float): Mean of the noise process. Defaults to 0.0.
+        std (float): Standard deviation of the noise process. Defaults to 1.0.
+        phi (float): Autocorrelation coefficient (-1 < phi < 1).
+            Controls the noise "color". Positive phi -> red noise (smoother),
+            negative phi -> blue noise (oscillating), phi=0 -> white noise.
+            Defaults to 0.9 (strong red noise).
+        **kwargs: Additional parameters (ignored).
+
+    Returns:
+        np.ndarray: Red noise signal vector.
+
+    Raises:
+        ValueError: If phi is not strictly between -1 and 1.
+    """
+    if not -1 < phi < 1:
+        raise ValueError(
+            "phi (autocorrelation coefficient) must be strictly between -1 and 1"
+        )
+
+    effective_length = length if length is not None else n_timesteps
+
+    # Calculate std dev for the white noise component
+    variance_epsilon = max(0, std**2 * (1 - phi**2))
+    std_epsilon = np.sqrt(variance_epsilon)
+
+    # Generate white noise
+    epsilon = rng.normal(loc=0.0, scale=std_epsilon, size=effective_length)
+
+    # Initialize output array
+    red_noise = np.zeros(effective_length)
+
+    # Set the first value using the stationary distribution
+    red_noise[0] = mean + rng.normal(loc=0.0, scale=std)
+
+    # Generate the AR(1) process iteratively
+    for t in range(1, effective_length):
+        red_noise[t] = mean + phi * (red_noise[t - 1] - mean) + epsilon[t]
+
+    return red_noise
+
+
 # Dictionary mapping component types to generator functions
 GENERATOR_FUNCS = {
     "constant": generate_constant,
@@ -606,7 +668,8 @@ GENERATOR_FUNCS = {
     "trough": generate_trough,
     "time_frequency": generate_time_frequency,
     "manual": generate_manual,
-    "ecg_like": generate_ecg_like,  # Add the ECG generator to the dictionary
+    "ecg_like": generate_ecg_like,
+    "red_noise": generate_red_noise,
 }
 
 

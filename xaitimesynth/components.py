@@ -93,6 +93,33 @@ def seasonal(period: int = 10, amplitude: float = 1.0, **kwargs) -> Dict[str, An
     return {"type": "seasonal", "period": period, "amplitude": amplitude, **kwargs}
 
 
+def red_noise(
+    mean: float = 0.0, std: float = 1.0, phi: float = 0.9, **kwargs
+) -> Dict[str, Any]:
+    """Create a red noise signal component using an AR(1) process.
+
+    Generates noise where successive values are correlated. The strength and nature
+    of this correlation are controlled by the `phi` parameter.
+
+    Args:
+        mean (float): The mean value around which the noise oscillates. Defaults to 0.0.
+        std (float): The overall standard deviation (amplitude) of the noise. Defaults to 1.0.
+        phi (float): The autocorrelation coefficient. Must be strictly between -1 and 1
+            (-1 < phi < 1). Controls the "color" of the noise:
+            - Positive phi (0 < phi < 1): Creates smoother, low-frequency dominant "red noise".
+              Closer to 1 means stronger correlation and slower changes.
+            - Negative phi (-1 < phi < 0): Creates rapidly oscillating, high-frequency dominant "blue noise".
+              Closer to -1 means stronger anti-correlation.
+            - phi = 0: Results in uncorrelated white noise.
+            Defaults to 0.9 (strong red noise).
+        **kwargs: Additional parameters.
+
+    Returns:
+        Dict[str, Any]: Component definition dictionary.
+    """
+    return {"type": "red_noise", "mean": mean, "std": std, "phi": phi, **kwargs}
+
+
 def ecg_like(
     heart_rate: float = 70.0,
     p_amplitude: float = 0.15,

@@ -38,6 +38,7 @@ from .components import (
     manual,
     peak,
     random_walk,
+    red_noise,  # Add red_noise import
     seasonal,
     shapelet,
     time_frequency,
@@ -91,6 +92,7 @@ __all__ = [
     "manual",
     "peak",
     "random_walk",
+    "red_noise",  # Add red_noise to __all__
     "seasonal",
     "shapelet",
     "time_frequency",
@@ -107,6 +109,7 @@ register_component(gaussian, "signal")
 register_component(uniform, "signal")
 register_component(seasonal, "signal")
 register_component(ecg_like, "signal")
+register_component(red_noise, "signal")  # Register red_noise
 
 register_component(shapelet, "feature")
 register_component(level_change, "feature")
