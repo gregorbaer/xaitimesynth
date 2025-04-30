@@ -13,10 +13,8 @@ from xaitimesynth import (
     TimeSeriesBuilder,
     constant,
     gaussian,
-    level_change,
     peak,
     random_walk,
-    shapelet,
 )
 
 
@@ -50,10 +48,10 @@ def test_univariate_two_classes(basic_univariate_config):
         .for_class(0)  # Class 0: No discriminative features
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .for_class(1)  # Class 1: Has shapelet feature
+        .for_class(1)  # Class 1: Has constant feature
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -114,16 +112,16 @@ def test_univariate_three_classes(basic_univariate_config):
         .for_class(0)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        # Class 1: Base signal + shapelet
+        # Class 1: Base signal + constant level change
         .for_class(1)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
-        # Class 2: Base signal + level change
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
+        # Class 2: Base signal + constant level change
         .for_class(2)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(level_change(amplitude=0.8), start_pct=0.6, end_pct=0.8)
+        .add_feature(constant(value=0.8), start_pct=0.6, end_pct=0.8)
         .build()
     )
 
@@ -164,8 +162,8 @@ def test_multivariate_two_classes(basic_multivariate_config):
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
         .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1])
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
-        .add_feature(level_change(amplitude=0.8), start_pct=0.6, end_pct=0.8, dim=[1])
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+        .add_feature(constant(value=0.8), start_pct=0.6, end_pct=0.8, dim=[1])
         .build()
     )
 
@@ -229,7 +227,7 @@ def test_multivariate_three_classes_and_dimensions():
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
         .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
-        .add_feature(shapelet(scale=1.0), start_pct=0.3, end_pct=0.5, dim=[0, 1])
+        .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.5, dim=[0, 1])
         # Class 2: Feature in third dimension
         .for_class(2)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
@@ -265,10 +263,10 @@ def test_clone_method(basic_univariate_config):
         .for_class(0)  # Class 0: No discriminative features
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .for_class(1)  # Class 1: Has shapelet feature
+        .for_class(1)  # Class 1: Has constant feature
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(scale=1.0), start_pct=0.4, end_pct=0.6)
     )
 
     # Generate train dataset with 70% of samples and the same random seed
@@ -342,8 +340,8 @@ def test_random_feature_locations():
         .for_class(1)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), random_location=True, length_pct=0.2)
-        .add_feature(level_change(amplitude=0.5), random_location=True, length_pct=0.2)
+        .add_feature(constant(scale=1.0), random_location=True, length_pct=0.2)
+        .add_feature(constant(amplitude=0.5), random_location=True, length_pct=0.2)
         .build()
     )
 
@@ -399,7 +397,7 @@ def test_shared_features_across_dimensions():
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
         .add_feature(
-            shapelet(scale=1.2),
+            constant(scale=1.2),
             random_location=True,
             length_pct=0.15,
             dim=[0, 1],
@@ -532,7 +530,7 @@ def test_to_df_functionality():
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+        .add_feature(constant(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
         .build()
     )
 

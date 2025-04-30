@@ -190,32 +190,6 @@ def ecg_like(
 
 
 ## Feature Components
-def shapelet(scale: float = 1.0, **kwargs) -> Dict[str, Any]:
-    """Create a shapelet feature component.
-
-    Args:
-        scale (float): Scale of the shapelet pattern.
-        **kwargs: Additional parameters. Can include 'pattern' for custom shapelet.
-
-    Returns:
-        Dict[str, Any]: Component definition dictionary.
-    """
-    return {"type": "shapelet", "scale": scale, **kwargs}
-
-
-def level_change(amplitude: float = 1.0, **kwargs) -> Dict[str, Any]:
-    """Create a level change feature component.
-
-    Args:
-        amplitude (float): Amplitude of the level change.
-        **kwargs: Additional parameters.
-
-    Returns:
-        Dict[str, Any]: Component definition dictionary.
-    """
-    return {"type": "level_change", "amplitude": amplitude, **kwargs}
-
-
 def trend(
     slope: float = 0.1, endpoints: Optional[List[float]] = None, **kwargs
 ) -> Dict[str, Any]:
@@ -262,27 +236,6 @@ def trough(amplitude: float = 1.0, width: int = 3, **kwargs) -> Dict[str, Any]:
         Dict[str, Any]: Component definition dictionary.
     """
     return {"type": "trough", "amplitude": amplitude, "width": width, **kwargs}
-
-
-def time_frequency(
-    frequency: float = 0.1, amplitude: float = 1.0, **kwargs
-) -> Dict[str, Any]:
-    """Create a time frequency feature component.
-
-    Args:
-        frequency (float): Frequency of the pattern.
-        amplitude (float): Amplitude of the pattern.
-        **kwargs: Additional parameters.
-
-    Returns:
-        Dict[str, Any]: Component definition dictionary.
-    """
-    return {
-        "type": "time_frequency",
-        "frequency": frequency,
-        "amplitude": amplitude,
-        **kwargs,
-    }
 
 
 def manual(

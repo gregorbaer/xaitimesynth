@@ -11,8 +11,8 @@ import pytest
 
 from xaitimesynth import (
     TimeSeriesBuilder,
+    constant,
     gaussian,
-    level_change,
     seasonal,
 )
 from xaitimesynth.metrics import (
@@ -42,7 +42,7 @@ def simple_dataset():
         .add_signal(gaussian(), role="foundation")
         .for_class(1)
         .add_signal(gaussian(), role="foundation")
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
     return dataset
@@ -66,9 +66,9 @@ def multivariate_dataset():
         .for_class(1)
         .add_signal(gaussian(), dim=[0, 1])
         # Feature in dimension 0
-        .add_feature(level_change(amplitude=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
+        .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
         # Feature in dimension 1
-        .add_feature(level_change(amplitude=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
+        .add_feature(constant(value=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
         .build()
     )
     return dataset
@@ -91,7 +91,7 @@ def random_feature_dataset():
         .add_signal(gaussian())
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(level_change(amplitude=1.0), random_location=True, length_pct=0.2)
+        .add_feature(constant(value=1.0), random_location=True, length_pct=0.2)
         .build()
     )
     return dataset
@@ -603,8 +603,8 @@ def test_per_sample_dimension_average():
         .add_signal(gaussian(), dim=[0, 1])
         .for_class(1)
         .add_signal(gaussian(), dim=[0, 1])
-        .add_feature(level_change(amplitude=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
-        .add_feature(level_change(amplitude=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
+        .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
+        .add_feature(constant(value=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
         .build()
     )
 
@@ -655,7 +655,7 @@ def test_empty_attribution():
         TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -689,7 +689,7 @@ def test_error_handling():
         .add_signal(gaussian())
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -729,7 +729,7 @@ def test_data_format_conversion():
         .add_signal(gaussian(), role="foundation")
         .for_class(1)
         .add_signal(gaussian(), role="foundation")
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -814,7 +814,7 @@ def test_auc_roc_score():
         TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -928,7 +928,7 @@ def test_nac_score():
         TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -1038,8 +1038,8 @@ def test_nac_score():
         TimeSeriesBuilder(n_timesteps=20, n_samples=1, n_dimensions=2, random_state=42)
         .for_class(1)
         .add_signal(gaussian(), dim=[0, 1])
-        .add_feature(level_change(amplitude=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
-        .add_feature(level_change(amplitude=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
+        .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
+        .add_feature(constant(value=1.0), start_pct=0.6, end_pct=0.7, dim=[1])
         .build()
     )
 
@@ -1090,7 +1090,7 @@ def test_auc_pr_score():
         TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(level_change(amplitude=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -1202,9 +1202,7 @@ def test_auc_pr_score():
         TimeSeriesBuilder(n_timesteps=20, n_samples=1, random_state=42)
         .for_class(1)
         .add_signal(gaussian())
-        .add_feature(
-            level_change(amplitude=1.0), start_pct=0.45, end_pct=0.5
-        )  # Small feature
+        .add_feature(constant(value=1.0), start_pct=0.45, end_pct=0.5)  # Small feature
         .build()
     )
 
@@ -1246,7 +1244,7 @@ def test_correlation_score():
         TimeSeriesBuilder(n_timesteps=50, n_samples=1, random_state=42)
         .for_class(1)
         .add_signal(gaussian(), role="foundation")
-        .add_feature(level_change(amplitude=2.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=2.0), start_pct=0.4, end_pct=0.6)
         .build(return_components=True)
     )
 
@@ -1275,13 +1273,13 @@ def test_correlation_score():
     # Extract the isolated feature values from the components
     feature_component = None
     for feature_name, values in dataset["components"][0].features.items():
-        if "level_change" in feature_name:
+        if "constant" in feature_name:
             feature_component = values
             break
 
-    # Ensure we found the level_change feature component
+    # Ensure we found the constant feature component
     assert feature_component is not None, (
-        "Could not find level_change feature in components"
+        "Could not find constant feature in components"
     )
 
     # Test cases:
@@ -1375,7 +1373,7 @@ def test_correlation_score():
         .for_class(1)
         .add_signal(gaussian(), role="foundation")
         .add_feature(seasonal(period=5), start_pct=0.2, end_pct=0.4)
-        .add_feature(level_change(amplitude=2.0), start_pct=0.5, end_pct=0.7)
+        .add_feature(constant(value=2.0), start_pct=0.5, end_pct=0.7)
         .build(return_components=True)
     )
 
@@ -1412,8 +1410,8 @@ def test_correlation_score():
         TimeSeriesBuilder(n_timesteps=50, n_samples=1, n_dimensions=2, random_state=42)
         .for_class(1)
         .add_signal(gaussian(), dim=[0, 1])
-        .add_feature(level_change(amplitude=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
-        .add_feature(level_change(amplitude=2.0), start_pct=0.6, end_pct=0.7, dim=[1])
+        .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.4, dim=[0])
+        .add_feature(constant(value=2.0), start_pct=0.6, end_pct=0.7, dim=[1])
         .build(return_components=True)
     )
 

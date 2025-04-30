@@ -50,40 +50,6 @@ def generate_random_walk(
     return np.cumsum(steps)
 
 
-def generate_autoregressive(
-    n_timesteps: int,
-    rng: np.random.RandomState,
-    coefficients: List[float] = [0.8],
-    sigma: float = 1.0,
-    **kwargs,
-) -> np.ndarray:
-    """Generate an autoregressive signal.
-
-    Args:
-        n_timesteps (int): Length of time series.
-        rng (np.random.RandomState): Random number generator.
-        coefficients (List[float]): AR coefficients.
-        sigma (float): Noise standard deviation.
-        **kwargs: Additional parameters.
-
-    Returns:
-        np.ndarray: Autoregressive signal vector.
-    """
-    result = np.zeros(n_timesteps)
-    p = len(coefficients)
-
-    # Initialize with random values
-    result[:p] = rng.normal(0, sigma, p)
-
-    # Generate the autoregressive process
-    for t in range(p, n_timesteps):
-        result[t] = np.sum(
-            [coefficients[i] * result[t - i - 1] for i in range(p)]
-        ) + rng.normal(0, sigma)
-
-    return result
-
-
 def generate_gaussian(
     n_timesteps: int,
     rng: np.random.RandomState,
@@ -134,6 +100,69 @@ def generate_uniform(
     return rng.uniform(low, high, effective_length)
 
 
+def generate_red_noise(
+    n_timesteps: int,
+    rng: np.random.RandomState,
+    length: Optional[int] = None,
+    mean: float = 0.0,
+    std: float = 1.0,
+    phi: float = 0.9,
+    **kwargs,
+) -> np.ndarray:
+    """Generate a red noise signal using an AR(1) process.
+
+    Uses an Autoregressive model of order 1 (AR(1)):
+    X_t = mean + phi * (X_{t-1} - mean) + epsilon_t
+    where epsilon_t is white noise N(0, sigma_epsilon^2)
+    and sigma_epsilon = std * sqrt(1 - phi^2) to ensure the stationary
+    variance of X_t is std^2.
+
+    Args:
+        n_timesteps (int): Length of the full time series.
+        rng (np.random.RandomState): Random number generator.
+        length (Optional[int]): Length of the component. If None, uses n_timesteps.
+        mean (float): Mean of the noise process. Defaults to 0.0.
+        std (float): Standard deviation of the noise process. Defaults to 1.0.
+        phi (float): Autocorrelation coefficient (-1 < phi < 1).
+            Controls the noise "color". Positive phi -> red noise (smoother),
+            negative phi -> blue noise (oscillating), phi=0 -> white noise.
+            Defaults to 0.9 (strong red noise).
+        **kwargs: Additional parameters (ignored).
+
+    Returns:
+        np.ndarray: Red noise signal vector.
+
+    Raises:
+        ValueError: If phi is not strictly between -1 and 1.
+    """
+    if not -1 < phi < 1:
+        raise ValueError(
+            "phi (autocorrelation coefficient) must be strictly between -1 and 1"
+        )
+
+    effective_length = length if length is not None else n_timesteps
+
+    # Calculate std dev for the white noise component
+    variance_epsilon = max(0, std**2 * (1 - phi**2))
+    std_epsilon = np.sqrt(variance_epsilon)
+
+    # Generate white noise
+    epsilon = rng.normal(loc=0.0, scale=std_epsilon, size=effective_length)
+
+    # Initialize output array
+    red_noise = np.zeros(effective_length)
+
+    # Set the first value using the stationary distribution
+    if effective_length > 0:
+        red_noise[0] = mean + rng.normal(loc=0.0, scale=std)
+
+    # Generate the AR(1) process iteratively
+    for t in range(1, effective_length):
+        red_noise[t] = mean + phi * (red_noise[t - 1] - mean) + epsilon[t]
+
+    return red_noise
+
+
 def generate_seasonal(
     n_timesteps: int,
     rng: np.random.RandomState,
@@ -158,63 +187,6 @@ def generate_seasonal(
     effective_length = length if length is not None else n_timesteps
     t = np.arange(effective_length)
     return amplitude * np.sin(2 * np.pi * t / period)
-
-
-def generate_shapelet(
-    n_timesteps: int,
-    rng: np.random.RandomState,
-    length: int,
-    scale: float = 1.0,
-    pattern: Optional[np.ndarray] = None,
-    **kwargs,
-) -> np.ndarray:
-    """Generate a shapelet feature.
-
-    Args:
-        n_timesteps (int): Length of time series.
-        rng (np.random.RandomState): Random number generator.
-        length (int): Length of feature in timesteps.
-        scale (float): Scale of the shapelet pattern.
-        pattern (Optional[np.ndarray]): Custom pattern values. If None, generate a Gaussian bump.
-        **kwargs: Additional parameters.
-
-    Returns:
-        np.ndarray: Shapelet feature vector.
-    """
-    if pattern is not None:
-        # Ensure pattern length matches feature length
-        if len(pattern) != length:
-            pattern = np.interp(
-                np.linspace(0, 1, length), np.linspace(0, 1, len(pattern)), pattern
-            )
-    else:
-        # Default shapelet is a bump
-        t = np.linspace(-1, 1, length)
-        pattern = np.exp(-5 * t**2)
-
-    return scale * pattern
-
-
-def generate_level_change(
-    n_timesteps: int,
-    rng: np.random.RandomState,
-    length: int,
-    amplitude: float = 1.0,
-    **kwargs,
-) -> np.ndarray:
-    """Generate a level change feature.
-
-    Args:
-        n_timesteps (int): Length of time series.
-        rng (np.random.RandomState): Random number generator.
-        length (int): Length of feature in timesteps.
-        amplitude (float): Amplitude of the level change.
-        **kwargs: Additional parameters.
-
-    Returns:
-        np.ndarray: Level change feature vector.
-    """
-    return np.full(length, amplitude)
 
 
 def generate_trend(
@@ -315,31 +287,6 @@ def generate_trough(
         np.ndarray: Trough feature vector.
     """
     return generate_peak(n_timesteps, rng, length, -amplitude, width, **kwargs)
-
-
-def generate_time_frequency(
-    n_timesteps: int,
-    rng: np.random.RandomState,
-    length: int,
-    frequency: float = 0.1,
-    amplitude: float = 1.0,
-    **kwargs,
-) -> np.ndarray:
-    """Generate a time frequency feature.
-
-    Args:
-        n_timesteps (int): Length of time series.
-        rng (np.random.RandomState): Random number generator.
-        length (int): Length of feature in timesteps.
-        frequency (float): Frequency of the pattern.
-        amplitude (float): Amplitude of the pattern.
-        **kwargs: Additional parameters.
-
-    Returns:
-        np.ndarray: Time frequency feature vector.
-    """
-    t = np.arange(length)
-    return amplitude * np.sin(2 * np.pi * frequency * t / n_timesteps)
 
 
 def generate_manual(
@@ -567,83 +514,16 @@ def generate_ecg_like(
     return full_signal
 
 
-def generate_red_noise(
-    n_timesteps: int,
-    rng: np.random.RandomState,
-    length: Optional[int] = None,
-    mean: float = 0.0,
-    std: float = 1.0,
-    phi: float = 0.9,
-    **kwargs,
-) -> np.ndarray:
-    """Generate a red noise signal using an AR(1) process.
-
-    Uses an Autoregressive model of order 1 (AR(1)):
-    X_t = mean + phi * (X_{t-1} - mean) + epsilon_t
-    where epsilon_t is white noise N(0, sigma_epsilon^2)
-    and sigma_epsilon = std * sqrt(1 - phi^2) to ensure the stationary
-    variance of X_t is std^2.
-
-    Args:
-        n_timesteps (int): Length of the full time series.
-        rng (np.random.RandomState): Random number generator.
-        length (Optional[int]): Length of the component. If None, uses n_timesteps.
-        mean (float): Mean of the noise process. Defaults to 0.0.
-        std (float): Standard deviation of the noise process. Defaults to 1.0.
-        phi (float): Autocorrelation coefficient (-1 < phi < 1).
-            Controls the noise "color". Positive phi -> red noise (smoother),
-            negative phi -> blue noise (oscillating), phi=0 -> white noise.
-            Defaults to 0.9 (strong red noise).
-        **kwargs: Additional parameters (ignored).
-
-    Returns:
-        np.ndarray: Red noise signal vector.
-
-    Raises:
-        ValueError: If phi is not strictly between -1 and 1.
-    """
-    if not -1 < phi < 1:
-        raise ValueError(
-            "phi (autocorrelation coefficient) must be strictly between -1 and 1"
-        )
-
-    effective_length = length if length is not None else n_timesteps
-
-    # Calculate std dev for the white noise component
-    variance_epsilon = max(0, std**2 * (1 - phi**2))
-    std_epsilon = np.sqrt(variance_epsilon)
-
-    # Generate white noise
-    epsilon = rng.normal(loc=0.0, scale=std_epsilon, size=effective_length)
-
-    # Initialize output array
-    red_noise = np.zeros(effective_length)
-
-    # Set the first value using the stationary distribution
-    if effective_length > 0:
-        red_noise[0] = mean + rng.normal(loc=0.0, scale=std)
-
-    # Generate the AR(1) process iteratively
-    for t in range(1, effective_length):
-        red_noise[t] = mean + phi * (red_noise[t - 1] - mean) + epsilon[t]
-
-    return red_noise
-
-
 # Dictionary mapping component types to generator functions
 GENERATOR_FUNCS = {
     "constant": generate_constant,
     "random_walk": generate_random_walk,
-    "autoregressive": generate_autoregressive,
     "gaussian": generate_gaussian,
     "uniform": generate_uniform,
     "seasonal": generate_seasonal,
-    "shapelet": generate_shapelet,
-    "level_change": generate_level_change,
     "trend": generate_trend,
     "peak": generate_peak,
     "trough": generate_trough,
-    "time_frequency": generate_time_frequency,
     "manual": generate_manual,
     "ecg_like": generate_ecg_like,
     "red_noise": generate_red_noise,

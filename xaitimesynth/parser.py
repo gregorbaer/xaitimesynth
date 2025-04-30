@@ -254,8 +254,8 @@ def load_builders_from_config(
                   random_location: true # Place it randomly
                   dimensions: [0] # Only in dimension 0
                   shared_location: false # If dim had >1 element, location would differ
-                - function: level_change
-                  params: { amplitude: -1.0 }
+                - function: constant
+                  params: { value: -1.0 }
                   start_pct: 0.7
                   end_pct: 0.9
                   dimensions: [1] # Only in dimension 1

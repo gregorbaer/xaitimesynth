@@ -171,15 +171,15 @@ def test_add_feature_parameter_validation() -> None:
 
     # Test missing start_pct and end_pct
     with pytest.raises(ValueError, match="start_pct and end_pct must be provided"):
-        builder.add_feature({"type": "shapelet"}, random_location=False)
+        builder.add_feature({"type": "constant"}, random_location=False)
 
     # Test invalid start_pct and end_pct range
     with pytest.raises(ValueError, match="Invalid start_pct or end_pct"):
-        builder.add_feature({"type": "shapelet"}, start_pct=1.1, end_pct=1.5)
+        builder.add_feature({"type": "constant"}, start_pct=1.1, end_pct=1.5)
 
     # Test random_location without length_pct
     with pytest.raises(ValueError, match="length_pct must be provided"):
-        builder.add_feature({"type": "shapelet"}, random_location=True)
+        builder.add_feature({"type": "constant"}, random_location=True)
 
 
 def test_add_feature_random_location() -> None:
@@ -189,7 +189,7 @@ def test_add_feature_random_location() -> None:
     """
     builder = TimeSeriesBuilder().for_class(1)
     with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
-        builder.add_feature({"type": "shapelet"}, random_location=True, length_pct=1.5)
+        builder.add_feature({"type": "constant"}, random_location=True, length_pct=1.5)
 
 
 def test_build_no_classes() -> None:
@@ -212,7 +212,7 @@ def test_random_state_reproducibility() -> None:
         .add_signal({"type": "random_walk"})
         .for_class(1)
         .add_signal({"type": "random_walk"})
-        .add_feature({"type": "shapelet"}, random_location=True, length_pct=0.2)
+        .add_feature({"type": "constant"}, random_location=True, length_pct=0.2)
         .build()
     )
 
@@ -222,7 +222,7 @@ def test_random_state_reproducibility() -> None:
         .add_signal({"type": "random_walk"})
         .for_class(1)
         .add_signal({"type": "random_walk"})
-        .add_feature({"type": "shapelet"}, random_location=True, length_pct=0.2)
+        .add_feature({"type": "constant"}, random_location=True, length_pct=0.2)
         .build()
     )
 
@@ -324,7 +324,7 @@ def test_to_df_basic(two_class_builder) -> None:
     """
     # Create a minimal dataset
     builder = two_class_builder
-    builder.add_feature({"type": "shapelet"}, start_pct=0.4, end_pct=0.6)
+    builder.add_feature({"type": "constant"}, start_pct=0.4, end_pct=0.6)
     dataset = builder.build()
 
     # Convert to dataframe
@@ -364,7 +364,7 @@ def test_clone() -> None:
         .add_signal({"type": "random_walk", "step_size": 0.2})
         .for_class(1)
         .add_signal({"type": "random_walk", "step_size": 0.2})
-        .add_feature({"type": "shapelet"}, start_pct=0.4, end_pct=0.6)
+        .add_feature({"type": "constant"}, start_pct=0.4, end_pct=0.6)
     )
 
     # Clone with different parameters
@@ -433,7 +433,7 @@ def test_build_shuffle_all_parts() -> None:
         .add_signal({"type": "random_walk"})
         .for_class(1)
         .add_signal({"type": "random_walk"})
-        .add_feature({"type": "shapelet"}, start_pct=0.2, end_pct=0.4)
+        .add_feature({"type": "constant"}, start_pct=0.2, end_pct=0.4)
     )
     ds_shuffled = builder.clone(random_state=123).build(
         shuffle=True, deterministic_class_counts=True

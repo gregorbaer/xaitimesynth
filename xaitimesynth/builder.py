@@ -16,9 +16,9 @@ class TimeSeriesBuilder:
     known ground truth features for explainable AI (XAI) evaluation.
 
     The builder creates time series by combining multiple components:
-    - Foundation: The base structure of the time series (e.g., random walk, constant)
+    - Foundation: The base structure of the time series (e.g., random walk, gaussian noise)
     - Noise: Random noise added to the time series
-    - Features: Discriminative patterns for class separation (e.g., shapelet, peak)
+    - Features: Discriminative patterns for class separation (e.g., peaks, level changes, ...)
 
     Terminology:
     - "Signals" refer to either foundation or noise components, added with add_signal()
@@ -40,24 +40,7 @@ class TimeSeriesBuilder:
 
     Example usage (univariate):
         ```python
-        from xaitimesynth import (
-            TimeSeriesBuilder, random_walk, gaussian, shapelet
-        )
-
-        # Create a simple binary classification dataset
-        dataset = (
-            TimeSeriesBuilder(n_timesteps=100, n_samples=200)
-            # Class 0: Just random walk with noise
-            .for_class(0)
-            .add_signal(random_walk(step_size=0.2))
-            .add_signal(gaussian(sigma=0.1), role="noise")
-            # Class 1: Random walk with noise plus a shapelet feature
-            .for_class(1)
-            .add_signal(random_walk(step_size=0.2))
-            .add_signal(gaussian(sigma=0.1), role="noise")
-            .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
-            .build(train_test_split=0.7)
-        )
+        TODO: Add example usage here once API is stable.
         ```
 
     Advanced usage:
@@ -1438,7 +1421,7 @@ class TimeSeriesBuilder:
                 .add_signal(random_walk(step_size=0.2))
                 .for_class(1)
                 .add_signal(random_walk(step_size=0.2))
-                .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
+                .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
             )
 
             # Generate train dataset with 140 samples
