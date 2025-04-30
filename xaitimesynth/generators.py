@@ -22,11 +22,8 @@ def generate_constant(
     Returns:
         np.ndarray: Constant signal vector.
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
-
-    return np.full(length, value)
+    effective_length = length if length is not None else n_timesteps
+    return np.full(effective_length, value)
 
 
 def generate_random_walk(
@@ -48,11 +45,8 @@ def generate_random_walk(
     Returns:
         np.ndarray: Random walk signal vector.
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
-
-    steps = rng.normal(0, step_size, length)
+    effective_length = length if length is not None else n_timesteps
+    steps = rng.normal(0, step_size, effective_length)
     return np.cumsum(steps)
 
 
@@ -111,11 +105,8 @@ def generate_gaussian(
     Returns:
         np.ndarray: Gaussian noise vector.
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
-
-    return rng.normal(mu, sigma, length)
+    effective_length = length if length is not None else n_timesteps
+    return rng.normal(mu, sigma, effective_length)
 
 
 def generate_uniform(
@@ -139,11 +130,8 @@ def generate_uniform(
     Returns:
         np.ndarray: Uniform noise vector.
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
-
-    return rng.uniform(low, high, length)
+    effective_length = length if length is not None else n_timesteps
+    return rng.uniform(low, high, effective_length)
 
 
 def generate_seasonal(
@@ -167,11 +155,8 @@ def generate_seasonal(
     Returns:
         np.ndarray: Seasonal signal vector.
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
-
-    t = np.arange(length)
+    effective_length = length if length is not None else n_timesteps
+    t = np.arange(effective_length)
     return amplitude * np.sin(2 * np.pi * t / period)
 
 
@@ -379,20 +364,20 @@ def generate_manual(
     Returns:
         np.ndarray: Manual component vector.
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
+    effective_length = length if length is not None else n_timesteps
 
     if values is not None:
         # Ensure values length matches the required length
-        if len(values) != length:
+        if len(values) != effective_length:
             return np.interp(
-                np.linspace(0, 1, length), np.linspace(0, 1, len(values)), values
+                np.linspace(0, 1, effective_length),
+                np.linspace(0, 1, len(values)),
+                values,
             )
         return values
 
     if generator is not None:
-        return generator(length, rng, **kwargs)
+        return generator(effective_length, rng, **kwargs)
 
     raise ValueError("Either values or generator must be provided")
 
@@ -469,15 +454,13 @@ def generate_ecg_like(
         >>> # Tachycardia (fast heart rate)
         >>> tachy_ecg = generate_ecg_like(1000, rng, heart_rate=120)
     """
-    # If length is not provided, use the entire time series length
-    if length is None:
-        length = n_timesteps
+    effective_length = length if length is not None else n_timesteps
 
     # Calculate period in samples
     period_samples = int(60.0 / heart_rate * sampling_rate)
 
     # Number of heartbeats to generate
-    n_beats = int(np.ceil(length / period_samples))
+    n_beats = int(np.ceil(effective_length / period_samples))
 
     # Create time array for a single beat
     beat_time = np.arange(period_samples) / sampling_rate
@@ -522,28 +505,24 @@ def generate_ecg_like(
     beat += t_amplitude * np.exp(-((beat_time - t_center) ** 2) / (2 * t_sigma**2))
 
     # Generate full signal by repeating the beat
-    full_signal = np.tile(beat, n_beats)[:length]
+    full_signal = np.tile(beat, n_beats)[:effective_length]
 
     # Add heart rate variability
     if n_beats > 1 and hr_variability > 0:
-        # Slightly modify periods between consecutive beats
-        modified_signal = np.zeros(length)
+        modified_signal = np.zeros(effective_length)
         current_pos = 0
 
         for i in range(n_beats):
-            # Add variability to period length
             if i < n_beats - 1:
                 period_var = period_samples * (
                     1 + rng.uniform(-hr_variability, hr_variability)
                 )
                 period_var = int(period_var)
             else:
-                period_var = length - current_pos
+                period_var = effective_length - current_pos
 
-            # Ensure we don't exceed the signal length
-            period_var = min(period_var, length - current_pos)
+            period_var = min(period_var, effective_length - current_pos)
 
-            # Extract and stretch/compress the beat
             if period_var > 0:
                 beat_stretched = np.interp(
                     np.linspace(0, 1, period_var),
@@ -553,16 +532,14 @@ def generate_ecg_like(
                 modified_signal[current_pos : current_pos + period_var] = beat_stretched
                 current_pos += period_var
 
-            # Break if we've filled the signal
-            if current_pos >= length:
+            if current_pos >= effective_length:
                 break
 
         full_signal = modified_signal
 
     # Add baseline wander (low frequency drift)
     if baseline_wander > 0:
-        # Create a slow-moving sine wave for baseline drift
-        t = np.arange(length) / sampling_rate
+        t = np.arange(effective_length) / sampling_rate
         wander_freq1 = 0.05  # ~respiratory frequency (0.05 Hz)
         wander_freq2 = 0.01  # very slow drift
         baseline = baseline_wander * np.sin(
@@ -574,12 +551,11 @@ def generate_ecg_like(
 
     # Add measurement noise
     if noise_level > 0:
-        # High-frequency measurement noise
-        noise = rng.normal(0, noise_level, size=length)
+        noise = rng.normal(0, noise_level, size=effective_length)
 
         # Add occasional small artifacts
         if rng.uniform() < 0.3:  # 30% chance of artifact
-            artifact_pos = rng.randint(0, length - 10)
+            artifact_pos = rng.randint(0, effective_length - 10)
             artifact_len = rng.randint(5, 15)
             artifact_amp = noise_level * rng.uniform(2, 4)
             noise[artifact_pos : artifact_pos + artifact_len] += (
@@ -644,7 +620,8 @@ def generate_red_noise(
     red_noise = np.zeros(effective_length)
 
     # Set the first value using the stationary distribution
-    red_noise[0] = mean + rng.normal(loc=0.0, scale=std)
+    if effective_length > 0:
+        red_noise[0] = mean + rng.normal(loc=0.0, scale=std)
 
     # Generate the AR(1) process iteratively
     for t in range(1, effective_length):
