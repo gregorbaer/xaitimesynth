@@ -5,90 +5,81 @@ import numpy as np
 
 ## Signal Components
 def constant(value: float = 0.0, **kwargs) -> Dict[str, Any]:
-    """Create a constant signal component.
+    """Create a definition for a constant signal component.
+
+    This component represents a time series with a constant value.
 
     Args:
-        value (float): The constant value.
-        **kwargs: Additional parameters.
+        value (float): The constant value to fill the series with. Defaults to 0.0.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'constant' component with its parameters.
     """
     return {"type": "constant", "value": value, **kwargs}
 
 
 def random_walk(step_size: float = 0.1, **kwargs) -> Dict[str, Any]:
-    """Create a random walk signal component.
+    """Create a definition for a random walk signal component.
+
+    This component represents a random walk where each step is drawn from a normal distribution.
 
     Args:
-        step_size (float): Standard deviation of random steps.
-        **kwargs: Additional parameters.
+        step_size (float): Standard deviation of the random steps taken at each timestep.
+            Defaults to 0.1.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'random_walk' component with its parameters.
     """
     return {"type": "random_walk", "step_size": step_size, **kwargs}
 
 
-def autoregressive(
-    coefficients: List[float] = [0.8], sigma: float = 1.0, **kwargs
-) -> Dict[str, Any]:
-    """Create an autoregressive signal component.
+def gaussian(mu: float = 0.0, sigma: float = 1, **kwargs) -> Dict[str, Any]:
+    """Create a definition for a Gaussian noise component.
+
+    This component represents a time series with values drawn from a Gaussian (normal) distribution.
 
     Args:
-        coefficients (List[float]): AR coefficients.
-        sigma (float): Noise standard deviation.
-        **kwargs: Additional parameters.
+        mu (float): Mean of the Gaussian distribution. Defaults to 0.0.
+        sigma (float): Standard deviation of the Gaussian distribution. Defaults to 1.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
-    """
-    return {
-        "type": "autoregressive",
-        "coefficients": coefficients,
-        "sigma": sigma,
-        **kwargs,
-    }
-
-
-def gaussian(mu: float = 0.0, sigma: float = 0.1, **kwargs) -> Dict[str, Any]:
-    """Create a Gaussian noise component.
-
-    Args:
-        mu (float): Mean of the Gaussian distribution.
-        sigma (float): Standard deviation of the Gaussian distribution.
-        **kwargs: Additional parameters.
-
-    Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'gaussian' component with its parameters.
     """
     return {"type": "gaussian", "mu": mu, "sigma": sigma, **kwargs}
 
 
-def uniform(low: float = -0.1, high: float = 0.1, **kwargs) -> Dict[str, Any]:
-    """Create a uniform noise component.
+def uniform(low: float = 0, high: float = 1, **kwargs) -> Dict[str, Any]:
+    """Create a definition for a uniform noise component.
+
+    This component represents a time series with values drawn from a uniform distribution.
 
     Args:
-        low (float): Lower bound of the uniform distribution.
-        high (float): Upper bound of the uniform distribution.
-        **kwargs: Additional parameters.
+        low (float): Lower bound of the uniform distribution (inclusive). Defaults to 0.
+        high (float): Upper bound of the uniform distribution (exclusive). Defaults to 1.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'uniform' component with its parameters.
     """
     return {"type": "uniform", "low": low, "high": high, **kwargs}
 
 
 def seasonal(period: int = 10, amplitude: float = 1.0, **kwargs) -> Dict[str, Any]:
-    """Create a seasonal signal component.
+    """Create a definition for a seasonal (sine wave) signal component.
+
+    This component represents a periodic pattern based on a sine wave.
 
     Args:
-        period (int): Length of seasonal period.
-        amplitude (float): Amplitude of seasonal pattern.
-        **kwargs: Additional parameters.
+        period (int): The number of timesteps in one full cycle of the sine wave.
+            Defaults to 10.
+        amplitude (float): The peak amplitude of the sine wave. Defaults to 1.0.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'seasonal' component with its parameters.
     """
     return {"type": "seasonal", "period": period, "amplitude": amplitude, **kwargs}
 
@@ -96,26 +87,23 @@ def seasonal(period: int = 10, amplitude: float = 1.0, **kwargs) -> Dict[str, An
 def red_noise(
     mean: float = 0.0, std: float = 1.0, phi: float = 0.9, **kwargs
 ) -> Dict[str, Any]:
-    """Create a red noise signal component using an AR(1) process.
+    """Create a definition for a red noise signal component using an AR(1) process.
 
-    Generates noise where successive values are correlated. The strength and nature
-    of this correlation are controlled by the `phi` parameter.
+    This component represents red noise, which exhibits positive autocorrelation,
+    meaning successive values are likely to be close to each other, resulting in
+    smoother, slower fluctuations compared to white noise.
 
     Args:
         mean (float): The mean value around which the noise oscillates. Defaults to 0.0.
-        std (float): The overall standard deviation (amplitude) of the noise. Defaults to 1.0.
-        phi (float): The autocorrelation coefficient. Must be strictly between -1 and 1
-            (-1 < phi < 1). Controls the "color" of the noise:
-            - Positive phi (0 < phi < 1): Creates smoother, low-frequency dominant "red noise".
-              Closer to 1 means stronger correlation and slower changes.
-            - Negative phi (-1 < phi < 0): Creates rapidly oscillating, high-frequency dominant "blue noise".
-              Closer to -1 means stronger anti-correlation.
-            - phi = 0: Results in uncorrelated white noise.
-            Defaults to 0.9 (strong red noise).
-        **kwargs: Additional parameters.
+        std (float): The overall standard deviation (amplitude) of the noise process.
+            Defaults to 1.0.
+        phi (float): The autocorrelation coefficient (-1 < phi < 1). Controls the
+            "memory" or smoothness. Values closer to 1 result in stronger positive
+            autocorrelation (smoother noise). Defaults to 0.9.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'red_noise' component with its parameters.
     """
     return {"type": "red_noise", "mean": mean, "std": std, "phi": phi, **kwargs}
 
@@ -136,39 +124,33 @@ def ecg_like(
     baseline_wander: float = 0.02,
     **kwargs,
 ) -> Dict[str, Any]:
-    """Create an ECG-like signal component.
+    """Create a definition for a synthetic ECG-like signal component.
+
+    This component simulates an electrocardiogram (ECG) signal mimicking the characteristic
+    P-QRS-T wave pattern, allowing customization of various ECG parameters.
+
+    Note:
+        This simulation is for illustrative purposes and not medical diagnosis.
 
     Args:
-        heart_rate (float): Heart rate in beats per minute (BPM). Normal resting is 60-100 BPM.
-            Default is 70.0 (typical resting adult).
-        p_amplitude (float): Amplitude of P wave in millivolts. Represents atrial depolarization.
-            Default is 0.15 (typical range 0.1-0.2 mV).
-        qrs_amplitude (float): Amplitude of the QRS complex in millivolts. Represents ventricular depolarization.
-            Default is 1.0 (typical range 0.8-1.2 mV).
-        t_amplitude (float): Amplitude of T wave in millivolts. Represents ventricular repolarization.
-            Default is 0.3 (typical range 0.3-0.4 mV).
-        p_width (float): Width/duration of P wave in seconds.
-            Default is 0.09 (typical range 0.08-0.1 s).
-        qrs_width (float): Width/duration of QRS complex in seconds.
-            Default is 0.08 (typical range 0.06-0.1 s).
-        t_width (float): Width/duration of T wave in seconds.
-            Default is 0.16 (typical range 0.16-0.2 s).
-        pr_interval (float): Interval between start of P wave and start of QRS complex in seconds.
-            Default is 0.16 (typical range 0.12-0.2 s).
-        st_segment (float): Duration of the ST segment between S wave and T wave in seconds.
-            Default is 0.1 (typical range 0.08-0.12 s).
-        noise_level (float): Amplitude of random noise in millivolts, simulating measurement noise.
-            Default is 0.03.
-        sampling_rate (float): Sampling rate in Hz (samples per second).
-            Default is 250.0 (clinical standard).
-        hr_variability (float): Heart rate variability factor (0-1). Higher values mean more variable beat intervals.
-            Default is 0.05.
-        baseline_wander (float): Magnitude of low-frequency baseline wandering in millivolts.
-            Default is 0.02.
-        **kwargs: Additional parameters.
+        heart_rate (float): Average heart rate in beats per minute (BPM). Defaults to 70.0.
+        p_amplitude (float): Amplitude of the P wave (mV). Defaults to 0.15.
+        qrs_amplitude (float): Amplitude of the QRS complex (mV). Defaults to 1.0.
+        t_amplitude (float): Amplitude of the T wave (mV). Defaults to 0.3.
+        p_width (float): Duration of the P wave (seconds). Defaults to 0.09.
+        qrs_width (float): Duration of the QRS complex (seconds). Defaults to 0.08.
+        t_width (float): Duration of the T wave (seconds). Defaults to 0.16.
+        pr_interval (float): Time from P wave start to QRS start (seconds). Defaults to 0.16.
+        st_segment (float): Duration of the isoelectric ST segment (seconds). Defaults to 0.1.
+        noise_level (float): Standard deviation of additive Gaussian noise (mV). Defaults to 0.03.
+        sampling_rate (float): Sampling frequency in Hz (samples per second). Defaults to 250.0.
+        hr_variability (float): Factor controlling beat-to-beat interval variation (0-1).
+            Defaults to 0.05.
+        baseline_wander (float): Amplitude of low-frequency baseline drift (mV). Defaults to 0.02.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'ecg_like' component with its parameters.
     """
     return {
         "type": "ecg_like",
@@ -193,16 +175,22 @@ def ecg_like(
 def trend(
     slope: float = 0.1, endpoints: Optional[List[float]] = None, **kwargs
 ) -> Dict[str, Any]:
-    """Create a trend feature component.
+    """Create a definition for a linear trend feature component.
+
+    This component represents a feature that increases or decreases linearly over time.
+    The trend can be defined either by a slope (starting from 0) or by
+    specifying the start and end values.
 
     Args:
-        slope (float): Slope of the trend.
-        endpoints (Optional[List[float]]): List containing [start_value, end_value].
-            If provided, overrides the slope parameter.
-        **kwargs: Additional parameters.
+        slope (float): The slope of the trend (change per timestep). Used if `endpoints`
+            is None. Assumes trend starts at 0. Defaults to 0.1.
+        endpoints (Optional[List[float]]): A list or tuple `[start_value, end_value]`.
+            If provided, the trend is generated between these values, and `slope` is ignored.
+            Defaults to None.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'trend' component with its parameters.
     """
     return {"type": "trend", "slope": slope, "endpoints": endpoints, **kwargs}
 
@@ -211,29 +199,37 @@ def trend(
 # also, maybe use "value" instead of "amplitude" for consistency?
 # also, maybe we can use "constant" signal function for peak/trough, to avoid code duplication?
 def peak(amplitude: float = 1.0, width: int = 3, **kwargs) -> Dict[str, Any]:
-    """Create a peak feature component.
+    """Create a definition for a peak feature component.
+
+    This component represents a single triangular peak centered within the feature's length.
 
     Args:
-        amplitude (float): Amplitude of the peak.
-        width (int): Width of the peak in timesteps.
-        **kwargs: Additional parameters.
+        amplitude (float): The height of the peak relative to the baseline (0). Defaults to 1.0.
+        width (int): The width of the peak's base in timesteps. Should ideally be odd
+            for a single central maximum point. Defaults to 3.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'peak' component with its parameters.
     """
     return {"type": "peak", "amplitude": amplitude, "width": width, **kwargs}
 
 
 def trough(amplitude: float = 1.0, width: int = 3, **kwargs) -> Dict[str, Any]:
-    """Create a trough feature component.
+    """Create a definition for a trough feature component.
+
+    This component represents a single triangular trough centered within the feature's length.
+    It is generated by creating a peak with the given amplitude and negating it.
 
     Args:
-        amplitude (float): Amplitude of the trough (will be negated).
-        width (int): Width of the trough in timesteps.
-        **kwargs: Additional parameters.
+        amplitude (float): The depth of the trough relative to the baseline (0). The generated
+            peak will have this amplitude, and the result will be negated. Defaults to 1.0.
+        width (int): The width of the trough's base in timesteps. Should ideally be odd
+            for a single central minimum point. Defaults to 3.
+        **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'trough' component with its parameters.
     """
     return {"type": "trough", "amplitude": amplitude, "width": width, **kwargs}
 
@@ -241,16 +237,27 @@ def trough(amplitude: float = 1.0, width: int = 3, **kwargs) -> Dict[str, Any]:
 def manual(
     values: Optional[np.ndarray] = None, generator: Optional[Callable] = None, **kwargs
 ) -> Dict[str, Any]:
-    """Create a manual component from values or a generator function.
+    """Create a definition for a manual component from provided values or a custom generator function.
+
+    Allows direct specification of the component's values or using a custom function
+    for generation, providing flexibility beyond the standard components.
 
     Args:
-        values (Optional[np.ndarray]): Array of values for the component.
-        generator (Optional[Callable]): Function that generates the component.
-            Should accept n_timesteps, rng, and **kwargs.
-        **kwargs: Additional parameters for the generator.
+        values (Optional[np.ndarray]): A numpy array of values to use directly for the
+            component. If provided, `generator` is ignored. The length must match
+            the required output length during generation. Defaults to None.
+        generator (Optional[Callable]): A function to generate the values. Ignored if
+            `values` is provided. The function should accept `n_timesteps`, `rng`,
+            `length`, and `**kwargs` as arguments and return a numpy array of the
+            specified `length`. Defaults to None.
+        **kwargs: Additional keyword arguments passed directly to the `generator` function
+            during build time, or stored if `values` are provided.
 
     Returns:
-        Dict[str, Any]: Component definition dictionary.
+        Dict[str, Any]: A dictionary defining the 'manual' component with its parameters.
+
+    Raises:
+        ValueError: If neither `values` nor `generator` is provided.
     """
     component = {"type": "manual", **kwargs}
 
