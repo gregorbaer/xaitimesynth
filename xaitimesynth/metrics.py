@@ -300,6 +300,156 @@ def _validate_and_prepare_inputs(
     return attributions, ground_truth_by_dim, sample_indices, dim_indices
 
 
+def _extract_feature_data(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    threshold: Optional[float] = None,
+    feature_source: str = "isolated",
+    needs_feature_values: bool = False,
+    allow_continuous: bool = False,
+) -> Dict[str, Any]:
+    """Extract attribution values, feature values, and masks for metric calculations.
+
+    This helper function prepares all necessary data for feature attribution metrics,
+    serving as a central extraction point for all metrics in the module.
+
+    Args:
+        attributions (np.ndarray): Feature attribution values.
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+        class_label (Optional[int]): Class label to consider for evaluation.
+        threshold (Optional[float]): Threshold for binarizing attribution values.
+        feature_source (str): Source of feature values to extract:
+            - "isolated": Use values from isolated feature components.
+            - "aggregated": Use values from the aggregated time series.
+        needs_feature_values (bool): If True, extract actual feature values from the dataset.
+            If False, only extract binary masks (more efficient for most metrics).
+        allow_continuous (bool): If True, allow continuous attribution values even without a threshold.
+            Used for metrics like AUC-ROC, AUC-PR, and NAC that work with continuous values.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing:
+            - "attributions": Feature attribution values [n_samples, n_timesteps, n_dimensions]
+            - "feature_values": Ground truth feature values if needs_feature_values=True,
+                               otherwise None
+            - "masks": Ground truth masks [n_samples, n_timesteps, n_dimensions]
+            - "sample_indices": List of sample indices
+            - "dim_indices": List of dimension indices
+    """
+    # We need to set allow_continuous=True here to prevent validation errors
+    # for continuous attributions in _validate_and_prepare_inputs
+    allow_continuous_validation = True
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            None,  # Don't binarize in _validate_and_prepare_inputs
+            class_label,
+            allow_continuous=allow_continuous_validation,
+        )
+    )
+
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+    n_timesteps = attributions.shape[1]
+
+    # Create output arrays
+    masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
+
+    # Fill mask array from ground_truth_by_dim
+    for j, dim_idx in enumerate(dim_indices):
+        dim_mask = ground_truth_by_dim[dim_idx]
+        for i in range(n_samples):
+            masks[i, :, j] = dim_mask[i]
+
+    # Binarize attributions if threshold is provided
+    if threshold is not None:
+        # Create a binary copy for metrics that need boolean input
+        attributions = _binarize_attributions(attributions, threshold)
+    # For metrics that need boolean values (precision, recall, f1) but don't allow continuous values
+    elif not (allow_continuous or needs_feature_values) and not np.issubdtype(
+        attributions.dtype, np.bool_
+    ):
+        # For metrics that need boolean values but continuous values were provided
+        # without a threshold, raise an error with the original error message pattern
+        # to match existing tests
+        raise ValueError(
+            "Attribution must be boolean type when no threshold was provided."
+        )
+
+    # Only extract feature values if needed
+    feature_values = None
+    if needs_feature_values:
+        feature_values = np.full((n_samples, n_timesteps, n_dimensions), np.nan)
+
+        # Fill feature_values based on the source
+        if feature_source == "aggregated":
+            # Get data format from metadata
+            data_format = dataset.get("metadata", {}).get(
+                "data_format", "channels_first"
+            )
+            X = dataset["X"]
+
+            # Ensure X is in channels_last format
+            if data_format == "channels_first":
+                X = np.transpose(X, (0, 2, 1))
+
+            # Extract values for each sample and dimension
+            for i, sample_idx in enumerate(sample_indices):
+                for j, dim_idx in enumerate(dim_indices):
+                    feature_values[i, :, j] = X[sample_idx, :, dim_idx]
+
+        elif (
+            feature_source == "isolated"
+            and "components" in dataset
+            and len(dataset["components"]) > 0
+        ):
+            # Extract from isolated components
+            for i, sample_idx in enumerate(sample_indices):
+                sample_components = dataset["components"][sample_idx]
+                if (
+                    hasattr(sample_components, "features")
+                    and sample_components.features
+                ):
+                    # Process each dimension
+                    for j, dim_idx in enumerate(dim_indices):
+                        # Initialize with zeros where features will be added
+                        feature_mask = masks[i, :, j]
+                        if np.any(feature_mask):
+                            feature_values[i, feature_mask, j] = 0.0
+
+                        # Find and combine all features for this dimension
+                        for (
+                            feature_name,
+                            feature_vals,
+                        ) in sample_components.features.items():
+                            dim_match = f"_dim{dim_idx}" in feature_name or (
+                                dim_idx == 0 and "_dim" not in feature_name
+                            )
+                            if dim_match:
+                                # Copy only non-NaN values
+                                valid = ~np.isnan(feature_vals)
+                                if np.any(valid):
+                                    # Add feature values (treating NaN as 0)
+                                    temp_vals = feature_vals.copy()
+                                    temp_vals[~valid] = 0
+                                    feature_values[i, valid, j] += temp_vals[valid]
+
+    return {
+        "attributions": attributions,
+        "feature_values": feature_values,
+        "masks": masks,
+        "sample_indices": sample_indices,
+        "dim_indices": dim_indices,
+    }
+
+
 def precision_score(
     attribution: np.ndarray,
     dataset: Dict[str, Any],
@@ -692,6 +842,11 @@ def nac_score(
     Intuition: Measures if important regions receive statistically higher attribution values than would be expected by chance.
     Answers: Are my attribution values significantly elevated in the regions that matter?
 
+    Note: NAC is another name for Normalised Scanpath Saliency (NSS) [1], which is used in
+    another context to compare binary ground truth masks of where people look in an image (obtained via eye-tracking)
+    to the predicted saliency map of where we think they are most likely to focus their
+    visual attention. We use the name NAC here to match the domain of XAI validation instead of eye-tracking.
+
     Args:
         attributions (np.ndarray): Feature attribution values. Can be:
             - 1D array (n_timesteps,): Single sample, single dimension
@@ -717,6 +872,9 @@ def nac_score(
     Returns:
         Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
             NAC score(s) depending on the averaging method.
+
+    References:
+        [1] Peters, R. J., Iyer, A., Itti, L., & Koch, C. (2005). Components of bottom-up gaze allocation in natural images. Vision research, 45(18), 2397-2416.
     """
     # Extract data using the enhanced helper function - NAC needs continuous values
     data = _extract_feature_data(
@@ -1148,301 +1306,6 @@ def auc_pr_score(
                 results += auc / (n_samples * n_dimensions)
 
     return results
-
-
-def correlation_score(
-    attributions: np.ndarray,
-    dataset: Dict,
-    sample_indices: Optional[List[int]] = None,
-    dim_indices: Optional[List[int]] = None,
-    class_label: Optional[int] = None,
-    average: Optional[str] = "macro",
-    feature_source: str = "isolated",
-    absolute: bool = True,
-) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
-    """Calculate correlation coefficient between attribution values and ground truth features.
-
-    This metric measures how well attribution values correlate with ground truth feature values
-    in regions where ground truth features exist. Higher correlation coefficients indicate that
-    the attribution values follow a similar pattern to the feature values.
-
-    Intuition (absolute=True): Measures how well attribution values align with the pattern of ground truth features, regardless of direction.
-    Answers (absolute=True): Do my attributions follow the same pattern as the ground truth, even if the relationship is inverse?
-
-    Args:
-        attributions (np.ndarray): Feature attribution values. Can be:
-            - 1D array (n_timesteps,): Single sample, single dimension
-            - 2D array (n_timesteps, n_dimensions): Single sample, multiple dimensions
-            - 3D array (n_samples, n_timesteps, n_dimensions): Multiple samples, multiple dimensions
-        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
-        sample_indices (Optional[List[int]]): Sample indices to include.
-            For 1D or 2D attributions (single sample), you must specify which sample
-            to compare against. For 3D attributions, defaults to all samples.
-        dim_indices (Optional[List[int]]): Dimension indices to include.
-            If None, uses all dimensions available in the attribution array.
-        class_label (Optional[int]): Class label to calculate correlation for.
-            If None, uses all feature masks regardless of class.
-        average (Optional[str]): Method for averaging:
-            - 'macro': Average correlation across samples and dimensions
-            - 'per_sample': Return correlation for each sample (averaged across dimensions)
-            - 'per_dimension': Return correlation for each dimension (averaged across samples)
-            - 'per_sample_dimension': Return correlation for each sample-dimension pair
-        feature_source (str): Source of feature values to correlate against:
-            - 'isolated': Use values from isolated feature components (dataset["components"][i].features)
-            - 'aggregated': Use values from the aggregated time series (dataset["X"])
-        absolute (bool): If True, returns the absolute value of the correlation coefficient,
-            measuring strength of correlation regardless of direction. If False, returns
-            the raw correlation coefficient with sign. Default is True.
-
-    Returns:
-        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
-            Correlation coefficient(s) depending on the averaging method.
-    """
-    # Extract all necessary data - correlation_score requires feature values
-    data = _extract_feature_data(
-        attributions,
-        dataset,
-        sample_indices,
-        dim_indices,
-        class_label,
-        threshold=None,  # No thresholding for correlation
-        feature_source=feature_source,
-        needs_feature_values=True,  # Correlation needs actual feature values
-        allow_continuous=True,
-    )
-
-    attr = data["attributions"]
-    feat_vals = data["feature_values"]
-    masks = data["masks"]
-    sample_indices = data["sample_indices"]
-    dim_indices = data["dim_indices"]
-
-    n_samples = len(sample_indices)
-    n_dimensions = len(dim_indices)
-
-    # Calculate correlations for each sample-dimension pair
-    raw_correlations = {}
-
-    for i, sample_idx in enumerate(sample_indices):
-        for j, dim_idx in enumerate(dim_indices):
-            mask = masks[i, :, j]
-
-            # Skip if no ground truth regions
-            if not np.any(mask):
-                raw_correlations[(sample_idx, dim_idx)] = 0.0
-                continue
-
-            # Get values at mask positions
-            attr_values = attr[i, mask, j]
-            feat_values = feat_vals[i, mask, j]
-
-            # Skip NaN values
-            valid = ~np.isnan(feat_values)
-            if np.sum(valid) < 2:  # Need at least 2 points
-                raw_correlations[(sample_idx, dim_idx)] = 0.0
-                continue
-
-            attr_valid = attr_values[valid]
-            feat_valid = feat_values[valid]
-
-            # Calculate correlation
-            attr_std = np.std(attr_valid)
-            feat_std = np.std(feat_valid)
-
-            if attr_std == 0 and feat_std == 0:
-                # Both constant arrays
-                if np.allclose(attr_valid[0], feat_valid[0]):
-                    raw_correlations[(sample_idx, dim_idx)] = 1.0
-                elif np.allclose(attr_valid[0], -feat_valid[0]):
-                    raw_correlations[(sample_idx, dim_idx)] = -1.0
-                else:
-                    raw_correlations[(sample_idx, dim_idx)] = 0.0
-            elif attr_std == 0 or feat_std == 0:
-                # One array is constant
-                raw_correlations[(sample_idx, dim_idx)] = 0.0
-            else:
-                # Calculate normalized correlation
-                attr_norm = (attr_valid - np.mean(attr_valid)) / attr_std
-                feat_norm = (feat_valid - np.mean(feat_valid)) / feat_std
-                raw_correlations[(sample_idx, dim_idx)] = np.mean(attr_norm * feat_norm)
-
-    # Apply averaging according to the specified method
-    results = {}
-
-    if average == "per_sample_dimension":
-        for key, corr in raw_correlations.items():
-            results[key] = abs(corr) if absolute else corr
-    elif average == "per_sample":
-        for sample_idx in sample_indices:
-            total_corr = 0.0
-            for dim_idx in dim_indices:
-                corr = raw_correlations.get((sample_idx, dim_idx), 0.0)
-                total_corr += abs(corr) if absolute else corr
-            results[sample_idx] = total_corr / n_dimensions
-    elif average == "per_dimension":
-        for dim_idx in dim_indices:
-            total_corr = 0.0
-            for sample_idx in sample_indices:
-                corr = raw_correlations.get((sample_idx, dim_idx), 0.0)
-                total_corr += abs(corr) if absolute else corr
-            results[dim_idx] = total_corr / n_samples
-    else:  # macro
-        total_corr = 0.0
-        for corr in raw_correlations.values():
-            total_corr += abs(corr) if absolute else corr
-        results = total_corr / (n_samples * n_dimensions)
-
-    return results
-
-
-def _extract_feature_data(
-    attributions: np.ndarray,
-    dataset: Dict,
-    sample_indices: Optional[List[int]] = None,
-    dim_indices: Optional[List[int]] = None,
-    class_label: Optional[int] = None,
-    threshold: Optional[float] = None,
-    feature_source: str = "isolated",
-    needs_feature_values: bool = False,
-    allow_continuous: bool = False,
-) -> Dict[str, Any]:
-    """Extract attribution values, feature values, and masks for metric calculations.
-
-    This helper function prepares all necessary data for feature attribution metrics,
-    serving as a central extraction point for all metrics in the module.
-
-    Args:
-        attributions (np.ndarray): Feature attribution values.
-        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
-        sample_indices (Optional[List[int]]): Sample indices to include.
-        dim_indices (Optional[List[int]]): Dimension indices to include.
-        class_label (Optional[int]): Class label to consider for evaluation.
-        threshold (Optional[float]): Threshold for binarizing attribution values.
-        feature_source (str): Source of feature values to extract:
-            - "isolated": Use values from isolated feature components.
-            - "aggregated": Use values from the aggregated time series.
-        needs_feature_values (bool): If True, extract actual feature values from the dataset.
-            If False, only extract binary masks (more efficient for most metrics).
-        allow_continuous (bool): If True, allow continuous attribution values even without a threshold.
-            Used for metrics like AUC-ROC, AUC-PR, and NAC that work with continuous values.
-
-    Returns:
-        Dict[str, Any]: Dictionary containing:
-            - "attributions": Feature attribution values [n_samples, n_timesteps, n_dimensions]
-            - "feature_values": Ground truth feature values if needs_feature_values=True,
-                               otherwise None
-            - "masks": Ground truth masks [n_samples, n_timesteps, n_dimensions]
-            - "sample_indices": List of sample indices
-            - "dim_indices": List of dimension indices
-    """
-    # We need to set allow_continuous=True here to prevent validation errors
-    # for continuous attributions in _validate_and_prepare_inputs
-    allow_continuous_validation = True
-    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
-        _validate_and_prepare_inputs(
-            attributions,
-            dataset,
-            sample_indices,
-            dim_indices,
-            None,  # Don't binarize in _validate_and_prepare_inputs
-            class_label,
-            allow_continuous=allow_continuous_validation,
-        )
-    )
-
-    n_samples = len(sample_indices)
-    n_dimensions = len(dim_indices)
-    n_timesteps = attributions.shape[1]
-
-    # Create output arrays
-    masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
-
-    # Fill mask array from ground_truth_by_dim
-    for j, dim_idx in enumerate(dim_indices):
-        dim_mask = ground_truth_by_dim[dim_idx]
-        for i in range(n_samples):
-            masks[i, :, j] = dim_mask[i]
-
-    # Binarize attributions if threshold is provided
-    if threshold is not None:
-        # Create a binary copy for metrics that need boolean input
-        attributions = _binarize_attributions(attributions, threshold)
-    # For metrics that need boolean values (precision, recall, f1) but don't allow continuous values
-    elif not (allow_continuous or needs_feature_values) and not np.issubdtype(
-        attributions.dtype, np.bool_
-    ):
-        # For metrics that need boolean values but continuous values were provided
-        # without a threshold, raise an error with the original error message pattern
-        # to match existing tests
-        raise ValueError(
-            "Attribution must be boolean type when no threshold was provided."
-        )
-
-    # Only extract feature values if needed
-    feature_values = None
-    if needs_feature_values:
-        feature_values = np.full((n_samples, n_timesteps, n_dimensions), np.nan)
-
-        # Fill feature_values based on the source
-        if feature_source == "aggregated":
-            # Get data format from metadata
-            data_format = dataset.get("metadata", {}).get(
-                "data_format", "channels_first"
-            )
-            X = dataset["X"]
-
-            # Ensure X is in channels_last format
-            if data_format == "channels_first":
-                X = np.transpose(X, (0, 2, 1))
-
-            # Extract values for each sample and dimension
-            for i, sample_idx in enumerate(sample_indices):
-                for j, dim_idx in enumerate(dim_indices):
-                    feature_values[i, :, j] = X[sample_idx, :, dim_idx]
-
-        elif (
-            feature_source == "isolated"
-            and "components" in dataset
-            and len(dataset["components"]) > 0
-        ):
-            # Extract from isolated components
-            for i, sample_idx in enumerate(sample_indices):
-                sample_components = dataset["components"][sample_idx]
-                if (
-                    hasattr(sample_components, "features")
-                    and sample_components.features
-                ):
-                    # Process each dimension
-                    for j, dim_idx in enumerate(dim_indices):
-                        # Initialize with zeros where features will be added
-                        feature_mask = masks[i, :, j]
-                        if np.any(feature_mask):
-                            feature_values[i, feature_mask, j] = 0.0
-
-                        # Find and combine all features for this dimension
-                        for (
-                            feature_name,
-                            feature_vals,
-                        ) in sample_components.features.items():
-                            dim_match = f"_dim{dim_idx}" in feature_name or (
-                                dim_idx == 0 and "_dim" not in feature_name
-                            )
-                            if dim_match:
-                                # Copy only non-NaN values
-                                valid = ~np.isnan(feature_vals)
-                                if np.any(valid):
-                                    # Add feature values (treating NaN as 0)
-                                    temp_vals = feature_vals.copy()
-                                    temp_vals[~valid] = 0
-                                    feature_values[i, valid, j] += temp_vals[valid]
-
-    return {
-        "attributions": attributions,
-        "feature_values": feature_values,
-        "masks": masks,
-        "sample_indices": sample_indices,
-        "dim_indices": dim_indices,
-    }
 
 
 def relevance_mass_accuracy(
