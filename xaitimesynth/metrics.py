@@ -1529,3 +1529,94 @@ def relevance_mass_accuracy(
         return results
     else:
         raise ValueError(f"Invalid average method: {average}")
+
+
+def relevance_rank_accuracy(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Compute Relevance Rank Accuracy for feature attributions.
+
+    The relevance rank accuracy[1] measures the fraction of the K highest attribution values
+    that fall within the ground truth mask, where K is the number of ground truth positives.
+
+    Args:
+        attributions (np.ndarray): Attribution values (any shape supported by _validate_and_prepare_inputs).
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+        class_label (Optional[int]): Class label to calculate the metric for.
+        average (str): Averaging method: 'macro', 'per_sample', 'per_dimension', 'per_sample_dimension'.
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]: Relevance rank accuracy score(s).
+
+    References:
+        [1] Arras, L., Osman, A., & Samek, W. (2022). CLEVR-XAI: A benchmark dataset for the ground truth evaluation of neural network explanations. Information Fusion, 81, 14-40.
+    """
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            threshold=None,
+            class_label=class_label,
+            allow_continuous=True,
+        )
+    )
+
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+    n_timesteps = attributions.shape[1]
+
+    # Prepare mask array: [n_samples, n_timesteps, n_dimensions]
+    masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
+    for j, dim_idx in enumerate(dim_indices):
+        dim_mask = ground_truth_by_dim[dim_idx]
+        for i in range(n_samples):
+            masks[i, :, j] = dim_mask[i]
+
+    results = {}
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            attr = attributions[i, :, j]
+            mask = masks[i, :, j]
+            K = int(np.sum(mask))
+            if K == 0:
+                score = 0.0
+            else:
+                # Get indices of top-K attributions
+                topk_indices = np.argpartition(-attr, K - 1)[:K]
+                # Count how many of these indices are in the ground truth mask
+                n_in_mask = np.sum(mask[topk_indices])
+                score = n_in_mask / K
+            results[(sample_idx, dim_idx)] = score
+
+    if average == "macro":
+        return np.mean(list(results.values())) if results else 0.0
+    elif average == "per_sample":
+        sample_results = {}
+        for sample_idx in sample_indices:
+            vals = [results[(sample_idx, d)] for d in dim_indices]
+            sample_results[sample_idx] = np.mean(vals) if vals else 0.0
+        return sample_results
+    elif average == "per_dimension":
+        dim_results = {}
+        for dim_idx in dim_indices:
+            vals = [results[(s, dim_idx)] for s in sample_indices]
+            dim_results[dim_idx] = np.mean(vals) if vals else 0.0
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
+    elif average == "per_sample_dimension":
+        return results
+    else:
+        raise ValueError(f"Invalid average method: {average}")
