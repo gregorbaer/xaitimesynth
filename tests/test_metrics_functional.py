@@ -23,6 +23,7 @@ from xaitimesynth.metrics import (
     nac_score,
     precision_score,
     recall_score,
+    relevance_mass_accuracy,
 )
 
 
@@ -1485,4 +1486,131 @@ def test_correlation_score():
     )
     assert per_dim_raw_corr[1] < -0.9, (
         f"Dimension 1 raw correlation should be < -0.9, got {per_dim_raw_corr[1]}"
+    )
+
+
+def test_relevance_mass_accuracy(
+    simple_dataset, get_class1_sample_and_feature_mask, multivariate_dataset
+):
+    """Test the relevance_mass_accuracy metric in various scenarios.
+
+    This test covers:
+    1. Perfect attribution (all relevance inside the mask)
+    2. Partial attribution (split relevance inside/outside)
+    3. All relevance outside the mask
+    4. Empty attribution (all zeros)
+    5. Multivariate case with per-dimension and macro averaging
+    """
+
+    # --- Univariate, single sample ---
+    sample_idx, mask = get_class1_sample_and_feature_mask(simple_dataset)
+    n_timesteps = simple_dataset["metadata"]["n_timesteps"]
+    n_dimensions = simple_dataset["metadata"]["n_dimensions"]
+
+    # 1. Perfect attribution: all relevance inside the mask
+    attr_perfect = np.zeros((1, n_timesteps, n_dimensions))
+    attr_perfect[0, :, 0] = mask.astype(float)
+    score = relevance_mass_accuracy(
+        attr_perfect, simple_dataset, sample_indices=[sample_idx], class_label=1
+    )
+    assert score == 1.0, (
+        "Perfect attribution should yield relevance_mass_accuracy of 1.0"
+    )
+
+    # 2. Partial attribution: half inside, half outside
+    attr_partial = np.zeros((1, n_timesteps, n_dimensions))
+    # Put 0.5 in mask, 0.5 outside mask
+    attr_partial[0, :, 0] = 0.5 * mask + 0.5 * (~mask)
+    score = relevance_mass_accuracy(
+        attr_partial, simple_dataset, sample_indices=[sample_idx], class_label=1
+    )
+    expected = np.sum(0.5 * mask) / np.sum(attr_partial[0, :, 0])
+    assert np.isclose(score, expected), (
+        f"Partial attribution should yield score {expected}, got {score}"
+    )
+
+    # 3. All relevance outside the mask
+    attr_outside = np.zeros((1, n_timesteps, n_dimensions))
+    attr_outside[0, :, 0] = (~mask).astype(float)
+    score = relevance_mass_accuracy(
+        attr_outside, simple_dataset, sample_indices=[sample_idx], class_label=1
+    )
+    assert score == 0.0, "All relevance outside mask should yield score 0.0"
+
+    # 4. Empty attribution (all zeros)
+    attr_empty = np.zeros((1, n_timesteps, n_dimensions))
+    score = relevance_mass_accuracy(
+        attr_empty, simple_dataset, sample_indices=[sample_idx], class_label=1
+    )
+    assert score == 0.0, "Empty attribution should yield score 0.0"
+
+    # 6. Complex scenario: non-uniform attribution values (mass test)
+    attr_mass = np.zeros((1, n_timesteps, n_dimensions))
+    # Assign 2.0 inside the mask, 0.5 outside
+    attr_mass[0, :, 0] = 2.0 * mask + 0.5 * (~mask)
+    expected_mass = np.sum(2.0 * mask) / np.sum(attr_mass[0, :, 0])
+    score_mass = relevance_mass_accuracy(
+        attr_mass, simple_dataset, sample_indices=[sample_idx], class_label=1
+    )
+    assert np.isclose(score_mass, expected_mass), (
+        f"Complex mass scenario: expected {expected_mass}, got {score_mass} (should reflect mass of attributions)"
+    )
+
+    # --- Multivariate, per-dimension and macro averaging ---
+    class1_indices = np.where(multivariate_dataset["y"] == 1)[0]
+    sample_idx = class1_indices[0]
+    n_timesteps = multivariate_dataset["metadata"]["n_timesteps"]
+    n_dimensions = multivariate_dataset["metadata"]["n_dimensions"]
+
+    # Get feature masks for each dimension
+    feature_masks = {
+        k: v[sample_idx] for k, v in multivariate_dataset["feature_masks"].items()
+    }
+    dim0_mask = np.zeros(n_timesteps, dtype=bool)
+    dim1_mask = np.zeros(n_timesteps, dtype=bool)
+    for k, m in feature_masks.items():
+        if "_dim0" in k or ("_dim" not in k):
+            dim0_mask |= m
+        if "_dim1" in k:
+            dim1_mask |= m
+
+    # Perfect attribution for both dimensions
+    attr_mv = np.zeros((1, n_timesteps, n_dimensions))
+    attr_mv[0, :, 0] = dim0_mask.astype(float)
+    attr_mv[0, :, 1] = dim1_mask.astype(float)
+    score_macro = relevance_mass_accuracy(
+        attr_mv, multivariate_dataset, sample_indices=[sample_idx], average="macro"
+    )
+    assert score_macro == 1.0, (
+        "Perfect multivariate attribution should yield macro score 1.0"
+    )
+    score_per_dim = relevance_mass_accuracy(
+        attr_mv,
+        multivariate_dataset,
+        sample_indices=[sample_idx],
+        average="per_dimension",
+    )
+    assert all(np.isclose(s, 1.0) for s in score_per_dim), (
+        "Perfect attribution should yield per-dimension scores of 1.0"
+    )
+
+    # Mixed: only dim0 is perfect, dim1 is all outside
+    attr_mv[0, :, 1] = (~dim1_mask).astype(float)
+    score_macro = relevance_mass_accuracy(
+        attr_mv, multivariate_dataset, sample_indices=[sample_idx], average="macro"
+    )
+    assert np.isclose(score_macro, 0.5), (
+        f"One perfect, one zero: macro should be 0.5, got {score_macro}"
+    )
+    score_per_dim = relevance_mass_accuracy(
+        attr_mv,
+        multivariate_dataset,
+        sample_indices=[sample_idx],
+        average="per_dimension",
+    )
+    assert np.isclose(score_per_dim[0], 1.0), (
+        f"Dim0 should be 1.0, got {score_per_dim[0]}"
+    )
+    assert np.isclose(score_per_dim[1], 0.0), (
+        f"Dim1 should be 0.0, got {score_per_dim[1]}"
     )
