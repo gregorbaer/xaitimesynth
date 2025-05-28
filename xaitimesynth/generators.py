@@ -707,6 +707,94 @@ def generate_ecg_like(
     return full_signal
 
 
+def generate_gaussian_pulse(
+    n_timesteps: int,
+    amplitude: float = 1.0,
+    width_ratio: float = 1.0,
+    center: float = 0.5,
+    rng: Optional[np.random.RandomState] = None,
+    length: Optional[int] = None,
+    **kwargs,
+) -> np.ndarray:
+    """Generate a Gaussian pulse time series.
+
+    The pulse follows a Gaussian curve: amplitude * exp(-0.5 * ((x - center) / sigma)^2)
+    The center is automatically snapped to the nearest discrete timestep to ensure
+    exact amplitude and symmetric shape.
+
+    Width is controlled using the 6-sigma rule: 99.7% of pulse energy falls within
+    the specified width_ratio, with amplitude dropping to ~1% at boundaries.
+
+    Args:
+        n_timesteps (int): The nominal length of the time series context. The actual output
+            length is determined by the `length` parameter if provided, otherwise `n_timesteps`.
+        amplitude (float): Peak amplitude of the Gaussian pulse. The maximum value will be
+            exactly this amplitude. Defaults to 1.0.
+        width_ratio (float): Pulse width as fraction of the output length. Using the 6-sigma
+            rule, 99.7% of the pulse energy will be contained within this fraction of the
+            total length, with the pulse amplitude dropping to ~1% at the boundaries.
+            Must be between 0.0 and 1.0. Defaults to 1.0.
+        center (float): Desired peak position within the output length, ranging from 0.0 (start)
+            to 1.0 (end). Will be snapped to the nearest discrete timestep to ensure exact
+            amplitude and symmetric shape. Defaults to 0.5 (middle).
+        rng (Optional[np.random.RandomState]): Random number generator instance. Included for
+            API consistency with other generators but unused here. Defaults to None.
+        length (Optional[int]): The exact desired length of the output time series array.
+            If provided, this overrides `n_timesteps`. If None, `n_timesteps` is used.
+            Typically provided by the TimeSeriesBuilder. Defaults to None.
+        **kwargs: Catches unused parameters passed by TimeSeriesBuilder for compatibility.
+
+    Returns:
+        np.ndarray: A 1D numpy array containing the Gaussian pulse with exact amplitude.
+
+    Raises:
+        ValueError: If width_ratio is not between 0.0 and 1.0, or if center is not between
+            0.0 and 1.0.
+
+    Example:
+        >>> pulse = generate_gaussian_pulse(n_timesteps=100, amplitude=2.0, center=0.7)
+        >>> np.max(pulse)  # Exactly 2.0
+        2.0
+        >>> np.argmax(pulse)  # At position 70 (nearest to 0.7 * 99 = 69.3)
+        70
+    """
+    # Validate parameters
+    if not 0.0 <= width_ratio <= 1.0:
+        raise ValueError(f"width_ratio must be between 0.0 and 1.0, got {width_ratio}")
+    if not 0.0 <= center <= 1.0:
+        raise ValueError(f"center must be between 0.0 and 1.0, got {center}")
+
+    output_length = length if length is not None else n_timesteps
+
+    if output_length <= 0:
+        return np.array([])
+
+    # Create time index array
+    x = np.arange(output_length)
+
+    # Convert relative center to absolute position and snap to nearest discrete timestep
+    # This ensures the peak falls exactly on a timestep for mathematical precision
+    center_pos = round(center * (output_length - 1)) if output_length > 1 else 0
+
+    # Convert width_ratio to standard deviation using 6-sigma rule
+    # This ensures 99.7% of the pulse energy is within the specified width
+    sigma = (width_ratio * output_length) / 6.0
+
+    # Handle edge case where sigma is very small
+    if sigma <= 0:
+        # If width is essentially zero, create a single spike at the center
+        result = np.zeros(output_length)
+        center_idx = int(round(center_pos))
+        if 0 <= center_idx < output_length:
+            result[center_idx] = amplitude
+        return result
+
+    # Generate Gaussian pulse
+    gaussian_pulse = amplitude * np.exp(-0.5 * ((x - center_pos) / sigma) ** 2)
+
+    return gaussian_pulse
+
+
 # Dictionary mapping component types to generator functions
 GENERATOR_FUNCS = {
     "constant": generate_constant,
@@ -719,7 +807,8 @@ GENERATOR_FUNCS = {
     "trough": generate_trough,
     "manual": generate_manual,
     "red_noise": generate_red_noise,
-    "ecg_like": generate_ecg_like,  # Added here
+    "ecg_like": generate_ecg_like,
+    "gaussian_pulse": generate_gaussian_pulse,
 }
 
 

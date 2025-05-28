@@ -171,6 +171,53 @@ def ecg_like(
     }
 
 
+def gaussian_pulse(
+    amplitude: float = 1.0, width_ratio: float = 1, center: float = 0.5, **kwargs
+) -> Dict[str, Any]:
+    """Create a definition for a Gaussian pulse component.
+
+    This component represents a Gaussian-shaped pulse with configurable amplitude,
+    width, and center position. It can be used as both a signal component (for
+    generating full-length pulse signals) or as a feature component (for creating
+    localized pulse patterns).
+
+    The pulse follows a Gaussian curve: amplitude * exp(-0.5 * ((x - center) / sigma)^2)
+    The center is automatically snapped to the nearest discrete timestep to ensure
+    exact amplitude and symmetric shape.
+
+    Width is controlled using the 6-sigma rule: 99.7% of pulse energy falls within
+    the specified width_ratio, with amplitude dropping to ~1% at boundaries.
+
+    Args:
+        amplitude (float): Peak amplitude of the Gaussian pulse. The maximum value will
+            be exactly this amplitude. Defaults to 1.0.
+        width_ratio (float): Pulse width as fraction of the component length. Using the 6-sigma
+            rule, 99.7% of the pulse energy will be contained within this fraction of the
+            total length, with amplitude dropping to ~1% at the boundaries.
+            Must be between 0.0 and 1.0. Defaults to 1.0.
+        center (float): Desired peak position within the component length, ranging from 0.0 (start)
+            to 1.0 (end). Will be snapped to the nearest discrete timestep. Defaults to 0.5 (middle).
+        **kwargs: Additional parameters passed to the generator during build time.
+
+    Returns:
+        Dict[str, Any]: A dictionary defining the 'gaussian_pulse' component with its parameters.
+
+    Example:
+        >>> pulse_def = gaussian_pulse(amplitude=2.0, width_ratio=0.4, center=0.3)
+        >>> pulse_def['type']
+        'gaussian_pulse'
+        >>> pulse_def['amplitude']
+        2.0
+    """
+    return {
+        "type": "gaussian_pulse",
+        "amplitude": amplitude,
+        "width_ratio": width_ratio,
+        "center": center,
+        **kwargs,
+    }
+
+
 ## Feature Components
 def trend(
     slope: float = 0.1, endpoints: Optional[List[float]] = None, **kwargs

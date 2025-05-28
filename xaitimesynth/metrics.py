@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 
+# TODO: check whether we need binarizations and tresholds after stablizing metrics
 def _binarize_attributions(attributions: np.ndarray, threshold: float) -> np.ndarray:
     """Binarize attribution values using a threshold.
 

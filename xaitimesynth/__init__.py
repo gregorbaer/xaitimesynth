@@ -15,6 +15,7 @@ from .components import (
     constant,
     ecg_like,
     gaussian,
+    gaussian_pulse,
     manual,
     peak,
     random_walk,
@@ -65,6 +66,7 @@ __all__ = [
     "constant",
     "ecg_like",
     "gaussian",
+    "gaussian_pulse",
     "manual",
     "peak",
     "random_walk",
@@ -87,6 +89,7 @@ register_component(red_noise, "signal")
 register_component(trend, "feature")
 register_component(peak, "feature")
 register_component(trough, "feature")
+register_component(gaussian_pulse, "feature")
 
 register_component(manual, "both")
 
