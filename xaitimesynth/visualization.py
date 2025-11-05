@@ -146,7 +146,7 @@ def plot_component(
 
 def prepare_plot_data(
     dataset: Dict,
-    sample_indices: Dict[int, int] = None,
+    sample_indices: Union[Dict[int, int], List[int], int, None] = None,
     components_to_include: List[str] = None,
     dimensions: List[int] = None,
 ) -> pd.DataFrame:
@@ -154,8 +154,12 @@ def prepare_plot_data(
 
     Args:
         dataset (Dict): Dataset containing time series data and components.
-        sample_indices (Optional[Dict[int, int]]): Dictionary mapping class labels to sample indices.
-            If None, use first sample of each class.
+        sample_indices (Union[Dict[int, int], List[int], int, None]): Samples to include.
+            Can be provided in several formats:
+            - Dict[int, int]: Mapping from class labels to sample indices (e.g., {0: 5, 1: 10})
+            - List[int]: List of sample indices to include (e.g., [0, 5, 10])
+            - int: Single sample index (e.g., 5)
+            - None: Use first sample of each class (default)
         components_to_include (Optional[List[str]]): List of components to include. If None, include all.
             Default components: ["aggregated", "features", "foundation", "noise"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
@@ -166,14 +170,27 @@ def prepare_plot_data(
     # Ensure dataset is in channels_last format for visualization
     dataset = _ensure_visualization_format(dataset)
 
-    # Determine sample indices if not provided
+    # Process sample_indices to determine which samples to include
     if sample_indices is None:
-        sample_indices = {}
+        # Default: first sample of each class
+        indices_dict = {}
         for class_label in np.unique(dataset["y"]):
-            sample_indices[class_label] = np.where(dataset["y"] == class_label)[0][0]
-
-    # Convert sample_indices dict to list of indices
-    indices = list(sample_indices.values())
+            indices_dict[class_label] = np.where(dataset["y"] == class_label)[0][0]
+        indices = list(indices_dict.values())
+    elif isinstance(sample_indices, dict):
+        # Dict mapping class -> index
+        indices = list(sample_indices.values())
+    elif isinstance(sample_indices, int):
+        # Single sample index
+        indices = [sample_indices]
+    elif isinstance(sample_indices, list):
+        # List of sample indices
+        indices = sample_indices
+    else:
+        raise TypeError(
+            f"sample_indices must be Dict[int, int], List[int], int, or None, "
+            f"got {type(sample_indices)}"
+        )
 
     # Use the to_df method to get the data in the right format
     builder = TimeSeriesBuilder()
@@ -394,6 +411,7 @@ def prepare_feature_highlights(
     return rect_df
 
 
+# TODO: remove noise component from default components (since we only separate between background, aggregated, and feature now)
 def plot_components(
     dataset: Dict,
     samples: Union[int, List[int], Dict[int, int], None] = None,
@@ -607,7 +625,7 @@ def plot_components(
     # Calculate global y-limits
     y_min = df["value"].min()
     y_max = df["value"].max()
-    padding = (y_max - y_min) * 0.15
+    padding = (y_max - y_min) * 0.001
     y_min = float(y_min - padding)
     y_max = float(y_max + padding)
 
@@ -808,7 +826,7 @@ def plot_dimensions(
             p = p + scale_y_continuous(limits=[y_min, y_max])
 
         # Add title and labels
-        p = p + labs(title=f"Dimension {dim}", x="Time Steps", y="Value")
+        p = p + labs(title=f"Dimension {dim}", x="Time steps", y="Value")
 
         # Calculate plot dimensions
         n_components = len(dim_df["component"].unique())
@@ -905,7 +923,7 @@ def plot_by_class(
         # Calculate y limits for this class
         y_min = class_df["value"].min()
         y_max = class_df["value"].max()
-        padding = (y_max - y_min) * 0.15
+        padding = (y_max - y_min) * 0.02
         y_min = float(y_min - padding)
         y_max = float(y_max + padding)
 
