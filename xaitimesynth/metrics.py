@@ -718,9 +718,7 @@ def auc_roc_score(
                             mask = fpr_sorted == fpr
                             unique_tprs[k] = np.max(tpr_sorted[mask])
 
-                        auc = np.trapz(
-                            unique_tprs, unique_fprs
-                        )  # TODO: replace with np.trapezoidal if downstream integration permits
+                        auc = np.trapezoid(unique_tprs, unique_fprs)
 
             # Normalize if requested
             if normalize:
