@@ -13,10 +13,8 @@ from xaitimesynth import (
     TimeSeriesBuilder,
     constant,
     gaussian,
-    level_change,
     peak,
     random_walk,
-    shapelet,
 )
 
 
@@ -50,10 +48,10 @@ def test_univariate_two_classes(basic_univariate_config):
         .for_class(0)  # Class 0: No discriminative features
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .for_class(1)  # Class 1: Has shapelet feature
+        .for_class(1)  # Class 1: Has constant feature
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
 
@@ -66,8 +64,8 @@ def test_univariate_two_classes(basic_univariate_config):
     assert "components" in dataset, "Dataset should contain 'components' key"
 
     # Check the shapes
-    assert dataset["X"].shape == (n_samples, n_timesteps, 1), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, 1), "
+    assert dataset["X"].shape == (n_samples, 1, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions=1, n_timesteps={n_timesteps}), "
         f"got {dataset['X'].shape}"
     )
     assert dataset["y"].shape == (n_samples,), (
@@ -114,16 +112,16 @@ def test_univariate_three_classes(basic_univariate_config):
         .for_class(0)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        # Class 1: Base signal + shapelet
+        # Class 1: Base signal + constant level change
         .for_class(1)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
-        # Class 2: Base signal + level change
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
+        # Class 2: Base signal + constant level change
         .for_class(2)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(level_change(amplitude=0.8), start_pct=0.6, end_pct=0.8)
+        .add_feature(constant(value=0.8), start_pct=0.6, end_pct=0.8)
         .build()
     )
 
@@ -133,8 +131,8 @@ def test_univariate_three_classes(basic_univariate_config):
     assert set(classes) == {0, 1, 2}, f"Expected classes {0, 1, 2}, got {set(classes)}"
 
     # Check the shapes
-    assert dataset["X"].shape == (n_samples, n_timesteps, 1), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, 1), "
+    assert dataset["X"].shape == (n_samples, 1, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions=1, n_timesteps={n_timesteps}), "
         f"got {dataset['X'].shape}"
     )
     assert dataset["y"].shape == (n_samples,), (
@@ -164,15 +162,15 @@ def test_multivariate_two_classes(basic_multivariate_config):
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
         .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1])
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
-        .add_feature(level_change(amplitude=0.8), start_pct=0.6, end_pct=0.8, dim=[1])
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+        .add_feature(constant(value=0.8), start_pct=0.6, end_pct=0.8, dim=[1])
         .build()
     )
 
     # Verify the shape includes all dimensions
-    assert dataset["X"].shape == (n_samples, n_timesteps, n_dimensions), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, "
-        f"n_dimensions={n_dimensions}), got {dataset['X'].shape}"
+    assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions={n_dimensions}, "
+        f"n_timesteps={n_timesteps}), got {dataset['X'].shape}"
     )
     assert dataset["metadata"]["n_dimensions"] == n_dimensions, (
         f"Metadata should indicate {n_dimensions} dimensions"
@@ -229,7 +227,7 @@ def test_multivariate_three_classes_and_dimensions():
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
         .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
-        .add_feature(shapelet(scale=1.0), start_pct=0.3, end_pct=0.5, dim=[0, 1])
+        .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.5, dim=[0, 1])
         # Class 2: Feature in third dimension
         .for_class(2)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
@@ -244,70 +242,82 @@ def test_multivariate_three_classes_and_dimensions():
     assert set(classes) == {0, 1, 2}, f"Expected classes {0, 1, 2}, got {set(classes)}"
 
     # Check the shapes
-    assert dataset["X"].shape == (n_samples, n_timesteps, n_dimensions), (
-        f"Expected X shape (n_samples={n_samples}, n_timesteps={n_timesteps}, "
-        f"n_dimensions={n_dimensions}), got {dataset['X'].shape}"
+    assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+        f"Expected X shape (n_samples={n_samples}, n_dimensions={n_dimensions}, "
+        f"n_timesteps={n_timesteps}), got {dataset['X'].shape}"
     )
 
 
-def test_train_test_split(basic_univariate_config):
-    """Test the train_test_split functionality.
+def test_clone_method(basic_univariate_config):
+    """Test the clone method for creating train/test splits with consistent patterns.
 
     Tests that:
-    1. The data is split into train and test sets with the correct ratio
-    2. The shapes of X_train, X_test, y_train, and y_test are correct
-    3. Class distribution is preserved in both splits
+    1. The clone method preserves class definitions from the original builder
+    2. Different n_samples parameters correctly control the size of the datasets
+    3. Different random_state parameters produce different but structurally similar datasets
+    4. All dataset properties are correctly maintained in the cloned builders
     """
-    n_samples = basic_univariate_config["n_samples"]
-    train_ratio = 0.7
-
-    dataset = (
+    # Create a base builder with class definitions
+    base_builder = (
         TimeSeriesBuilder(**basic_univariate_config)
-        .for_class(0)
+        .for_class(0)  # Class 0: No discriminative features
         .add_signal(random_walk(step_size=0.2))
-        .for_class(1)
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .for_class(1)  # Class 1: Has constant feature
         .add_signal(random_walk(step_size=0.2))
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
-        .build(train_test_split=train_ratio)
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_feature(constant(scale=1.0), start_pct=0.4, end_pct=0.6)
     )
 
-    # Verify train/test sets were created
-    assert "X_train" in dataset, "Dataset should contain 'X_train' key"
-    assert "y_train" in dataset, "Dataset should contain 'y_train' key"
-    assert "X_test" in dataset, "Dataset should contain 'X_test' key"
-    assert "y_test" in dataset, "Dataset should contain 'y_test' key"
+    # Generate train dataset with 70% of samples and the same random seed
+    train_samples = int(basic_univariate_config["n_samples"] * 0.7)
+    train_dataset = base_builder.clone(n_samples=train_samples, random_state=42).build()
 
-    # Check split ratio
-    expected_train_size = int(n_samples * train_ratio)
-    assert len(dataset["y_train"]) == expected_train_size, (
-        f"Expected train set size {expected_train_size}, got {len(dataset['y_train'])}"
-    )
-    expected_test_size = n_samples - expected_train_size
-    assert len(dataset["y_test"]) == expected_test_size, (
-        f"Expected test set size {expected_test_size}, got {len(dataset['y_test'])}"
-    )
+    # Generate test dataset with 30% of samples and a different random seed
+    test_samples = int(basic_univariate_config["n_samples"] * 0.3)
+    test_dataset = base_builder.clone(n_samples=test_samples, random_state=43).build()
 
-    # Check that class distribution is similar in train and test
-    train_classes, train_counts = np.unique(dataset["y_train"], return_counts=True)
-    test_classes, test_counts = np.unique(dataset["y_test"], return_counts=True)
-    assert set(train_classes) == set(test_classes), (
-        "Train and test sets should contain the same classes"
+    # Verify the datasets have the correct sizes
+    assert train_dataset["X"].shape[0] == train_samples, (
+        f"Expected {train_samples} training samples, got {train_dataset['X'].shape[0]}"
+    )
+    assert test_dataset["X"].shape[0] == test_samples, (
+        f"Expected {test_samples} test samples, got {test_dataset['X'].shape[0]}"
     )
 
-    # Check shapes
-    assert dataset["X_train"].shape[0] == expected_train_size, (
-        f"Expected {expected_train_size} training samples, "
-        f"got {dataset['X_train'].shape[0]}"
+    # Check that both datasets have the same class labels
+    train_classes = set(np.unique(train_dataset["y"]))
+    test_classes = set(np.unique(test_dataset["y"]))
+    assert train_classes == test_classes, (
+        f"Train and test datasets should have the same classes. "
+        f"Train: {train_classes}, Test: {test_classes}"
     )
-    assert dataset["X_test"].shape[0] == expected_test_size, (
-        f"Expected {expected_test_size} test samples, got {dataset['X_test'].shape[0]}"
+
+    # Verify datasets are different due to different random seeds
+    # Get first sample from each dataset
+    train_first_sample = train_dataset["X"][0]
+    test_first_sample = test_dataset["X"][0]
+
+    assert not np.array_equal(train_first_sample, test_first_sample), (
+        "Different random seeds should produce different data patterns"
     )
-    assert dataset["y_train"].shape[0] == expected_train_size, (
-        f"Expected {expected_train_size} training labels, "
-        f"got {dataset['y_train'].shape[0]}"
+
+    # Test cloning with different parameters
+    modified_builder = base_builder.clone(
+        n_timesteps=200,  # Different time steps
+        normalization="minmax",  # Different normalization
     )
-    assert dataset["y_test"].shape[0] == expected_test_size, (
-        f"Expected {expected_test_size} test labels, got {dataset['y_test'].shape[0]}"
+    modified_dataset = modified_builder.build()
+
+    # Check that the parameters were properly updated
+    assert modified_dataset["X"].shape[2] == 200, (
+        "Modified timesteps parameter should be reflected in the data shape"
+    )
+
+    # Check normalization change (minmax should be in range [0, 1])
+    data_values = modified_dataset["X"].reshape(-1)
+    assert np.min(data_values) >= 0 and np.max(data_values) <= 1, (
+        "Min-max normalized data should be in range [0, 1]"
     )
 
 
@@ -330,8 +340,8 @@ def test_random_feature_locations():
         .for_class(1)
         .add_signal(random_walk(step_size=0.2))
         .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(shapelet(scale=1.0), random_location=True, length_pct=0.2)
-        .add_feature(level_change(amplitude=0.5), random_location=True, length_pct=0.2)
+        .add_feature(constant(scale=1.0), random_location=True, length_pct=0.2)
+        .add_feature(constant(amplitude=0.5), random_location=True, length_pct=0.2)
         .build()
     )
 
@@ -387,7 +397,7 @@ def test_shared_features_across_dimensions():
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
         .add_feature(
-            shapelet(scale=1.2),
+            constant(scale=1.2),
             random_location=True,
             length_pct=0.15,
             dim=[0, 1],
@@ -483,10 +493,10 @@ def test_add_signal_segment_functionality():
     )
 
     # Verify the shape of the datasets
-    assert dataset_fixed["X"].shape == (n_samples, n_timesteps, 1), (
+    assert dataset_fixed["X"].shape == (n_samples, 1, n_timesteps), (
         "Dataset with fixed signal segments has incorrect shape"
     )
-    assert dataset_random["X"].shape == (n_samples, n_timesteps, 1), (
+    assert dataset_random["X"].shape == (n_samples, 1, n_timesteps), (
         "Dataset with random signal segments has incorrect shape"
     )
 
@@ -520,7 +530,7 @@ def test_to_df_functionality():
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
         .for_class(1)
         .add_signal(random_walk(step_size=0.2), dim=[0, 1])
-        .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+        .add_feature(constant(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
         .build()
     )
 
@@ -609,4 +619,108 @@ def test_normalization_options():
     )
     assert not (np.min(none_data) >= 0 and np.max(none_data) <= 1), (
         "Non-normalized data should not match min-max normalization pattern"
+    )
+
+
+def test_deterministic_class_counts():
+    """Test deterministic_class_counts parameter in the build method.
+
+    Tests that:
+    1. When deterministic_class_counts=True, class counts exactly match the expected proportions
+    2. When deterministic_class_counts=False, class counts follow multinomial distribution
+    3. Both methods produce valid datasets with the correct total sample count
+    """
+    n_samples = 100
+    n_timesteps = 50
+
+    # Define class weights
+    class0_weight = 0.2
+    class1_weight = 0.3
+    class2_weight = 0.5
+
+    # Expected counts with deterministic sampling
+    expected_class0 = int(n_samples * class0_weight)  # 20
+    expected_class1 = int(n_samples * class1_weight)  # 30
+    expected_class2 = n_samples - expected_class0 - expected_class1  # 50
+
+    # Create a builder with three classes and different weights
+    builder = (
+        TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
+        .for_class(0, weight=class0_weight)
+        .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .for_class(1, weight=class1_weight)
+        .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
+        .for_class(2, weight=class2_weight)
+        .add_signal(random_walk(step_size=0.2))
+        .add_signal(gaussian(sigma=0.1), role="noise")
+    )
+
+    # Build with deterministic class counts
+    deterministic_dataset = builder.build(deterministic_class_counts=True)
+
+    # Build with probabilistic class counts (the default)
+    probabilistic_dataset = builder.build(deterministic_class_counts=False)
+
+    # Verify total sample counts
+    assert len(deterministic_dataset["y"]) == n_samples, (
+        f"Deterministic dataset should have {n_samples} samples, "
+        f"got {len(deterministic_dataset['y'])}"
+    )
+    assert len(probabilistic_dataset["y"]) == n_samples, (
+        f"Probabilistic dataset should have {n_samples} samples, "
+        f"got {len(probabilistic_dataset['y'])}"
+    )
+
+    # Get class counts for both datasets
+    deterministic_classes, deterministic_counts = np.unique(
+        deterministic_dataset["y"], return_counts=True
+    )
+    probabilistic_classes, probabilistic_counts = np.unique(
+        probabilistic_dataset["y"], return_counts=True
+    )
+
+    # Create dictionaries mapping class labels to counts
+    det_count_dict = dict(zip(deterministic_classes, deterministic_counts))
+    prob_count_dict = dict(zip(probabilistic_classes, probabilistic_counts))
+
+    # Verify deterministic counts exactly match expected proportions
+    assert det_count_dict[0] == expected_class0, (
+        f"Expected exactly {expected_class0} samples for class 0 with deterministic sampling, "
+        f"got {det_count_dict[0]}"
+    )
+    assert det_count_dict[1] == expected_class1, (
+        f"Expected exactly {expected_class1} samples for class 1 with deterministic sampling, "
+        f"got {det_count_dict[1]}"
+    )
+    assert det_count_dict[2] == expected_class2, (
+        f"Expected exactly {expected_class2} samples for class 2 with deterministic sampling, "
+        f"got {det_count_dict[2]}"
+    )
+
+    # For probabilistic counts, we can't test exact values since they're random
+    # Instead, verify that all classes are present and the distribution seems reasonable
+    assert len(probabilistic_classes) == 3, (
+        f"Expected all 3 classes to be present with probabilistic sampling, "
+        f"got {len(probabilistic_classes)}"
+    )
+
+    # Optional: Run multiple probabilistic builds to verify the distribution varies
+    # Note: This is a statistical test, so there's a tiny chance it could fail randomly
+    counts_vary = False
+    for _ in range(5):
+        another_dataset = builder.build(deterministic_class_counts=False)
+        another_classes, another_counts = np.unique(
+            another_dataset["y"], return_counts=True
+        )
+        another_count_dict = dict(zip(another_classes, another_counts))
+
+        # If any count differs from our first probabilistic sample, we've shown variation
+        if any(another_count_dict[i] != prob_count_dict[i] for i in range(3)):
+            counts_vary = True
+            break
+
+    assert counts_vary, (
+        "Probabilistic sampling should produce varying class counts across multiple runs"
     )

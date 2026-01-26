@@ -1,3 +1,4 @@
+import copy
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -15,9 +16,9 @@ class TimeSeriesBuilder:
     known ground truth features for explainable AI (XAI) evaluation.
 
     The builder creates time series by combining multiple components:
-    - Foundation: The base structure of the time series (e.g., random walk, constant)
+    - Foundation: The base structure of the time series (e.g., random walk, gaussian noise)
     - Noise: Random noise added to the time series
-    - Features: Discriminative patterns for class separation (e.g., shapelet, peak)
+    - Features: Discriminative patterns for class separation (e.g., peaks, level changes, ...)
 
     Terminology:
     - "Signals" refer to either foundation or noise components, added with add_signal()
@@ -39,24 +40,7 @@ class TimeSeriesBuilder:
 
     Example usage (univariate):
         ```python
-        from xaitimesynth import (
-            TimeSeriesBuilder, random_walk, gaussian, shapelet
-        )
-
-        # Create a simple binary classification dataset
-        dataset = (
-            TimeSeriesBuilder(n_timesteps=100, n_samples=200)
-            # Class 0: Just random walk with noise
-            .for_class(0)
-            .add_signal(random_walk(step_size=0.2))
-            .add_signal(gaussian(sigma=0.1), role="noise")
-            # Class 1: Random walk with noise plus a shapelet feature
-            .for_class(1)
-            .add_signal(random_walk(step_size=0.2))
-            .add_signal(gaussian(sigma=0.1), role="noise")
-            .add_feature(shapelet(scale=1.0), start_pct=0.4, end_pct=0.6)
-            .build(train_test_split=0.7)
-        )
+        TODO: Add example usage here once API is stable.
         ```
 
     Advanced usage:
@@ -80,9 +64,12 @@ class TimeSeriesBuilder:
         rng (np.random.RandomState): Random number generator.
         feature_fill_value: Value used for non-existent features (default: np.nan).
         foundation_fill_value: Value used for foundation when none exists (default: 0.0).
-        noise_fill_value: Value used for noise when none exists (default: 0.0).
+        noise_fill_value: Value used for noise when none exists (default: np.nan).
         class_definitions (list): List of class definitions with components.
         current_class (dict): Current class being configured.
+        data_format (str): Format of the output tensor data. Either 'channels_last'
+            corresponding to shape [batch, time_steps, channels] or 'channels_first'
+            corresponding to shape [batch, channels, time_steps]. Default is 'channels_first'.
     """
 
     def __init__(
@@ -95,7 +82,8 @@ class TimeSeriesBuilder:
         normalization_kwargs: Optional[Dict[str, Any]] = {},
         feature_fill_value: Any = np.nan,
         foundation_fill_value: Any = 0.0,
-        noise_fill_value: Any = 0.0,
+        noise_fill_value: Any = np.nan,
+        data_format: str = "channels_first",
     ):
         """Initialize the time series builder.
 
@@ -113,11 +101,15 @@ class TimeSeriesBuilder:
             foundation_fill_value: Value used for foundation when none exists. Default is 0.0.
                 Foundation typically affects the entire time series, so zeros represent
                 "no contribution" rather than "doesn't exist".
-            noise_fill_value: Value used for noise when none exists. Default is 0.0.
-                Similar to foundation, zeros indicate "no contribution".
+            noise_fill_value: Value used for noise when none exists. Default is np.nan.
+            data_format (str): Format of the output tensor data.
+                'channels_last': [batch, time_steps, channels] (original XAITimeSynth format)
+                'channels_first': [batch, channels, time_steps] (PyTorch/tsai format)
+                Default is 'channels_first'.
 
         Raises:
             ValueError: If n_dimensions is less than 1.
+            ValueError: If data_format is not one of ['channels_first', 'channels_last']
         """
         self.n_timesteps = n_timesteps
         self.n_samples = n_samples
@@ -126,6 +118,13 @@ class TimeSeriesBuilder:
         # Validate n_dimensions
         if n_dimensions < 1:
             raise ValueError("n_dimensions must be at least 1")
+
+        # Validate data_format
+        if data_format not in ["channels_first", "channels_last"]:
+            raise ValueError(
+                "data_format must be one of ['channels_first', 'channels_last']"
+            )
+        self.data_format = data_format
 
         self.normalization = normalization
         self.normalization_kwargs = normalization_kwargs or {}
@@ -189,7 +188,7 @@ class TimeSeriesBuilder:
         self,
         component: Dict[str, Any],
         role: str = "foundation",
-        dim: Optional[List[int]] = [0],
+        dim: Optional[List[int]] = None,
         shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
         """Add a signal component to the current class.
@@ -201,7 +200,7 @@ class TimeSeriesBuilder:
             component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
             role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
             dim (List[int]): List of dimension indices where this signal should be applied.
-                Default is [0] (creates univariate time series if all components have dim=[0]).
+                If None, the signal will be added to all dimensions. Default is None.
             shared_randomness (bool): If True, the same random pattern will be used across all
                 specified dimensions. If False, each dimension gets its own random pattern
                 (for stochastic components). Default is False.
@@ -218,6 +217,8 @@ class TimeSeriesBuilder:
         if role not in ("foundation", "noise"):
             raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
+        if dim is None:
+            dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
         # If shared_randomness is True or only one dimension, store a single component
@@ -243,7 +244,7 @@ class TimeSeriesBuilder:
         self,
         component: Dict[str, Any],
         role: str = "foundation",
-        dim: Optional[List[int]] = [0],
+        dim: Optional[List[int]] = None,
         shared_randomness: bool = False,
         start_pct: Optional[float] = None,
         end_pct: Optional[float] = None,
@@ -262,7 +263,7 @@ class TimeSeriesBuilder:
             component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
             role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
             dim (List[int]): List of dimension indices where this signal should be applied.
-                Default is [0] (creates univariate time series if all components have dim=[0]).
+                If None, the signal will be added to all dimensions. Default is None.
             shared_randomness (bool): If True, the same random pattern will be used across all
                 specified dimensions. If False, each dimension gets its own random pattern
                 (for stochastic components). Default is False.
@@ -287,6 +288,8 @@ class TimeSeriesBuilder:
         if role not in ("foundation", "noise"):
             raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
+        if dim is None:
+            dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
         # Explicitly validate location parameters based on random_location setting
@@ -361,7 +364,7 @@ class TimeSeriesBuilder:
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
         random_location: bool = False,
-        dim: Optional[List[int]] = [0],
+        dim: Optional[List[int]] = None,
         shared_location: bool = True,
         shared_randomness: bool = False,
     ) -> "TimeSeriesBuilder":
@@ -381,7 +384,7 @@ class TimeSeriesBuilder:
             random_location (bool): Whether to place the feature at a random location.
                 Default is False (fixed position).
             dim (List[int]): List of dimension indices where this feature should be applied.
-                Default is [0] (creates univariate time series if all components have dim=[0]).
+                If None, the feature will be added to all dimensions. Default is None.
             shared_location (bool): If True and random_location is True, the same random
                 location will be used across all dimensions. If False, each dimension gets
                 its own random location. Default is True.
@@ -398,6 +401,8 @@ class TimeSeriesBuilder:
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
 
+        if dim is None:
+            dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
         # Create feature definition
@@ -572,7 +577,10 @@ class TimeSeriesBuilder:
         return feature, mask
 
     def build(
-        self, return_components: bool = True, train_test_split: Optional[float] = None
+        self,
+        return_components: bool = True,
+        deterministic_class_counts: bool = True,
+        shuffle: bool = True,
     ) -> Dict[str, Any]:
         """Build the dataset based on the configured class definitions.
 
@@ -583,13 +591,18 @@ class TimeSeriesBuilder:
         Args:
             return_components (bool): Whether to return the individual component vectors.
                 Useful for visualization and analysis. Default is True.
-            train_test_split (Optional[float]): If provided, fraction of data to use for training
-                (between 0 and 1). The dataset will be randomly split into train and test sets.
-                If None, no split is performed. Default is None.
+            deterministic_class_counts (bool): If True, class counts will be determined exactly
+                by the weights rather than using multinomial sampling. This ensures exact class
+                proportions. Default is True.
+            shuffle (bool): Whether to shuffle the samples across classes. If True (default),
+                samples will be randomly ordered. If False, samples will be grouped by class
+                in the order classes were defined.
 
         Returns:
             Dict[str, Any]: Dictionary containing the generated dataset with keys:
-                - 'X': Time series data with shape (n_samples, n_timesteps, n_dimensions)
+                - 'X': Time series data with shape determined by data_format:
+                       - 'channels_last': [n_samples, n_timesteps, n_dimensions]
+                       - 'channels_first': [n_samples, n_dimensions, n_timesteps]
                 - 'y': Class labels for each sample
                 - 'feature_masks': Boolean masks showing feature locations
                 - 'metadata': Dataset configuration information
@@ -609,9 +622,24 @@ class TimeSeriesBuilder:
         # Normalize class weights and determine class distribution
         weights = np.array([cd["weight"] for cd in self.class_definitions])
         weights = weights / weights.sum()
-        class_counts = self.rng.multinomial(self.n_samples, weights)
 
-        # Initialize arrays
+        if deterministic_class_counts:
+            # Deterministic class counts based on exact weights
+            raw_counts = weights * self.n_samples
+            # Round to integers and ensure we have exactly n_samples total
+            class_counts = np.floor(raw_counts).astype(int)
+            remaining = self.n_samples - class_counts.sum()
+            # Distribute remaining samples based on fractional parts
+            if remaining > 0:
+                fractions = raw_counts - class_counts
+                indices = np.argsort(fractions)[-remaining:]
+                for idx in indices:
+                    class_counts[idx] += 1
+        else:
+            # Probabilistic class counts using multinomial sampling
+            class_counts = self.rng.multinomial(self.n_samples, weights)
+
+        # Initialize arrays - always create in channels_last format first (internal format)
         X = np.zeros((self.n_samples, self.n_timesteps, self.n_dimensions))
         y = np.zeros(self.n_samples, dtype=int)
         all_components = []
@@ -935,6 +963,29 @@ class TimeSeriesBuilder:
 
                 sample_idx += 1
 
+        # Shuffle the dataset if requested
+        if shuffle:
+            # Generate shuffled indices based on the random state
+            indices = np.arange(self.n_samples)
+            self.rng.shuffle(indices)
+
+            # Shuffle X and y arrays
+            X = X[indices]
+            y = y[indices]
+
+            # Shuffle components if they were returned
+            if return_components:
+                all_components = [all_components[i] for i in indices]
+
+            # Shuffle feature masks
+            for key in feature_masks:
+                feature_masks[key] = feature_masks[key][indices]
+
+        # Convert the tensor format if needed (from channels_last to channels_first)
+        if self.data_format == "channels_first":
+            # Transpose from [n_samples, n_timesteps, n_dimensions] to [n_samples, n_dimensions, n_timesteps]
+            X = np.transpose(X, (0, 2, 1))
+
         # Prepare result dictionary
         result = {
             "X": X,
@@ -948,40 +999,13 @@ class TimeSeriesBuilder:
                 "normalize": self.normalization,
                 "normalization_kwargs": self.normalization_kwargs,
                 "random_state": self.random_state,
+                "data_format": self.data_format,
+                "shuffled": shuffle,
             },
         }
 
         if return_components:
             result["components"] = all_components
-
-        # Split into train and test if requested
-        if train_test_split is not None:
-            # Shuffle indices
-            indices = np.arange(self.n_samples)
-            self.rng.shuffle(indices)
-
-            # Split point
-            split_idx = int(self.n_samples * train_test_split)
-
-            # Train indices
-            train_indices = indices[:split_idx]
-            result["X_train"] = X[train_indices]
-            result["y_train"] = y[train_indices]
-
-            # Test indices
-            test_indices = indices[split_idx:]
-            result["X_test"] = X[test_indices]
-            result["y_test"] = y[test_indices]
-
-            # Split feature masks
-            for key in feature_masks:
-                result[f"feature_masks_train_{key}"] = feature_masks[key][train_indices]
-                result[f"feature_masks_test_{key}"] = feature_masks[key][test_indices]
-
-            # Split components if needed
-            if return_components:
-                result["components_train"] = [all_components[i] for i in train_indices]
-                result["components_test"] = [all_components[i] for i in test_indices]
 
         return result
 
@@ -1268,3 +1292,186 @@ class TimeSeriesBuilder:
         result[both_nan] = np.nan
 
         return result
+
+    @staticmethod
+    def convert_data_format(
+        dataset: Dict[str, Any], target_format: str
+    ) -> Dict[str, Any]:
+        """Convert an existing dataset between 'channels_first' and 'channels_last' formats.
+
+        This utility function helps convert datasets between the two supported tensor layouts:
+        - 'channels_last': [batch_size, time_steps, channels] (original XAITimeSynth format)
+        - 'channels_first': [batch_size, channels, time_steps] (PyTorch/tsai format)
+
+        Args:
+            dataset (Dict[str, Any]): Dataset dictionary returned by build().
+            target_format (str): Target format, either 'channels_first' or 'channels_last'.
+
+        Returns:
+            Dict[str, Any]: Dataset with X tensor in the target format. The metadata
+                is updated to reflect the new format.
+
+        Raises:
+            ValueError: If target_format is not one of ['channels_first', 'channels_last'].
+            ValueError: If dataset doesn't contain a metadata entry with data_format.
+        """
+        # Validate format
+        if target_format not in ["channels_first", "channels_last"]:
+            raise ValueError(
+                "target_format must be one of ['channels_first', 'channels_last']"
+            )
+
+        # Create a shallow copy of the dataset
+        result = dataset.copy()
+
+        # Get current format from metadata
+        if "metadata" not in dataset or "data_format" not in dataset["metadata"]:
+            # Try to infer format
+            if "X" in dataset and len(dataset["X"].shape) == 3:
+                # Assume original format for backward compatibility
+                current_format = "channels_last"
+            else:
+                raise ValueError("Dataset doesn't have format information in metadata")
+        else:
+            current_format = dataset["metadata"]["data_format"]
+
+        # If already in target format, return dataset as-is
+        if current_format == target_format:
+            return result
+
+        # Convert format by transposing the data
+        if "X" in result:
+            # Convert from channels_last to channels_first
+            if current_format == "channels_last" and target_format == "channels_first":
+                result["X"] = np.transpose(result["X"], (0, 2, 1))
+            # Convert from channels_first to channels_last
+            elif (
+                current_format == "channels_first" and target_format == "channels_last"
+            ):
+                result["X"] = np.transpose(result["X"], (0, 2, 1))
+
+            # Also convert train/test splits if they exist
+            if "X_train" in result:
+                if (
+                    current_format == "channels_last"
+                    and target_format == "channels_first"
+                ):
+                    result["X_train"] = np.transpose(result["X_train"], (0, 2, 1))
+                else:
+                    result["X_train"] = np.transpose(result["X_train"], (0, 2, 1))
+
+            if "X_test" in result:
+                if (
+                    current_format == "channels_last"
+                    and target_format == "channels_first"
+                ):
+                    result["X_test"] = np.transpose(result["X_test"], (0, 2, 1))
+                else:
+                    result["X_test"] = np.transpose(result["X_test"], (0, 2, 1))
+
+        # Update metadata
+        if "metadata" in result:
+            result["metadata"] = result["metadata"].copy()
+            result["metadata"]["data_format"] = target_format
+
+        return result
+
+    def clone(
+        self,
+        n_timesteps: Optional[int] = None,
+        n_samples: Optional[int] = None,
+        n_dimensions: Optional[int] = None,
+        normalization: Optional[str] = None,
+        random_state: Optional[int] = None,
+        normalization_kwargs: Optional[Dict[str, Any]] = None,
+        feature_fill_value: Optional[Any] = None,
+        foundation_fill_value: Optional[Any] = None,
+        noise_fill_value: Optional[Any] = None,
+        data_format: Optional[str] = None,
+    ) -> "TimeSeriesBuilder":
+        """Create a new builder with the same class definitions but different parameters.
+
+        This method creates an independent copy of the builder with all its class
+        definitions but allows overriding specific parameters. This is particularly
+        useful for generating train/test/validation splits with the same underlying
+        patterns but different sample counts or random seeds.
+
+        Args:
+            n_timesteps: New length of each time series. Defaults to original value.
+            n_samples: New number of samples to generate. Defaults to original value.
+            n_dimensions: New number of dimensions. Defaults to original value.
+            normalization: New normalization method. Defaults to original value.
+            random_state: New random seed for reproducibility. Defaults to original value.
+            normalization_kwargs: New normalization parameters. Defaults to original value.
+            feature_fill_value: New value for non-existent features. Defaults to original value.
+            foundation_fill_value: New value for foundation. Defaults to original value.
+            noise_fill_value: New value for noise. Defaults to original value.
+            data_format: New data format ('channels_first' or 'channels_last'). Defaults to original value.
+
+        Returns:
+            TimeSeriesBuilder: A new independent builder with copied class definitions
+            and potentially updated parameters.
+
+        Example:
+            ```python
+            # Create base builder with class definitions
+            base_builder = (
+                TimeSeriesBuilder(n_timesteps=100, random_state=42)
+                .for_class(0)
+                .add_signal(random_walk(step_size=0.2))
+                .for_class(1)
+                .add_signal(random_walk(step_size=0.2))
+                .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
+            )
+
+            # Generate train dataset with 140 samples
+            train_dataset = base_builder.clone(n_samples=140, random_state=42).build()
+
+            # Generate test dataset with 60 samples and a different random seed
+            test_dataset = base_builder.clone(n_samples=60, random_state=43).build()
+            ```
+        """
+        # Prepare parameters with defaults from current instance when not provided
+        params = {
+            "n_timesteps": n_timesteps if n_timesteps is not None else self.n_timesteps,
+            "n_samples": n_samples if n_samples is not None else self.n_samples,
+            "n_dimensions": n_dimensions
+            if n_dimensions is not None
+            else self.n_dimensions,
+            "normalization": normalization
+            if normalization is not None
+            else self.normalization,
+            "random_state": random_state
+            if random_state is not None
+            else self.random_state,
+            "normalization_kwargs": (
+                normalization_kwargs
+                if normalization_kwargs is not None
+                else copy.deepcopy(self.normalization_kwargs)
+            ),
+            "feature_fill_value": feature_fill_value
+            if feature_fill_value is not None
+            else self.feature_fill_value,
+            "foundation_fill_value": foundation_fill_value
+            if foundation_fill_value is not None
+            else self.foundation_fill_value,
+            "noise_fill_value": noise_fill_value
+            if noise_fill_value is not None
+            else self.noise_fill_value,
+            "data_format": data_format if data_format is not None else self.data_format,
+        }
+        # Create new builder with updated parameters
+        new_builder = TimeSeriesBuilder(**params)
+
+        # Copy class definitions (deep copy to ensure complete independence)
+        new_builder.class_definitions = copy.deepcopy(self.class_definitions)
+
+        # Set current class if one was selected in the original builder
+        if self.current_class is not None:
+            # Find the class label of the current class
+            for i, class_def in enumerate(self.class_definitions):
+                if class_def is self.current_class:
+                    new_builder.current_class = new_builder.class_definitions[i]
+                    break
+
+        return new_builder
