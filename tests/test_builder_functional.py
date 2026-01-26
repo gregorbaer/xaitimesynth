@@ -12,8 +12,6 @@ import pytest
 from xaitimesynth import (
     TimeSeriesBuilder,
     constant,
-    gaussian,
-    peak,
     random_walk,
 )
 
@@ -46,11 +44,9 @@ def test_univariate_two_classes(basic_univariate_config):
     dataset = (
         TimeSeriesBuilder(**basic_univariate_config)
         .for_class(0)  # Class 0: No discriminative features
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .for_class(1)  # Class 1: Has constant feature
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         .build()
     )
@@ -110,17 +106,14 @@ def test_univariate_three_classes(basic_univariate_config):
         )
         # Class 0: Base signal only
         .for_class(0)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         # Class 1: Base signal + constant level change
         .for_class(1)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
         # Class 2: Base signal + constant level change
         .for_class(2)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .add_feature(constant(value=0.8), start_pct=0.6, end_pct=0.8)
         .build()
     )
@@ -156,12 +149,10 @@ def test_multivariate_two_classes(basic_multivariate_config):
         TimeSeriesBuilder(**basic_multivariate_config)
         # Class 0: Base signal in all dimensions
         .for_class(0)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1])
-        .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         # Class 1: Features in different dimensions
         .for_class(1)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1])
-        .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
         .add_feature(constant(value=0.8), start_pct=0.6, end_pct=0.8, dim=[1])
         .build()
@@ -221,18 +212,15 @@ def test_multivariate_three_classes_and_dimensions():
         )
         # Class 0: Base signal in all dimensions
         .for_class(0)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-        .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
+        .add_signal(random_walk(), dim=[0, 1, 2])
         # Class 1: Features in first two dimensions
         .for_class(1)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-        .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
+        .add_signal(random_walk(), dim=[0, 1, 2])
         .add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.5, dim=[0, 1])
         # Class 2: Feature in third dimension
         .for_class(2)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-        .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
-        .add_feature(peak(amplitude=1.0, width=3), start_pct=0.6, end_pct=0.7, dim=[2])
+        .add_signal(random_walk(), dim=[0, 1, 2])
+        .add_feature(constant(value=0.5), start_pct=0.6, end_pct=0.7, dim=[2])
         .build()
     )
 
@@ -261,12 +249,10 @@ def test_clone_method(basic_univariate_config):
     base_builder = (
         TimeSeriesBuilder(**basic_univariate_config)
         .for_class(0)  # Class 0: No discriminative features
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .for_class(1)  # Class 1: Has constant feature
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(constant(scale=1.0), start_pct=0.4, end_pct=0.6)
+        .add_signal(random_walk())
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)
     )
 
     # Generate train dataset with 70% of samples and the same random seed
@@ -335,13 +321,11 @@ def test_random_feature_locations():
     dataset = (
         TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
         .for_class(0)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .for_class(1)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
-        .add_feature(constant(scale=1.0), random_location=True, length_pct=0.2)
-        .add_feature(constant(amplitude=0.5), random_location=True, length_pct=0.2)
+        .add_signal(random_walk())
+        .add_feature(constant(value=1.0), random_location=True, length_pct=0.2)
+        .add_feature(constant(value=0.5), random_location=True, length_pct=0.2)
         .build()
     )
 
@@ -393,11 +377,11 @@ def test_shared_features_across_dimensions():
             random_state=42,
         )
         .for_class(0)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .for_class(1)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .add_feature(
-            constant(scale=1.2),
+            constant(value=1.2),
             random_location=True,
             length_pct=0.15,
             dim=[0, 1],
@@ -448,18 +432,14 @@ def test_add_signal_segment_functionality():
     dataset_fixed = (
         TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
         .for_class(0)
-        .add_signal(
-            random_walk(step_size=0.1)
-        )  # Background signal for the entire series
+        .add_signal(random_walk())  # Background signal for the entire series
         .add_signal_segment(
             constant(value=2.0),
             start_pct=0.25,
             end_pct=0.35,
         )  # Signal in first half
         .for_class(1)
-        .add_signal(
-            random_walk(step_size=0.1)
-        )  # Background signal for the entire series
+        .add_signal(random_walk())  # Background signal for the entire series
         .add_signal_segment(
             constant(value=2.0),
             start_pct=0.65,
@@ -472,18 +452,14 @@ def test_add_signal_segment_functionality():
     dataset_random = (
         TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
         .for_class(0)
-        .add_signal(
-            random_walk(step_size=0.1)
-        )  # Background signal for the entire series
+        .add_signal(random_walk())  # Background signal for the entire series
         .add_signal_segment(
             constant(value=2.0),
             random_location=True,
             length_pct=0.1,
         )
         .for_class(1)
-        .add_signal(
-            random_walk(step_size=0.1)
-        )  # Background signal for the entire series
+        .add_signal(random_walk())  # Background signal for the entire series
         .add_signal_segment(
             constant(value=2.0),
             random_location=True,
@@ -527,10 +503,10 @@ def test_to_df_functionality():
             random_state=42,
         )
         .for_class(0)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .for_class(1)
-        .add_signal(random_walk(step_size=0.2), dim=[0, 1])
-        .add_feature(constant(scale=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+        .add_signal(random_walk(), dim=[0, 1])
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
         .build()
     )
 
@@ -592,7 +568,7 @@ def test_normalization_options():
                 random_state=42,
             )
             .for_class(0)
-            .add_signal(random_walk(step_size=0.5))
+            .add_signal(random_walk())
             .build()
         )
 
@@ -647,14 +623,11 @@ def test_deterministic_class_counts():
     builder = (
         TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
         .for_class(0, weight=class0_weight)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .for_class(1, weight=class1_weight)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
         .for_class(2, weight=class2_weight)
-        .add_signal(random_walk(step_size=0.2))
-        .add_signal(gaussian(sigma=0.1), role="noise")
+        .add_signal(random_walk())
     )
 
     # Build with deterministic class counts
@@ -723,4 +696,136 @@ def test_deterministic_class_counts():
 
     assert counts_vary, (
         "Probabilistic sampling should produce varying class counts across multiple runs"
+    )
+
+
+def test_clone_method_multivariate(basic_multivariate_config):
+    """Test the clone method for multivariate data.
+
+    Tests that:
+    1. The clone method preserves class definitions and dimension configuration
+    2. Different n_samples parameters correctly control the size of the datasets
+    3. All dimensions are correctly maintained in the cloned builders
+    """
+    # Create a base builder with class definitions
+    base_builder = (
+        TimeSeriesBuilder(**basic_multivariate_config)
+        .for_class(0)
+        .add_signal(random_walk(), dim=[0, 1])
+        .for_class(1)
+        .add_signal(random_walk(), dim=[0, 1])
+        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+    )
+
+    # Generate train dataset
+    train_samples = int(basic_multivariate_config["n_samples"] * 0.7)
+    train_dataset = base_builder.clone(n_samples=train_samples, random_state=42).build()
+
+    # Generate test dataset
+    test_samples = int(basic_multivariate_config["n_samples"] * 0.3)
+    test_dataset = base_builder.clone(n_samples=test_samples, random_state=43).build()
+
+    # Verify the datasets have the correct sizes and dimensions
+    n_dimensions = basic_multivariate_config["n_dimensions"]
+    n_timesteps = basic_multivariate_config["n_timesteps"]
+
+    assert train_dataset["X"].shape == (train_samples, n_dimensions, n_timesteps), (
+        f"Expected train shape ({train_samples}, {n_dimensions}, {n_timesteps}), "
+        f"got {train_dataset['X'].shape}"
+    )
+    assert test_dataset["X"].shape == (test_samples, n_dimensions, n_timesteps), (
+        f"Expected test shape ({test_samples}, {n_dimensions}, {n_timesteps}), "
+        f"got {test_dataset['X'].shape}"
+    )
+
+
+def test_random_feature_locations_multivariate():
+    """Test dataset with randomly located features in multivariate data.
+
+    Tests that:
+    1. Random features are correctly placed in specific dimensions
+    2. Feature masks have the correct shape
+    3. Features only appear in specified dimensions
+    """
+    n_samples = 50
+    n_timesteps = 100
+    n_dimensions = 2
+
+    dataset = (
+        TimeSeriesBuilder(
+            n_timesteps=n_timesteps,
+            n_samples=n_samples,
+            n_dimensions=n_dimensions,
+            random_state=42,
+        )
+        .for_class(0)
+        .add_signal(random_walk(), dim=[0, 1])
+        .for_class(1)
+        .add_signal(random_walk(), dim=[0, 1])
+        .add_feature(constant(value=1.0), random_location=True, length_pct=0.2, dim=[0])
+        .add_feature(constant(value=0.5), random_location=True, length_pct=0.2, dim=[1])
+        .build()
+    )
+
+    # Check shape includes all dimensions
+    assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+        f"Expected shape ({n_samples}, {n_dimensions}, {n_timesteps}), "
+        f"got {dataset['X'].shape}"
+    )
+
+    # Check feature masks have correct dimensions
+    feature_masks = dataset["feature_masks"]
+    assert len(feature_masks) > 0, "Dataset should contain feature masks"
+
+    for mask_key, mask in feature_masks.items():
+        assert mask.shape == (n_samples, n_timesteps), (
+            f"Feature mask should have shape ({n_samples}, {n_timesteps}), "
+            f"got {mask.shape}"
+        )
+
+
+def test_normalization_options_multivariate():
+    """Test different normalization options with multivariate data.
+
+    Tests that:
+    1. Normalization works correctly across multiple dimensions
+    2. Each normalization method produces expected value ranges
+    """
+    n_samples = 30
+    n_timesteps = 50
+    n_dimensions = 2
+
+    # Create datasets with different normalization options
+    datasets = {}
+    for norm in ["zscore", "minmax", "none"]:
+        datasets[norm] = (
+            TimeSeriesBuilder(
+                n_timesteps=n_timesteps,
+                n_samples=n_samples,
+                n_dimensions=n_dimensions,
+                normalization=norm,
+                random_state=42,
+            )
+            .for_class(0)
+            .add_signal(random_walk(), dim=[0, 1])
+            .build()
+        )
+
+    # Verify shapes
+    for norm, dataset in datasets.items():
+        assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+            f"Expected shape ({n_samples}, {n_dimensions}, {n_timesteps}) for {norm}, "
+            f"got {dataset['X'].shape}"
+        )
+
+    # Z-score normalization should have mean close to 0 and std dev close to 1
+    zscore_data = datasets["zscore"]["X"].reshape(-1)
+    assert -0.1 < np.mean(zscore_data) < 0.1, (
+        f"Z-score normalized data should have mean close to 0, got {np.mean(zscore_data)}"
+    )
+
+    # Min-max normalization should be in range [0, 1]
+    minmax_data = datasets["minmax"]["X"].reshape(-1)
+    assert np.min(minmax_data) >= 0 and np.max(minmax_data) <= 1, (
+        "Min-max normalized data should be in range [0, 1]"
     )

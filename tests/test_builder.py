@@ -2,23 +2,42 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from xaitimesynth.builder import TimeSeriesBuilder
+from xaitimesynth import TimeSeriesBuilder, constant, random_walk
 
 
 @pytest.fixture
 def basic_builder() -> TimeSeriesBuilder:
-    """Fixture providing a basic TimeSeriesBuilder instance."""
+    """Fixture providing a basic univariate TimeSeriesBuilder instance."""
     return TimeSeriesBuilder(n_timesteps=50, n_samples=20, random_state=42)
 
 
 @pytest.fixture
+def multivariate_builder() -> TimeSeriesBuilder:
+    """Fixture providing a multivariate TimeSeriesBuilder instance (2 dimensions)."""
+    return TimeSeriesBuilder(
+        n_timesteps=50, n_samples=20, n_dimensions=2, random_state=42
+    )
+
+
+@pytest.fixture
 def two_class_builder(basic_builder) -> TimeSeriesBuilder:
-    """Fixture providing a builder with two classes defined."""
+    """Fixture providing a univariate builder with two classes defined."""
     return (
         basic_builder.for_class(0)
-        .add_signal({"type": "random_walk"})
+        .add_signal(random_walk())
         .for_class(1)
-        .add_signal({"type": "random_walk"})
+        .add_signal(random_walk())
+    )
+
+
+@pytest.fixture
+def two_class_multivariate_builder(multivariate_builder) -> TimeSeriesBuilder:
+    """Fixture providing a multivariate builder with two classes defined."""
+    return (
+        multivariate_builder.for_class(0)
+        .add_signal(random_walk(), dim=[0, 1])
+        .for_class(1)
+        .add_signal(random_walk(), dim=[0, 1])
     )
 
 
@@ -55,35 +74,35 @@ def test_add_signal_no_class() -> None:
     """Test add_signal without selecting a class first."""
     builder = TimeSeriesBuilder()
     with pytest.raises(ValueError, match="No class selected"):
-        builder.add_signal({"type": "random_walk"}, role="foundation")
+        builder.add_signal(random_walk(), role="foundation")
 
 
 def test_add_signal_invalid_role() -> None:
     """Test add_signal with invalid role parameter."""
     builder = TimeSeriesBuilder().for_class(1)
     with pytest.raises(ValueError, match="Invalid role"):
-        builder.add_signal({"type": "random_walk"}, role="invalid_role")
+        builder.add_signal(random_walk(), role="invalid_role")
 
 
 def test_add_signal_invalid_dimensions() -> None:
     """Test add_signal with invalid dimension indices."""
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     with pytest.raises(ValueError, match="Dimension 2 is out of range"):
-        builder.add_signal({"type": "random_walk"}, dim=[2])
+        builder.add_signal(random_walk(), dim=[2])
 
 
 def test_add_signal_shared_randomness() -> None:
     """Test add_signal with shared_randomness parameter."""
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     # With shared_randomness=True, should create a single component with multiple dimensions
-    builder.add_signal({"type": "random_walk"}, dim=[0, 1], shared_randomness=True)
+    builder.add_signal(random_walk(), dim=[0, 1], shared_randomness=True)
     assert len(builder.current_class["components"]["foundation"]) == 1, (
         "With shared_randomness=True, should add a single component entry"
     )
 
     # With shared_randomness=False, should create separate components for each dimension
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
-    builder.add_signal({"type": "random_walk"}, dim=[0, 1], shared_randomness=False)
+    builder.add_signal(random_walk(), dim=[0, 1], shared_randomness=False)
     assert len(builder.current_class["components"]["foundation"]) == 2, (
         "With shared_randomness=False, should add separate component entries"
     )
@@ -102,22 +121,20 @@ def test_add_signal_segment_parameter_validation() -> None:
 
     # Test random location without length_pct
     with pytest.raises(ValueError, match="length_pct must be provided"):
-        builder.add_signal_segment({"type": "constant"}, random_location=True)
+        builder.add_signal_segment(constant(), random_location=True)
 
     # Test invalid range for fixed location
     with pytest.raises(ValueError, match="Invalid start_pct or end_pct"):
-        builder.add_signal_segment({"type": "constant"}, start_pct=1.1, end_pct=1.2)
+        builder.add_signal_segment(constant(), start_pct=1.1, end_pct=1.2)
 
     # Test invalid length_pct
     with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
-        builder.add_signal_segment(
-            {"type": "constant"}, random_location=True, length_pct=1.5
-        )
+        builder.add_signal_segment(constant(), random_location=True, length_pct=1.5)
 
     # Test fixed location without start_pct or end_pct
     with pytest.raises(ValueError, match="start_pct and end_pct must be provided"):
         builder.add_signal_segment(
-            {"type": "constant"},
+            constant(),
             random_location=False,  # Just need to specify random_location=False
         )
 
@@ -135,7 +152,7 @@ def test_add_signal_segment_shared_options() -> None:
 
     # Test shared location (should create one component)
     builder.add_signal_segment(
-        {"type": "constant"},
+        constant(),
         random_location=True,
         length_pct=0.2,
         dim=[0, 1],
@@ -148,7 +165,7 @@ def test_add_signal_segment_shared_options() -> None:
     # Test non-shared location (should create separate components)
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     builder.add_signal_segment(
-        {"type": "constant"},
+        constant(),
         random_location=True,
         length_pct=0.2,
         dim=[0, 1],
@@ -171,15 +188,15 @@ def test_add_feature_parameter_validation() -> None:
 
     # Test missing start_pct and end_pct
     with pytest.raises(ValueError, match="start_pct and end_pct must be provided"):
-        builder.add_feature({"type": "constant"}, random_location=False)
+        builder.add_feature(constant(), random_location=False)
 
     # Test invalid start_pct and end_pct range
     with pytest.raises(ValueError, match="Invalid start_pct or end_pct"):
-        builder.add_feature({"type": "constant"}, start_pct=1.1, end_pct=1.5)
+        builder.add_feature(constant(), start_pct=1.1, end_pct=1.5)
 
     # Test random_location without length_pct
     with pytest.raises(ValueError, match="length_pct must be provided"):
-        builder.add_feature({"type": "constant"}, random_location=True)
+        builder.add_feature(constant(), random_location=True)
 
 
 def test_add_feature_random_location() -> None:
@@ -189,7 +206,7 @@ def test_add_feature_random_location() -> None:
     """
     builder = TimeSeriesBuilder().for_class(1)
     with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
-        builder.add_feature({"type": "constant"}, random_location=True, length_pct=1.5)
+        builder.add_feature(constant(), random_location=True, length_pct=1.5)
 
 
 def test_build_no_classes() -> None:
@@ -209,20 +226,20 @@ def test_random_state_reproducibility() -> None:
     builder1 = TimeSeriesBuilder(random_state=42)
     dataset1 = (
         builder1.for_class(0)
-        .add_signal({"type": "random_walk"})
+        .add_signal(random_walk())
         .for_class(1)
-        .add_signal({"type": "random_walk"})
-        .add_feature({"type": "constant"}, random_location=True, length_pct=0.2)
+        .add_signal(random_walk())
+        .add_feature(constant(), random_location=True, length_pct=0.2)
         .build()
     )
 
     builder2 = TimeSeriesBuilder(random_state=42)
     dataset2 = (
         builder2.for_class(0)
-        .add_signal({"type": "random_walk"})
+        .add_signal(random_walk())
         .for_class(1)
-        .add_signal({"type": "random_walk"})
-        .add_feature({"type": "constant"}, random_location=True, length_pct=0.2)
+        .add_signal(random_walk())
+        .add_feature(constant(), random_location=True, length_pct=0.2)
         .build()
     )
 
@@ -254,11 +271,11 @@ def test_custom_fill_values() -> None:
         random_state=42,
     )
 
-    # Use a constant component that will generate properly sized output
+    # Use a constant component for the feature
     dataset = (
         builder.for_class(0)
-        .add_signal({"type": "random_walk"})
-        .add_feature({"type": "peak", "value": 5.0}, start_pct=0.5, end_pct=0.6)
+        .add_signal(random_walk())
+        .add_feature(constant(value=5.0), start_pct=0.5, end_pct=0.6)
         .build()
     )
 
@@ -324,7 +341,7 @@ def test_to_df_basic(two_class_builder) -> None:
     """
     # Create a minimal dataset
     builder = two_class_builder
-    builder.add_feature({"type": "constant"}, start_pct=0.4, end_pct=0.6)
+    builder.add_feature(constant(), start_pct=0.4, end_pct=0.6)
     dataset = builder.build()
 
     # Convert to dataframe
@@ -361,10 +378,10 @@ def test_clone() -> None:
     original = (
         TimeSeriesBuilder(n_timesteps=50, n_samples=20, random_state=42)
         .for_class(0)
-        .add_signal({"type": "random_walk", "step_size": 0.2})
+        .add_signal(random_walk(step_size=0.2))
         .for_class(1)
-        .add_signal({"type": "random_walk", "step_size": 0.2})
-        .add_feature({"type": "constant"}, start_pct=0.4, end_pct=0.6)
+        .add_signal(random_walk(step_size=0.2))
+        .add_feature(constant(), start_pct=0.4, end_pct=0.6)
     )
 
     # Clone with different parameters
@@ -430,10 +447,10 @@ def test_build_shuffle_all_parts() -> None:
     builder = (
         TimeSeriesBuilder(n_timesteps=10, n_samples=10, random_state=123)
         .for_class(0)
-        .add_signal({"type": "random_walk"})
+        .add_signal(random_walk())
         .for_class(1)
-        .add_signal({"type": "random_walk"})
-        .add_feature({"type": "constant"}, start_pct=0.2, end_pct=0.4)
+        .add_signal(random_walk())
+        .add_feature(constant(), start_pct=0.2, end_pct=0.4)
     )
     ds_shuffled = builder.clone(random_state=123).build(
         shuffle=True, deterministic_class_counts=True
@@ -500,9 +517,9 @@ def test_data_format_parameter() -> None:
             random_state=42,
         )
         .for_class(0)
-        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .for_class(1)
-        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
     )
     dataset_cf = builder_cf.build()
 
@@ -524,9 +541,9 @@ def test_data_format_parameter() -> None:
             random_state=42,
         )
         .for_class(0)
-        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .for_class(1)
-        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
     )
     dataset_cl = builder_cl.build()
 
@@ -565,9 +582,9 @@ def test_convert_data_format() -> None:
             random_state=42,
         )
         .for_class(0)
-        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
         .for_class(1)
-        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .add_signal(random_walk(), dim=[0, 1])
     )
     dataset_cf = builder.build()
 
@@ -624,7 +641,7 @@ def test_edge_case_single_sample() -> None:
     dataset_uni = (
         TimeSeriesBuilder(n_samples=1, n_timesteps=50, random_state=42)
         .for_class(0)
-        .add_signal({"type": "random_walk"})
+        .add_signal(random_walk())
         .build()
     )
 
@@ -642,10 +659,108 @@ def test_edge_case_single_sample() -> None:
     dataset_multi = (
         TimeSeriesBuilder(n_samples=1, n_timesteps=50, n_dimensions=3, random_state=42)
         .for_class(0)
-        .add_signal({"type": "random_walk"}, dim=[0, 1, 2])
+        .add_signal(random_walk(), dim=[0, 1, 2])
         .build()
     )
 
     assert dataset_multi["X"].shape == (1, 3, 50), (
         f"Single sample multivariate should have shape (1, 3, 50), got {dataset_multi['X'].shape}"
+    )
+
+
+def test_to_df_basic_multivariate(two_class_multivariate_builder) -> None:
+    """Test the basic functionality of to_df method for multivariate data.
+
+    Verifies that to_df correctly handles multivariate time series with features
+    in specific dimensions.
+    """
+    # Add a feature to dimension 0 only
+    builder = two_class_multivariate_builder
+    builder.add_feature(constant(), start_pct=0.4, end_pct=0.6, dim=[0])
+    dataset = builder.build()
+
+    # Convert to dataframe
+    df = builder.to_df(dataset)
+
+    # Basic validations
+    assert isinstance(df, pd.DataFrame), "to_df should return a pandas DataFrame"
+    assert not df.empty, "DataFrame should not be empty"
+
+    # Check that both dimensions are present
+    dims = df["dim"].unique()
+    assert 0 in dims, "Dimension 0 should be present"
+    assert 1 in dims, "Dimension 1 should be present"
+
+    # Check component types
+    components = df["component"].unique()
+    assert "aggregated" in components, "DataFrame should contain aggregated component"
+    assert "foundation" in components, "DataFrame should contain foundation component"
+
+
+def test_clone_multivariate() -> None:
+    """Test the clone method with multivariate data."""
+    # Create a multivariate builder with two classes
+    original = (
+        TimeSeriesBuilder(n_timesteps=50, n_samples=20, n_dimensions=2, random_state=42)
+        .for_class(0)
+        .add_signal(random_walk(), dim=[0, 1])
+        .for_class(1)
+        .add_signal(random_walk(), dim=[0, 1])
+        .add_feature(constant(), start_pct=0.4, end_pct=0.6, dim=[0])
+    )
+
+    # Clone with different parameters
+    clone1 = original.clone(n_samples=30, random_state=43)
+
+    # Verify basic properties
+    assert clone1.n_dimensions == 2, "n_dimensions should be preserved"
+    assert clone1.n_samples == 30, "n_samples should be overridden"
+
+    # Test that building datasets from clones produces correct shapes
+    dataset1 = original.build()
+    dataset2 = clone1.build()
+
+    assert dataset1["X"].shape == (20, 2, 50), (
+        f"Original dataset should have shape (20, 2, 50), got {dataset1['X'].shape}"
+    )
+    assert dataset2["X"].shape == (30, 2, 50), (
+        f"Cloned dataset should have shape (30, 2, 50), got {dataset2['X'].shape}"
+    )
+
+
+def test_build_shuffle_all_parts_multivariate() -> None:
+    """Test that all dataset parts are shuffled consistently for multivariate data.
+
+    Verifies that X, y, components, and feature_masks are shuffled in the same order
+    for multivariate time series.
+    """
+    builder = (
+        TimeSeriesBuilder(
+            n_timesteps=10, n_samples=10, n_dimensions=2, random_state=123
+        )
+        .for_class(0)
+        .add_signal(random_walk(), dim=[0, 1])
+        .for_class(1)
+        .add_signal(random_walk(), dim=[0, 1])
+        .add_feature(constant(), start_pct=0.2, end_pct=0.4, dim=[0])
+    )
+    ds_shuffled = builder.clone(random_state=123).build(
+        shuffle=True, deterministic_class_counts=True
+    )
+    ds_unshuffled = builder.clone(random_state=123).build(
+        shuffle=False, deterministic_class_counts=True
+    )
+
+    # y should be grouped by class in unshuffled, not in shuffled
+    n0 = np.sum(ds_unshuffled["y"] == 0)
+    assert np.all(ds_unshuffled["y"][:n0] == 0) and np.all(
+        ds_unshuffled["y"][n0:] == 1
+    ), f"Unshuffled y should be grouped by class, got {ds_unshuffled['y']}"
+    assert not np.all(ds_shuffled["y"][:n0] == 0), (
+        "Shuffled y should not be grouped by class"
+    )
+
+    # Verify shape is multivariate
+    assert ds_shuffled["X"].shape == (10, 2, 10), (
+        f"Expected shape (10, 2, 10), got {ds_shuffled['X'].shape}"
     )
