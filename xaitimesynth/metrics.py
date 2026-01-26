@@ -699,9 +699,7 @@ def auc_roc_score(
                 fpr_values = np.array(fpr_values)
 
                 # Calculate AUC using the trapezoidal rule
-                auc = np.trapz(
-                    tpr_values, fpr_values
-                )  # TODO: replace with np.trapezoidal if downstream integration permits
+                auc = np.trapezoid(tpr_values, fpr_values)
                 # Handle special case where fpr_values might not be monotonically increasing
                 if np.any(np.diff(fpr_values) < 0):
                     # Sort points by fpr
@@ -905,9 +903,7 @@ def auc_pr_score(
                     unique_precisions = unique_precisions[sort_idx]
 
                     # Calculate AUC using the trapezoidal rule
-                    auc = np.trapz(
-                        unique_precisions, unique_recalls
-                    )  # TODO: replace with np.trapezoidal if downstream integration permits
+                    auc = np.trapezoid(unique_precisions, unique_recalls)
                 else:
                     # Handle edge case with only one threshold
                     auc = precision_sorted[0]
