@@ -477,3 +477,175 @@ def test_build_shuffle_all_parts() -> None:
         assert np.array_equal(
             ds_shuffled["feature_masks"][key], ds_unshuffled["feature_masks"][key][perm]
         ), f"feature_masks for {key} not shuffled consistently"
+
+
+def test_data_format_parameter() -> None:
+    """Test data_format parameter for channels_first and channels_last outputs.
+
+    Verifies that:
+    1. channels_first produces shape [n_samples, n_dimensions, n_timesteps]
+    2. channels_last produces shape [n_samples, n_timesteps, n_dimensions]
+    3. Invalid data_format raises ValueError
+    4. Metadata correctly reflects the data format
+    """
+    n_samples, n_timesteps, n_dimensions = 10, 50, 2
+
+    # Test channels_first (default)
+    builder_cf = (
+        TimeSeriesBuilder(
+            n_samples=n_samples,
+            n_timesteps=n_timesteps,
+            n_dimensions=n_dimensions,
+            data_format="channels_first",
+            random_state=42,
+        )
+        .for_class(0)
+        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .for_class(1)
+        .add_signal({"type": "random_walk"}, dim=[0, 1])
+    )
+    dataset_cf = builder_cf.build()
+
+    assert dataset_cf["X"].shape == (n_samples, n_dimensions, n_timesteps), (
+        f"channels_first should produce shape ({n_samples}, {n_dimensions}, {n_timesteps}), "
+        f"got {dataset_cf['X'].shape}"
+    )
+    assert dataset_cf["metadata"]["data_format"] == "channels_first", (
+        "Metadata should reflect channels_first format"
+    )
+
+    # Test channels_last
+    builder_cl = (
+        TimeSeriesBuilder(
+            n_samples=n_samples,
+            n_timesteps=n_timesteps,
+            n_dimensions=n_dimensions,
+            data_format="channels_last",
+            random_state=42,
+        )
+        .for_class(0)
+        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .for_class(1)
+        .add_signal({"type": "random_walk"}, dim=[0, 1])
+    )
+    dataset_cl = builder_cl.build()
+
+    assert dataset_cl["X"].shape == (n_samples, n_timesteps, n_dimensions), (
+        f"channels_last should produce shape ({n_samples}, {n_timesteps}, {n_dimensions}), "
+        f"got {dataset_cl['X'].shape}"
+    )
+    assert dataset_cl["metadata"]["data_format"] == "channels_last", (
+        "Metadata should reflect channels_last format"
+    )
+
+    # Test invalid data_format
+    with pytest.raises(ValueError, match="data_format must be one of"):
+        TimeSeriesBuilder(data_format="invalid_format")
+
+
+def test_convert_data_format() -> None:
+    """Test the convert_data_format static method.
+
+    Verifies that:
+    1. Conversion from channels_first to channels_last works correctly
+    2. Conversion from channels_last to channels_first works correctly
+    3. Converting to same format returns equivalent dataset
+    4. Invalid target format raises ValueError
+    5. Data values are preserved after conversion
+    """
+    n_samples, n_timesteps, n_dimensions = 10, 50, 2
+
+    # Create a channels_first dataset
+    builder = (
+        TimeSeriesBuilder(
+            n_samples=n_samples,
+            n_timesteps=n_timesteps,
+            n_dimensions=n_dimensions,
+            data_format="channels_first",
+            random_state=42,
+        )
+        .for_class(0)
+        .add_signal({"type": "random_walk"}, dim=[0, 1])
+        .for_class(1)
+        .add_signal({"type": "random_walk"}, dim=[0, 1])
+    )
+    dataset_cf = builder.build()
+
+    # Convert to channels_last
+    dataset_cl = TimeSeriesBuilder.convert_data_format(dataset_cf, "channels_last")
+
+    assert dataset_cl["X"].shape == (n_samples, n_timesteps, n_dimensions), (
+        f"Converted channels_last should have shape ({n_samples}, {n_timesteps}, {n_dimensions}), "
+        f"got {dataset_cl['X'].shape}"
+    )
+    assert dataset_cl["metadata"]["data_format"] == "channels_last", (
+        "Metadata should be updated to channels_last"
+    )
+
+    # Verify data values are preserved (transpose should give same values)
+    np.testing.assert_array_equal(
+        dataset_cf["X"],
+        np.transpose(dataset_cl["X"], (0, 2, 1)),
+        err_msg="Data values should be preserved after format conversion",
+    )
+
+    # Convert back to channels_first
+    dataset_cf_roundtrip = TimeSeriesBuilder.convert_data_format(
+        dataset_cl, "channels_first"
+    )
+    np.testing.assert_array_equal(
+        dataset_cf["X"],
+        dataset_cf_roundtrip["X"],
+        err_msg="Round-trip conversion should preserve data exactly",
+    )
+
+    # Converting to same format should return equivalent data
+    dataset_cf_same = TimeSeriesBuilder.convert_data_format(
+        dataset_cf, "channels_first"
+    )
+    np.testing.assert_array_equal(
+        dataset_cf["X"],
+        dataset_cf_same["X"],
+        err_msg="Converting to same format should preserve data",
+    )
+
+    # Test invalid target format
+    with pytest.raises(ValueError, match="target_format must be one of"):
+        TimeSeriesBuilder.convert_data_format(dataset_cf, "invalid_format")
+
+
+def test_edge_case_single_sample() -> None:
+    """Test building a dataset with only one sample.
+
+    Verifies that the builder handles n_samples=1 correctly for both
+    univariate and multivariate cases.
+    """
+    # Univariate single sample
+    dataset_uni = (
+        TimeSeriesBuilder(n_samples=1, n_timesteps=50, random_state=42)
+        .for_class(0)
+        .add_signal({"type": "random_walk"})
+        .build()
+    )
+
+    assert dataset_uni["X"].shape == (1, 1, 50), (
+        f"Single sample univariate should have shape (1, 1, 50), got {dataset_uni['X'].shape}"
+    )
+    assert dataset_uni["y"].shape == (1,), (
+        f"Single sample y should have shape (1,), got {dataset_uni['y'].shape}"
+    )
+    assert len(dataset_uni["components"]) == 1, (
+        "Should have exactly one component entry"
+    )
+
+    # Multivariate single sample
+    dataset_multi = (
+        TimeSeriesBuilder(n_samples=1, n_timesteps=50, n_dimensions=3, random_state=42)
+        .for_class(0)
+        .add_signal({"type": "random_walk"}, dim=[0, 1, 2])
+        .build()
+    )
+
+    assert dataset_multi["X"].shape == (1, 3, 50), (
+        f"Single sample multivariate should have shape (1, 3, 50), got {dataset_multi['X'].shape}"
+    )
