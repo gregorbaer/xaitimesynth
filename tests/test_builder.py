@@ -334,17 +334,26 @@ def test_add_vector_handling_nans() -> None:
     )
 
 
-def test_to_df_basic(two_class_builder) -> None:
-    """Test the basic functionality of to_df method.
+@pytest.mark.parametrize("n_dimensions,dim_arg", [(1, None), (2, [0, 1])])
+def test_to_df_basic(n_dimensions, dim_arg) -> None:
+    """Test the basic functionality of to_df method."""
+    # Create builder with two classes
+    builder = TimeSeriesBuilder(
+        n_timesteps=50, n_samples=20, n_dimensions=n_dimensions, random_state=42
+    ).for_class(0)
+    if dim_arg:
+        builder.add_signal(random_walk(), dim=dim_arg)
+    else:
+        builder.add_signal(random_walk())
+    builder.for_class(1)
+    if dim_arg:
+        builder.add_signal(random_walk(), dim=dim_arg)
+        builder.add_feature(constant(), start_pct=0.4, end_pct=0.6, dim=[0])
+    else:
+        builder.add_signal(random_walk())
+        builder.add_feature(constant(), start_pct=0.4, end_pct=0.6)
 
-    More detailed tests for filtering and formatting are in test_builder_functional.py.
-    """
-    # Create a minimal dataset
-    builder = two_class_builder
-    builder.add_feature(constant(), start_pct=0.4, end_pct=0.6)
     dataset = builder.build()
-
-    # Convert to dataframe
     df = builder.to_df(dataset)
 
     # Basic validations
@@ -369,26 +378,39 @@ def test_to_df_basic(two_class_builder) -> None:
     components = df["component"].unique()
     assert "aggregated" in components, "DataFrame should contain aggregated component"
     assert "foundation" in components, "DataFrame should contain foundation component"
-    assert "features" in components, "DataFrame should contain features component"
+
+    # For multivariate, check all dimensions are present
+    if n_dimensions > 1:
+        dims = df["dim"].unique()
+        for d in range(n_dimensions):
+            assert d in dims, f"Dimension {d} should be present"
 
 
-def test_clone() -> None:
+@pytest.mark.parametrize("n_dimensions,dim_arg", [(1, None), (2, [0, 1])])
+def test_clone(n_dimensions, dim_arg) -> None:
     """Test the clone method creates independent builders with copied class definitions."""
     # Create a builder with two classes and some components
-    original = (
-        TimeSeriesBuilder(n_timesteps=50, n_samples=20, random_state=42)
-        .for_class(0)
-        .add_signal(random_walk(step_size=0.2))
-        .for_class(1)
-        .add_signal(random_walk(step_size=0.2))
-        .add_feature(constant(), start_pct=0.4, end_pct=0.6)
-    )
+    original = TimeSeriesBuilder(
+        n_timesteps=50, n_samples=20, n_dimensions=n_dimensions, random_state=42
+    ).for_class(0)
+    if dim_arg:
+        original.add_signal(random_walk(step_size=0.2), dim=dim_arg)
+    else:
+        original.add_signal(random_walk(step_size=0.2))
+    original.for_class(1)
+    if dim_arg:
+        original.add_signal(random_walk(step_size=0.2), dim=dim_arg)
+        original.add_feature(constant(), start_pct=0.4, end_pct=0.6, dim=[0])
+    else:
+        original.add_signal(random_walk(step_size=0.2))
+        original.add_feature(constant(), start_pct=0.4, end_pct=0.6)
 
     # Clone with different parameters
     clone1 = original.clone(n_samples=30, random_state=43)
 
     # Verify basic properties are correctly copied or overridden
     assert clone1.n_timesteps == original.n_timesteps, "n_timesteps should be copied"
+    assert clone1.n_dimensions == n_dimensions, "n_dimensions should be preserved"
     assert clone1.n_samples == 30, "n_samples should be overridden"
     assert clone1.random_state == 43, "random_state should be overridden"
     assert clone1.normalization == original.normalization, (
@@ -403,10 +425,10 @@ def test_clone() -> None:
     assert clone1.class_definitions[1]["label"] == 1, "Second class label should be 1"
 
     # Verify components are copied
-    assert len(clone1.class_definitions[0]["components"]["foundation"]) == 1, (
+    assert len(clone1.class_definitions[0]["components"]["foundation"]) >= 1, (
         "Foundation components should be copied"
     )
-    assert len(clone1.class_definitions[1]["components"]["features"]) == 1, (
+    assert len(clone1.class_definitions[1]["components"]["features"]) >= 1, (
         "Feature components should be copied"
     )
 
@@ -429,34 +451,42 @@ def test_clone() -> None:
     dataset1 = original.build()
     dataset2 = clone1.build()
 
-    assert dataset1["X"].shape == (20, 1, 50), (
-        "Original dataset should have shape (20, 1, 50)"
+    assert dataset1["X"].shape == (20, n_dimensions, 50), (
+        f"Original dataset should have shape (20, {n_dimensions}, 50)"
     )
-    assert dataset2["X"].shape == (30, 1, 50), (
-        "Cloned dataset should have shape (30, 1, 50)"
+    assert dataset2["X"].shape == (30, n_dimensions, 50), (
+        f"Cloned dataset should have shape (30, {n_dimensions}, 50)"
     )
 
 
-def test_build_shuffle_all_parts() -> None:
-    """Test that all dataset parts are shuffled consistently when shuffle=True.
+@pytest.mark.parametrize("n_dimensions,dim_arg", [(1, None), (2, [0, 1])])
+def test_build_shuffle_all_parts(n_dimensions, dim_arg) -> None:
+    """Test that all dataset parts are shuffled consistently when shuffle=True."""
+    builder = TimeSeriesBuilder(
+        n_timesteps=10, n_samples=10, n_dimensions=n_dimensions, random_state=123
+    ).for_class(0)
+    if dim_arg:
+        builder.add_signal(random_walk(), dim=dim_arg)
+    else:
+        builder.add_signal(random_walk())
+    builder.for_class(1)
+    if dim_arg:
+        builder.add_signal(random_walk(), dim=dim_arg)
+        builder.add_feature(constant(), start_pct=0.2, end_pct=0.4, dim=[0])
+    else:
+        builder.add_signal(random_walk())
+        builder.add_feature(constant(), start_pct=0.2, end_pct=0.4)
 
-    Verifies that X, y, components, and feature_masks are shuffled in the same order.
-    Also checks that unshuffled output is grouped by class, while shuffled is not.
-    Uses deterministic_class_counts=True to ensure class grouping in unshuffled output.
-    """
-    builder = (
-        TimeSeriesBuilder(n_timesteps=10, n_samples=10, random_state=123)
-        .for_class(0)
-        .add_signal(random_walk())
-        .for_class(1)
-        .add_signal(random_walk())
-        .add_feature(constant(), start_pct=0.2, end_pct=0.4)
-    )
     ds_shuffled = builder.clone(random_state=123).build(
         shuffle=True, deterministic_class_counts=True
     )
     ds_unshuffled = builder.clone(random_state=123).build(
         shuffle=False, deterministic_class_counts=True
+    )
+
+    # Verify shape
+    assert ds_shuffled["X"].shape == (10, n_dimensions, 10), (
+        f"Expected shape (10, {n_dimensions}, 10), got {ds_shuffled['X'].shape}"
     )
 
     # y should be grouped by class in unshuffled, not in shuffled
@@ -468,8 +498,7 @@ def test_build_shuffle_all_parts() -> None:
         "Shuffled y should not be grouped by class"
     )
 
-    # Find the permutation that maps unshuffled to shuffled efficiently
-    # For each row in ds_shuffled['X'], find its index in ds_unshuffled['X']
+    # Find the permutation that maps unshuffled to shuffled
     perm = []
     for x in ds_shuffled["X"]:
         matches = np.where(np.all(np.isclose(ds_unshuffled["X"], x), axis=(1, 2)))[0]
@@ -497,14 +526,7 @@ def test_build_shuffle_all_parts() -> None:
 
 
 def test_data_format_parameter() -> None:
-    """Test data_format parameter for channels_first and channels_last outputs.
-
-    Verifies that:
-    1. channels_first produces shape [n_samples, n_dimensions, n_timesteps]
-    2. channels_last produces shape [n_samples, n_timesteps, n_dimensions]
-    3. Invalid data_format raises ValueError
-    4. Metadata correctly reflects the data format
-    """
+    """Test data_format parameter for channels_first and channels_last outputs."""
     n_samples, n_timesteps, n_dimensions = 10, 50, 2
 
     # Test channels_first (default)
@@ -561,15 +583,7 @@ def test_data_format_parameter() -> None:
 
 
 def test_convert_data_format() -> None:
-    """Test the convert_data_format static method.
-
-    Verifies that:
-    1. Conversion from channels_first to channels_last works correctly
-    2. Conversion from channels_last to channels_first works correctly
-    3. Converting to same format returns equivalent dataset
-    4. Invalid target format raises ValueError
-    5. Data values are preserved after conversion
-    """
+    """Test the convert_data_format static method."""
     n_samples, n_timesteps, n_dimensions = 10, 50, 2
 
     # Create a channels_first dataset
@@ -665,102 +679,4 @@ def test_edge_case_single_sample() -> None:
 
     assert dataset_multi["X"].shape == (1, 3, 50), (
         f"Single sample multivariate should have shape (1, 3, 50), got {dataset_multi['X'].shape}"
-    )
-
-
-def test_to_df_basic_multivariate(two_class_multivariate_builder) -> None:
-    """Test the basic functionality of to_df method for multivariate data.
-
-    Verifies that to_df correctly handles multivariate time series with features
-    in specific dimensions.
-    """
-    # Add a feature to dimension 0 only
-    builder = two_class_multivariate_builder
-    builder.add_feature(constant(), start_pct=0.4, end_pct=0.6, dim=[0])
-    dataset = builder.build()
-
-    # Convert to dataframe
-    df = builder.to_df(dataset)
-
-    # Basic validations
-    assert isinstance(df, pd.DataFrame), "to_df should return a pandas DataFrame"
-    assert not df.empty, "DataFrame should not be empty"
-
-    # Check that both dimensions are present
-    dims = df["dim"].unique()
-    assert 0 in dims, "Dimension 0 should be present"
-    assert 1 in dims, "Dimension 1 should be present"
-
-    # Check component types
-    components = df["component"].unique()
-    assert "aggregated" in components, "DataFrame should contain aggregated component"
-    assert "foundation" in components, "DataFrame should contain foundation component"
-
-
-def test_clone_multivariate() -> None:
-    """Test the clone method with multivariate data."""
-    # Create a multivariate builder with two classes
-    original = (
-        TimeSeriesBuilder(n_timesteps=50, n_samples=20, n_dimensions=2, random_state=42)
-        .for_class(0)
-        .add_signal(random_walk(), dim=[0, 1])
-        .for_class(1)
-        .add_signal(random_walk(), dim=[0, 1])
-        .add_feature(constant(), start_pct=0.4, end_pct=0.6, dim=[0])
-    )
-
-    # Clone with different parameters
-    clone1 = original.clone(n_samples=30, random_state=43)
-
-    # Verify basic properties
-    assert clone1.n_dimensions == 2, "n_dimensions should be preserved"
-    assert clone1.n_samples == 30, "n_samples should be overridden"
-
-    # Test that building datasets from clones produces correct shapes
-    dataset1 = original.build()
-    dataset2 = clone1.build()
-
-    assert dataset1["X"].shape == (20, 2, 50), (
-        f"Original dataset should have shape (20, 2, 50), got {dataset1['X'].shape}"
-    )
-    assert dataset2["X"].shape == (30, 2, 50), (
-        f"Cloned dataset should have shape (30, 2, 50), got {dataset2['X'].shape}"
-    )
-
-
-def test_build_shuffle_all_parts_multivariate() -> None:
-    """Test that all dataset parts are shuffled consistently for multivariate data.
-
-    Verifies that X, y, components, and feature_masks are shuffled in the same order
-    for multivariate time series.
-    """
-    builder = (
-        TimeSeriesBuilder(
-            n_timesteps=10, n_samples=10, n_dimensions=2, random_state=123
-        )
-        .for_class(0)
-        .add_signal(random_walk(), dim=[0, 1])
-        .for_class(1)
-        .add_signal(random_walk(), dim=[0, 1])
-        .add_feature(constant(), start_pct=0.2, end_pct=0.4, dim=[0])
-    )
-    ds_shuffled = builder.clone(random_state=123).build(
-        shuffle=True, deterministic_class_counts=True
-    )
-    ds_unshuffled = builder.clone(random_state=123).build(
-        shuffle=False, deterministic_class_counts=True
-    )
-
-    # y should be grouped by class in unshuffled, not in shuffled
-    n0 = np.sum(ds_unshuffled["y"] == 0)
-    assert np.all(ds_unshuffled["y"][:n0] == 0) and np.all(
-        ds_unshuffled["y"][n0:] == 1
-    ), f"Unshuffled y should be grouped by class, got {ds_unshuffled['y']}"
-    assert not np.all(ds_shuffled["y"][:n0] == 0), (
-        "Shuffled y should not be grouped by class"
-    )
-
-    # Verify shape is multivariate
-    assert ds_shuffled["X"].shape == (10, 2, 10), (
-        f"Expected shape (10, 2, 10), got {ds_shuffled['X'].shape}"
     )

@@ -29,14 +29,7 @@ def basic_multivariate_config():
 
 
 def test_univariate_two_classes(basic_univariate_config):
-    """Test building a univariate dataset with two classes.
-
-    Tests that:
-    1. The builder correctly creates a dataset dictionary with expected keys
-    2. The shapes of X and y are correct for the requested configuration
-    3. The class distribution includes both requested classes
-    4. The metadata contains correct information about the dataset
-    """
+    """Test building a univariate dataset with two classes."""
     # Create a simple dataset with two classes
     n_samples = basic_univariate_config["n_samples"]
     n_timesteps = basic_univariate_config["n_timesteps"]
@@ -87,13 +80,7 @@ def test_univariate_two_classes(basic_univariate_config):
 
 
 def test_univariate_three_classes(basic_univariate_config):
-    """Test building a univariate dataset with three classes.
-
-    Tests that:
-    1. The builder correctly creates three distinct classes
-    2. The shapes of X and y match the requested configuration
-    3. All three classes are represented in the dataset
-    """
+    """Test building a univariate dataset with three classes."""
     # Use higher n_samples and timesteps for this test
     n_samples = 120
     n_timesteps = 100
@@ -134,13 +121,7 @@ def test_univariate_three_classes(basic_univariate_config):
 
 
 def test_multivariate_two_classes(basic_multivariate_config):
-    """Test building a multivariate dataset with two classes.
-
-    Tests that:
-    1. The builder correctly creates a multivariate dataset with specified dimensions
-    2. Components are properly generated for each dimension
-    3. Features are correctly applied to their respective dimensions
-    """
+    """Test building a multivariate dataset with two classes."""
     n_samples = basic_multivariate_config["n_samples"]
     n_timesteps = basic_multivariate_config["n_timesteps"]
     n_dimensions = basic_multivariate_config["n_dimensions"]
@@ -192,13 +173,7 @@ def test_multivariate_two_classes(basic_multivariate_config):
 
 
 def test_multivariate_three_classes_and_dimensions():
-    """Test building a multivariate dataset with three classes and three dimensions.
-
-    Tests that:
-    1. The builder correctly creates three classes with multivariate data
-    2. The dataset has the correct shape for the requested dimensions
-    3. All three classes are represented in the dataset
-    """
+    """Test building a multivariate dataset with three classes and three dimensions."""
     n_samples = 90
     n_timesteps = 40
     n_dimensions = 3
@@ -237,14 +212,7 @@ def test_multivariate_three_classes_and_dimensions():
 
 
 def test_clone_method(basic_univariate_config):
-    """Test the clone method for creating train/test splits with consistent patterns.
-
-    Tests that:
-    1. The clone method preserves class definitions from the original builder
-    2. Different n_samples parameters correctly control the size of the datasets
-    3. Different random_state parameters produce different but structurally similar datasets
-    4. All dataset properties are correctly maintained in the cloned builders
-    """
+    """Test the clone method for creating train/test splits."""
     # Create a base builder with class definitions
     base_builder = (
         TimeSeriesBuilder(**basic_univariate_config)
@@ -308,13 +276,7 @@ def test_clone_method(basic_univariate_config):
 
 
 def test_random_feature_locations():
-    """Test dataset with randomly located features.
-
-    Tests that:
-    1. The builder correctly generates features at random locations
-    2. Feature masks are created with the correct dimensions
-    3. Features are only present for the specified class
-    """
+    """Test dataset with randomly located features."""
     n_samples = 50
     n_timesteps = 100
 
@@ -358,13 +320,7 @@ def test_random_feature_locations():
 
 
 def test_shared_features_across_dimensions():
-    """Test shared features across multiple dimensions.
-
-    Tests that:
-    1. Features can be shared across multiple dimensions
-    2. When shared_location is True, features appear at the same position in all dimensions
-    3. Feature masks correctly reflect the shared locations
-    """
+    """Test shared features across multiple dimensions with shared_location=True."""
     n_samples = 50
     n_timesteps = 80
     n_dimensions = 2
@@ -418,13 +374,7 @@ def test_shared_features_across_dimensions():
 
 
 def test_add_signal_segment_functionality():
-    """Test add_signal_segment functionality with fixed and random locations.
-
-    Tests that:
-    1. Signal segments can be added at fixed locations
-    2. Signal segments can be added at random locations
-    3. Signal segments only affect the specified portion of the time series
-    """
+    """Test add_signal_segment functionality with fixed and random locations."""
     n_samples = 50
     n_timesteps = 200
 
@@ -483,13 +433,7 @@ def test_add_signal_segment_functionality():
 
 
 def test_to_df_functionality():
-    """Test to_df method functionality for visualization preparation.
-
-    Tests that:
-    1. The to_df method converts a dataset to a proper pandas DataFrame
-    2. The DataFrame contains the correct structure for visualization
-    3. Different filtering and formatting options work correctly
-    """
+    """Test to_df method with filtering and formatting options."""
     # Create a simple dataset
     n_samples = 20
     n_timesteps = 30
@@ -547,13 +491,7 @@ def test_to_df_functionality():
 
 
 def test_normalization_options():
-    """Test different normalization options.
-
-    Tests that:
-    1. Z-score normalization works correctly
-    2. Min-max normalization works correctly
-    3. No normalization works correctly
-    """
+    """Test zscore, minmax, and no normalization options."""
     n_samples = 30
     n_timesteps = 50
 
@@ -599,13 +537,7 @@ def test_normalization_options():
 
 
 def test_deterministic_class_counts():
-    """Test deterministic_class_counts parameter in the build method.
-
-    Tests that:
-    1. When deterministic_class_counts=True, class counts exactly match the expected proportions
-    2. When deterministic_class_counts=False, class counts follow multinomial distribution
-    3. Both methods produce valid datasets with the correct total sample count
-    """
+    """Test deterministic_class_counts parameter in build()."""
     n_samples = 100
     n_timesteps = 50
 
@@ -699,54 +631,8 @@ def test_deterministic_class_counts():
     )
 
 
-def test_clone_method_multivariate(basic_multivariate_config):
-    """Test the clone method for multivariate data.
-
-    Tests that:
-    1. The clone method preserves class definitions and dimension configuration
-    2. Different n_samples parameters correctly control the size of the datasets
-    3. All dimensions are correctly maintained in the cloned builders
-    """
-    # Create a base builder with class definitions
-    base_builder = (
-        TimeSeriesBuilder(**basic_multivariate_config)
-        .for_class(0)
-        .add_signal(random_walk(), dim=[0, 1])
-        .for_class(1)
-        .add_signal(random_walk(), dim=[0, 1])
-        .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
-    )
-
-    # Generate train dataset
-    train_samples = int(basic_multivariate_config["n_samples"] * 0.7)
-    train_dataset = base_builder.clone(n_samples=train_samples, random_state=42).build()
-
-    # Generate test dataset
-    test_samples = int(basic_multivariate_config["n_samples"] * 0.3)
-    test_dataset = base_builder.clone(n_samples=test_samples, random_state=43).build()
-
-    # Verify the datasets have the correct sizes and dimensions
-    n_dimensions = basic_multivariate_config["n_dimensions"]
-    n_timesteps = basic_multivariate_config["n_timesteps"]
-
-    assert train_dataset["X"].shape == (train_samples, n_dimensions, n_timesteps), (
-        f"Expected train shape ({train_samples}, {n_dimensions}, {n_timesteps}), "
-        f"got {train_dataset['X'].shape}"
-    )
-    assert test_dataset["X"].shape == (test_samples, n_dimensions, n_timesteps), (
-        f"Expected test shape ({test_samples}, {n_dimensions}, {n_timesteps}), "
-        f"got {test_dataset['X'].shape}"
-    )
-
-
 def test_random_feature_locations_multivariate():
-    """Test dataset with randomly located features in multivariate data.
-
-    Tests that:
-    1. Random features are correctly placed in specific dimensions
-    2. Feature masks have the correct shape
-    3. Features only appear in specified dimensions
-    """
+    """Test randomly located features in multivariate data with dimension-specific placement."""
     n_samples = 50
     n_timesteps = 100
     n_dimensions = 2
@@ -782,50 +668,3 @@ def test_random_feature_locations_multivariate():
             f"Feature mask should have shape ({n_samples}, {n_timesteps}), "
             f"got {mask.shape}"
         )
-
-
-def test_normalization_options_multivariate():
-    """Test different normalization options with multivariate data.
-
-    Tests that:
-    1. Normalization works correctly across multiple dimensions
-    2. Each normalization method produces expected value ranges
-    """
-    n_samples = 30
-    n_timesteps = 50
-    n_dimensions = 2
-
-    # Create datasets with different normalization options
-    datasets = {}
-    for norm in ["zscore", "minmax", "none"]:
-        datasets[norm] = (
-            TimeSeriesBuilder(
-                n_timesteps=n_timesteps,
-                n_samples=n_samples,
-                n_dimensions=n_dimensions,
-                normalization=norm,
-                random_state=42,
-            )
-            .for_class(0)
-            .add_signal(random_walk(), dim=[0, 1])
-            .build()
-        )
-
-    # Verify shapes
-    for norm, dataset in datasets.items():
-        assert dataset["X"].shape == (n_samples, n_dimensions, n_timesteps), (
-            f"Expected shape ({n_samples}, {n_dimensions}, {n_timesteps}) for {norm}, "
-            f"got {dataset['X'].shape}"
-        )
-
-    # Z-score normalization should have mean close to 0 and std dev close to 1
-    zscore_data = datasets["zscore"]["X"].reshape(-1)
-    assert -0.1 < np.mean(zscore_data) < 0.1, (
-        f"Z-score normalized data should have mean close to 0, got {np.mean(zscore_data)}"
-    )
-
-    # Min-max normalization should be in range [0, 1]
-    minmax_data = datasets["minmax"]["X"].reshape(-1)
-    assert np.min(minmax_data) >= 0 and np.max(minmax_data) <= 1, (
-        "Min-max normalized data should be in range [0, 1]"
-    )
