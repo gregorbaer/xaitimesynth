@@ -1105,3 +1105,284 @@ def relevance_rank_accuracy(
         return results
     else:
         raise ValueError(f"Invalid average method: {average}")
+
+
+def pointing_game(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Compute Pointing Game accuracy for feature attributions.
+
+    The Pointing Game[1] evaluates whether the point of maximal attribution falls
+    within the ground truth mask. For each sample, it returns 1 if the highest
+    attributed timestep is within the ground truth region, 0 otherwise.
+
+    This is a simple but intuitive metric: does the explanation correctly identify
+    at least one important location as most salient?
+
+    Intuition: Binary check whether the highest-attributed point is on target.
+    Answers: Does my explanation point to the right place?
+
+    Args:
+        attributions (np.ndarray): Attribution values (any shape supported by _validate_and_prepare_inputs).
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+        class_label (Optional[int]): Class label to calculate the metric for.
+        average (str): Averaging method: 'macro', 'per_sample', 'per_dimension', 'per_sample_dimension'.
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            Pointing game accuracy (0 or 1 per sample-dimension, averaged according to `average`).
+
+    References:
+        [1] Zhang, J., Bargal, S. A., Lin, Z., Brber, J., Shen, X., & Sclaroff, S. (2018).
+            Top-down neural attention by excitation backprop. International Journal of
+            Computer Vision, 126(10), 1084-1102.
+    """
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            threshold=None,
+            class_label=class_label,
+            allow_continuous=True,
+        )
+    )
+
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+    n_timesteps = attributions.shape[1]
+
+    # Prepare mask array: [n_samples, n_timesteps, n_dimensions]
+    masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
+    for j, dim_idx in enumerate(dim_indices):
+        dim_mask = ground_truth_by_dim[dim_idx]
+        for i in range(n_samples):
+            masks[i, :, j] = dim_mask[i]
+
+    results = {}
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            attr = attributions[i, :, j]
+            mask = masks[i, :, j]
+
+            # Find index of maximum attribution
+            max_idx = np.argmax(attr)
+
+            # Check if max attribution is within ground truth mask
+            score = 1.0 if mask[max_idx] else 0.0
+            results[(sample_idx, dim_idx)] = score
+
+    if average == "macro":
+        return np.mean(list(results.values())) if results else 0.0
+    elif average == "per_sample":
+        sample_results = {}
+        for sample_idx in sample_indices:
+            vals = [results[(sample_idx, d)] for d in dim_indices]
+            sample_results[sample_idx] = np.mean(vals) if vals else 0.0
+        return sample_results
+    elif average == "per_dimension":
+        dim_results = {}
+        for dim_idx in dim_indices:
+            vals = [results[(s, dim_idx)] for s in sample_indices]
+            dim_results[dim_idx] = np.mean(vals) if vals else 0.0
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
+    elif average == "per_sample_dimension":
+        return results
+    else:
+        raise ValueError(f"Invalid average method: {average}")
+
+
+def mean_absolute_error(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Compute Mean Absolute Error between attributions and ground truth mask.
+
+    Treats the binary ground truth mask as a continuous target (0 for non-feature,
+    1 for feature timesteps) and computes the mean absolute error between the
+    attributions and this target. Lower values indicate better alignment.
+
+    Note: For meaningful comparison, attributions should be normalized to [0, 1] range
+    before calling this function.
+
+    Intuition: Measures average absolute deviation from ideal attribution (1 at features, 0 elsewhere).
+    Answers: How far are my attributions from the perfect localization on average?
+
+    Args:
+        attributions (np.ndarray): Attribution values (any shape supported by _validate_and_prepare_inputs).
+            Should be normalized to [0, 1] for meaningful interpretation.
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+        class_label (Optional[int]): Class label to calculate the metric for.
+        average (str): Averaging method: 'macro', 'per_sample', 'per_dimension', 'per_sample_dimension'.
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            Mean absolute error (lower is better).
+    """
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            threshold=None,
+            class_label=class_label,
+            allow_continuous=True,
+        )
+    )
+
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+    n_timesteps = attributions.shape[1]
+
+    # Prepare mask array: [n_samples, n_timesteps, n_dimensions]
+    masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
+    for j, dim_idx in enumerate(dim_indices):
+        dim_mask = ground_truth_by_dim[dim_idx]
+        for i in range(n_samples):
+            masks[i, :, j] = dim_mask[i]
+
+    results = {}
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            attr = attributions[i, :, j]
+            mask = masks[i, :, j].astype(float)  # Convert to 0.0/1.0
+
+            # Compute mean absolute error
+            score = np.mean(np.abs(attr - mask))
+            results[(sample_idx, dim_idx)] = score
+
+    if average == "macro":
+        return np.mean(list(results.values())) if results else 0.0
+    elif average == "per_sample":
+        sample_results = {}
+        for sample_idx in sample_indices:
+            vals = [results[(sample_idx, d)] for d in dim_indices]
+            sample_results[sample_idx] = np.mean(vals) if vals else 0.0
+        return sample_results
+    elif average == "per_dimension":
+        dim_results = {}
+        for dim_idx in dim_indices:
+            vals = [results[(s, dim_idx)] for s in sample_indices]
+            dim_results[dim_idx] = np.mean(vals) if vals else 0.0
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
+    elif average == "per_sample_dimension":
+        return results
+    else:
+        raise ValueError(f"Invalid average method: {average}")
+
+
+def mean_squared_error(
+    attributions: np.ndarray,
+    dataset: Dict,
+    sample_indices: Optional[List[int]] = None,
+    dim_indices: Optional[List[int]] = None,
+    class_label: Optional[int] = None,
+    average: str = "macro",
+) -> Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+    """Compute Mean Squared Error between attributions and ground truth mask.
+
+    Treats the binary ground truth mask as a continuous target (0 for non-feature,
+    1 for feature timesteps) and computes the mean squared error between the
+    attributions and this target. Lower values indicate better alignment.
+    Compared to MAE, MSE penalizes large deviations more heavily.
+
+    Note: For meaningful comparison, attributions should be normalized to [0, 1] range
+    before calling this function.
+
+    Intuition: Measures average squared deviation from ideal attribution, penalizing large errors more.
+    Answers: How far are my attributions from perfect localization, with emphasis on large mistakes?
+
+    Args:
+        attributions (np.ndarray): Attribution values (any shape supported by _validate_and_prepare_inputs).
+            Should be normalized to [0, 1] for meaningful interpretation.
+        dataset (Dict): Dataset dictionary returned by TimeSeriesBuilder.build().
+        sample_indices (Optional[List[int]]): Sample indices to include.
+        dim_indices (Optional[List[int]]): Dimension indices to include.
+        class_label (Optional[int]): Class label to calculate the metric for.
+        average (str): Averaging method: 'macro', 'per_sample', 'per_dimension', 'per_sample_dimension'.
+
+    Returns:
+        Union[float, Dict[int, float], Dict[Tuple[int, int], float]]:
+            Mean squared error (lower is better).
+    """
+    attributions, ground_truth_by_dim, sample_indices, dim_indices = (
+        _validate_and_prepare_inputs(
+            attributions,
+            dataset,
+            sample_indices,
+            dim_indices,
+            threshold=None,
+            class_label=class_label,
+            allow_continuous=True,
+        )
+    )
+
+    n_samples = len(sample_indices)
+    n_dimensions = len(dim_indices)
+    n_timesteps = attributions.shape[1]
+
+    # Prepare mask array: [n_samples, n_timesteps, n_dimensions]
+    masks = np.zeros((n_samples, n_timesteps, n_dimensions), dtype=bool)
+    for j, dim_idx in enumerate(dim_indices):
+        dim_mask = ground_truth_by_dim[dim_idx]
+        for i in range(n_samples):
+            masks[i, :, j] = dim_mask[i]
+
+    results = {}
+    for i, sample_idx in enumerate(sample_indices):
+        for j, dim_idx in enumerate(dim_indices):
+            attr = attributions[i, :, j]
+            mask = masks[i, :, j].astype(float)  # Convert to 0.0/1.0
+
+            # Compute mean squared error
+            score = np.mean((attr - mask) ** 2)
+            results[(sample_idx, dim_idx)] = score
+
+    if average == "macro":
+        return np.mean(list(results.values())) if results else 0.0
+    elif average == "per_sample":
+        sample_results = {}
+        for sample_idx in sample_indices:
+            vals = [results[(sample_idx, d)] for d in dim_indices]
+            sample_results[sample_idx] = np.mean(vals) if vals else 0.0
+        return sample_results
+    elif average == "per_dimension":
+        dim_results = {}
+        for dim_idx in dim_indices:
+            vals = [results[(s, dim_idx)] for s in sample_indices]
+            dim_results[dim_idx] = np.mean(vals) if vals else 0.0
+        if len(dim_results) > 1:
+            return list(dim_results.values())
+        elif dim_results:
+            return next(iter(dim_results.values()))
+        else:
+            return 0.0
+    elif average == "per_sample_dimension":
+        return results
+    else:
+        raise ValueError(f"Invalid average method: {average}")

@@ -12,7 +12,10 @@ from xaitimesynth import TimeSeriesBuilder, constant
 from xaitimesynth.metrics import (
     auc_pr_score,
     auc_roc_score,
+    mean_absolute_error,
+    mean_squared_error,
     nac_score,
+    pointing_game,
     relevance_mass_accuracy,
     relevance_rank_accuracy,
 )
@@ -315,6 +318,150 @@ def test_nac_verification(simple_dataset, sample_and_mask):
     ), "macro should return float"
     assert isinstance(
         nac_score(
+            attr, simple_dataset, sample_indices=[sample_idx], average="per_sample"
+        ),
+        dict,
+    ), "per_sample should return dict"
+
+
+def test_pointing_game_verification(simple_dataset, sample_and_mask):
+    """Verification tests for pointing_game.
+
+    Checks if the max attribution point falls within the ground truth mask.
+    Returns 1.0 if yes, 0.0 if no.
+    """
+    sample_idx, mask = sample_and_mask
+    n_timesteps = simple_dataset["metadata"]["n_timesteps"]
+
+    # Max inside mask -> 1.0
+    attr = np.zeros((1, n_timesteps, 1))
+    attr[0, mask, 0] = 1.0
+    attr[0, ~mask, 0] = 0.0
+    score = pointing_game(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 1.0, "Max attribution inside mask should give 1.0"
+
+    # Max outside mask -> 0.0
+    attr = np.zeros((1, n_timesteps, 1))
+    attr[0, mask, 0] = 0.0
+    attr[0, ~mask, 0] = 1.0
+    score = pointing_game(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 0.0, "Max attribution outside mask should give 0.0"
+
+    # When all attributions are equal, argmax returns first index
+    # First index (0) is outside mask (mask starts at index 4)
+    attr = np.ones((1, n_timesteps, 1))
+    score = pointing_game(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 0.0, "Uniform attribution with first index outside should give 0.0"
+
+    # Return types
+    attr = np.ones((1, n_timesteps, 1))
+    assert isinstance(
+        pointing_game(
+            attr, simple_dataset, sample_indices=[sample_idx], average="macro"
+        ),
+        float,
+    ), "macro should return float"
+    assert isinstance(
+        pointing_game(
+            attr, simple_dataset, sample_indices=[sample_idx], average="per_sample"
+        ),
+        dict,
+    ), "per_sample should return dict"
+
+
+def test_mae_verification(simple_dataset, sample_and_mask):
+    """Verification tests for mean_absolute_error.
+
+    Treats mask as continuous target (0/1) and computes MAE with attributions.
+    Lower is better.
+    """
+    sample_idx, mask = sample_and_mask
+    n_timesteps = simple_dataset["metadata"]["n_timesteps"]
+
+    # Perfect attribution (1 at mask, 0 elsewhere) -> MAE = 0.0
+    attr = np.zeros((1, n_timesteps, 1))
+    attr[0, mask, 0] = 1.0
+    attr[0, ~mask, 0] = 0.0
+    score = mean_absolute_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 0.0, "Perfect attribution should give MAE = 0.0"
+
+    # Inverse attribution (0 at mask, 1 elsewhere) -> MAE = 1.0
+    attr = np.zeros((1, n_timesteps, 1))
+    attr[0, mask, 0] = 0.0
+    attr[0, ~mask, 0] = 1.0
+    score = mean_absolute_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 1.0, "Inverse attribution should give MAE = 1.0"
+
+    # Half attribution everywhere -> MAE = 0.5
+    # At mask positions: |0.5 - 1| = 0.5
+    # At non-mask positions: |0.5 - 0| = 0.5
+    attr = np.full((1, n_timesteps, 1), 0.5)
+    score = mean_absolute_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert np.isclose(score, 0.5), "Half attribution everywhere should give MAE = 0.5"
+
+    # Return types
+    attr = np.ones((1, n_timesteps, 1))
+    assert isinstance(
+        mean_absolute_error(
+            attr, simple_dataset, sample_indices=[sample_idx], average="macro"
+        ),
+        float,
+    ), "macro should return float"
+    assert isinstance(
+        mean_absolute_error(
+            attr, simple_dataset, sample_indices=[sample_idx], average="per_sample"
+        ),
+        dict,
+    ), "per_sample should return dict"
+
+
+def test_mse_verification(simple_dataset, sample_and_mask):
+    """Verification tests for mean_squared_error.
+
+    Treats mask as continuous target (0/1) and computes MSE with attributions.
+    Lower is better. Penalizes large errors more than MAE.
+    """
+    sample_idx, mask = sample_and_mask
+    n_timesteps = simple_dataset["metadata"]["n_timesteps"]
+
+    # Perfect attribution (1 at mask, 0 elsewhere) -> MSE = 0.0
+    attr = np.zeros((1, n_timesteps, 1))
+    attr[0, mask, 0] = 1.0
+    attr[0, ~mask, 0] = 0.0
+    score = mean_squared_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 0.0, "Perfect attribution should give MSE = 0.0"
+
+    # Inverse attribution (0 at mask, 1 elsewhere) -> MSE = 1.0
+    attr = np.zeros((1, n_timesteps, 1))
+    attr[0, mask, 0] = 0.0
+    attr[0, ~mask, 0] = 1.0
+    score = mean_squared_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert score == 1.0, "Inverse attribution should give MSE = 1.0"
+
+    # Half attribution everywhere -> MSE = 0.25
+    # At mask positions: (0.5 - 1)^2 = 0.25
+    # At non-mask positions: (0.5 - 0)^2 = 0.25
+    attr = np.full((1, n_timesteps, 1), 0.5)
+    score = mean_squared_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert np.isclose(score, 0.25), "Half attribution everywhere should give MSE = 0.25"
+
+    # MSE should be less than or equal to MAE for errors in [0,1]
+    # (since x^2 <= x for x in [0,1])
+    attr = np.full((1, n_timesteps, 1), 0.5)
+    mae = mean_absolute_error(attr, simple_dataset, sample_indices=[sample_idx])
+    mse = mean_squared_error(attr, simple_dataset, sample_indices=[sample_idx])
+    assert mse <= mae, "MSE should be <= MAE for errors in [0,1]"
+
+    # Return types
+    attr = np.ones((1, n_timesteps, 1))
+    assert isinstance(
+        mean_squared_error(
+            attr, simple_dataset, sample_indices=[sample_idx], average="macro"
+        ),
+        float,
+    ), "macro should return float"
+    assert isinstance(
+        mean_squared_error(
             attr, simple_dataset, sample_indices=[sample_idx], average="per_sample"
         ),
         dict,
