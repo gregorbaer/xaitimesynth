@@ -428,3 +428,43 @@ def test_component_generator_module_export(mock_generators_module):
         # Clean up by removing the exported component
         if hasattr(current_module, "exported_component"):
             delattr(current_module, "exported_component")
+
+
+def test_all_registered_components_have_generators():
+    """Verify every registered component has a corresponding generator function.
+
+    This test ensures consistency between the component registry and the
+    GENERATOR_FUNCS dictionary. Every component should have a generator
+    that can actually produce the time series data.
+
+    This test uses the actual package registries (not the mocked ones from
+    other tests) to verify the real components are properly configured.
+    """
+    # Import the actual registries from the package
+    from xaitimesynth.registry import _COMPONENT_REGISTRY
+    from xaitimesynth.generators import GENERATOR_FUNCS
+
+    # Get all registered component names
+    registered_components = set(_COMPONENT_REGISTRY.keys())
+    available_generators = set(GENERATOR_FUNCS.keys())
+
+    # Find components without generators
+    missing_generators = registered_components - available_generators
+
+    # Find generators without components (this is OK, but worth noting)
+    extra_generators = available_generators - registered_components
+
+    # Assert that all components have generators
+    assert not missing_generators, (
+        f"The following components are registered but have no generator function: "
+        f"{sorted(missing_generators)}. "
+        f"Did you forget to add them to GENERATOR_FUNCS in generators.py?"
+    )
+
+    # This is just informational - generators without components are allowed
+    # (they might be used directly or be helper functions)
+    if extra_generators:
+        print(
+            f"Note: The following generators exist but have no registered component: "
+            f"{sorted(extra_generators)}"
+        )

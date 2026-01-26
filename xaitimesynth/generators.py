@@ -825,6 +825,14 @@ def generate_gaussian_pulse(
 
 
 # Dictionary mapping component types to generator functions
+#
+# When adding a new generator:
+# 1. Implement generate_XXX() function above
+# 2. Add entry to this dictionary: "xxx": generate_xxx
+# 3. Create XXX() component function in components.py
+# 4. Register component in __init__.py with register_component()
+# 5. Add to __all__ exports in __init__.py
+# See docs/guides/adding_generators.md for the complete guide
 GENERATOR_FUNCS = {
     "constant": generate_constant,
     "random_walk": generate_random_walk,
@@ -861,10 +869,14 @@ def generate_component(
         np.ndarray: The generated component vector.
 
     Raises:
-        ValueError: If `component_type` is not found in `GENERATOR_FUNCS`.
+        ValueError: If `component_type` is not found in `GENERATOR_FUNCS`, with a helpful
+            message listing all available component types.
     """
     if component_type not in GENERATOR_FUNCS:
-        raise ValueError(f"Unknown component type: {component_type}")
+        available = ", ".join(sorted(GENERATOR_FUNCS.keys()))
+        raise ValueError(
+            f"Unknown component type: '{component_type}'. Available types: {available}"
+        )
 
     # Pass n_timesteps positionally, pass rng and other kwargs by keyword
     return GENERATOR_FUNCS[component_type](n_timesteps, rng=rng, **kwargs)
