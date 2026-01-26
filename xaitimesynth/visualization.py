@@ -445,7 +445,7 @@ def plot_components(
               (e.g., {0: 5, 1: 10} for first sample of class 0, second of class 1)
             - None: Use first sample from each class (default behavior)
         components (Optional[List[str]]): List of components to include. Can be used to exclude
-            certain components. Default: ["aggregated", "features", "foundation", "noise"].
+            certain components. Default: ["aggregated", "features", "foundation"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
             For multivariate time series, this allows selecting specific dimensions.
         show_indicators (bool): Whether to show feature indicators.
@@ -537,7 +537,7 @@ def plot_components(
                     )
 
     # Default component order - use internal names
-    default_components = ["aggregated", "features", "foundation", "noise"]
+    default_components = ["aggregated", "features", "foundation"]
     components_to_use = components if components is not None else default_components
 
     # Prepare data for visualization

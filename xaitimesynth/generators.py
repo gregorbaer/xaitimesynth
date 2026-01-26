@@ -423,6 +423,7 @@ def generate_peak(
     return peak_signal
 
 
+# TODO: remove trough, as peak does the same thing without negation
 def generate_trough(
     n_timesteps: int,
     amplitude: float = 1.0,
