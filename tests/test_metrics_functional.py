@@ -505,13 +505,13 @@ def test_multivariate_per_dimension(multivariate_dataset):
     )
     assert np.isclose(macro_score, 0.5), "Macro should average to 0.5"
 
-    # per_sample_dimension returns dict with (sample, dim) keys
+    # average=None returns dict with (sample, dim) keys
     scores = relevance_mass_accuracy(
         attr,
         multivariate_dataset,
         sample_indices=[sample_idx],
-        average="per_sample_dimension",
+        average=None,
     )
-    assert isinstance(scores, dict), "per_sample_dimension should return dict"
+    assert isinstance(scores, dict), "average=None should return dict"
     assert (sample_idx, 0) in scores, "Should have key for (sample, dim0)"
     assert (sample_idx, 1) in scores, "Should have key for (sample, dim1)"
