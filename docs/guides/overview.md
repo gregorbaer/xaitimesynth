@@ -195,5 +195,6 @@ This allows you to:
 
 - [Usage Guide](usage.md) - Detailed API walkthrough with examples
 - [Data Structure Reference](data_structure.md) - Internal data format for ML and XAI
+- [YAML Configuration](yaml_config.md) - Define datasets in config files
 - [Metrics Guide](metrics.md) - How to evaluate XAI methods
 - [Adding Generators](adding_generators.md) - Create custom components

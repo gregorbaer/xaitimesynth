@@ -402,6 +402,8 @@ my_dataset:
 builders = load_builders_from_config(config_str=yaml_str)
 ```
 
+For complete YAML configuration documentation including anchors, aliases, merge keys, and nested configurations, see the [YAML Configuration Guide](yaml_config.md).
+
 ## Custom Components
 
 ### Using the `manual()` Component
