@@ -102,13 +102,17 @@ xaitimesynth has two distinct classification systems that can be confusing at fi
 
 #### 1. Component Types (Registry Level)
 
-When registering a component, you specify what it can be used as:
+Each component is registered with a type that indicates its **intended use**:
 
-| Type | Can be used with | Typical use |
-|------|------------------|-------------|
-| `"signal"` | `add_signal()` | Full-length background patterns |
-| `"feature"` | `add_feature()` | Localized discriminative patterns |
-| `"both"` | Either method | Components like `constant` that work both ways |
+| Type | Intended use | Examples |
+|------|--------------|----------|
+| `"signal"` | Full-length background patterns | `random_walk`, `gaussian`, `seasonal` |
+| `"feature"` | Localized discriminative patterns | `peak`, `trough`, `gaussian_pulse` |
+| `"both"` | Works well either way | `constant`, `trend`, `manual` |
+
+**Important:** This is purely for discoverability via `list_signal_components()` and `list_feature_components()`. It does **not** restrict usage. You can use any component with `add_signal()` or `add_feature()` regardless of its registered type.
+
+For example, while `gaussian` is registered as a signal (it's typically background noise), nothing prevents you from using it as a feature if that's what your experiment needs. The registration just reflects the component's most common use case.
 
 #### 2. Signal Roles (Builder Level)
 

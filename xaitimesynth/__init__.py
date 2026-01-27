@@ -78,20 +78,25 @@ __all__ = [
 ]
 
 # Register standard components
-register_component(constant, "signal")
+# Type indicates intended use: "signal" for background patterns, "feature" for
+# discriminative patterns, "both" for components commonly used either way.
+# This is for discoverability only - users can use any component with add_signal()
+# or add_feature() regardless of its registered type.
+register_component(constant, "both")
+register_component(seasonal, "both")
+register_component(trend, "both")
+register_component(manual, "both")
+
 register_component(random_walk, "signal")
 register_component(gaussian, "signal")
 register_component(uniform, "signal")
-register_component(seasonal, "signal")
 register_component(ecg_like, "signal")
 register_component(red_noise, "signal")
 
-register_component(trend, "feature")
 register_component(peak, "feature")
 register_component(trough, "feature")
 register_component(gaussian_pulse, "feature")
 
-register_component(manual, "both")
 
 # Version
 __version__ = "0.1.0"
