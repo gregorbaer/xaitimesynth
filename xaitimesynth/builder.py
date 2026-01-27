@@ -1441,3 +1441,139 @@ class TimeSeriesBuilder:
                     break
 
         return new_builder
+
+    def to_config(self) -> Dict[str, Any]:
+        """Export the builder configuration as a dictionary.
+
+        Converts the builder's internal state to a configuration dictionary
+        that can be used with `load_builders_from_config()` or serialized to YAML.
+
+        The output format matches what the parser expects, enabling round-trip
+        conversion between Python code and configuration files.
+
+        Returns:
+            Dict[str, Any]: Configuration dictionary with builder parameters
+            and class definitions.
+
+        Example:
+            ```python
+            import yaml
+
+            # Build a dataset programmatically
+            builder = (
+                TimeSeriesBuilder(n_timesteps=100, n_samples=200)
+                .for_class(0)
+                .add_signal(gaussian(sigma=0.1), role="noise")
+                .for_class(1)
+                .add_signal(gaussian(sigma=0.1), role="noise")
+                .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.6)
+            )
+
+            # Export to config dict
+            config = builder.to_config()
+
+            # Save to YAML file
+            with open("config.yaml", "w") as f:
+                yaml.dump({"my_dataset": config}, f)
+
+            # Later, reload from YAML
+            builders = load_builders_from_config(config_path="config.yaml")
+            dataset = builders["my_dataset"].build()
+            ```
+        """
+        # Keys that should stay at the component level, not in params
+        COMPONENT_KEYS = {
+            "type",
+            "dimensions",
+            "shared_randomness",
+            "shared_location",
+            "start_pct",
+            "end_pct",
+            "length_pct",
+            "random_location",
+        }
+
+        def convert_component(comp: Dict[str, Any], role: str = None) -> Dict[str, Any]:
+            """Convert internal component format to config format."""
+            result = {}
+
+            # Map 'type' to 'function'
+            if "type" in comp:
+                result["function"] = comp["type"]
+
+            # Extract params (everything except special keys)
+            params = {k: v for k, v in comp.items() if k not in COMPONENT_KEYS}
+            if params:
+                result["params"] = params
+
+            # Add role for signals
+            if role is not None:
+                result["role"] = role
+
+            # Copy over special keys
+            if "dimensions" in comp:
+                result["dimensions"] = comp["dimensions"]
+            if comp.get("shared_randomness"):
+                result["shared_randomness"] = True
+            if "shared_location" in comp and not comp.get("shared_location", True):
+                result["shared_location"] = False
+
+            # Location parameters
+            if comp.get("random_location"):
+                result["random_location"] = True
+                if "length_pct" in comp:
+                    result["length_pct"] = comp["length_pct"]
+            elif "start_pct" in comp or "end_pct" in comp:
+                if "start_pct" in comp:
+                    result["start_pct"] = comp["start_pct"]
+                if "end_pct" in comp:
+                    result["end_pct"] = comp["end_pct"]
+
+            return result
+
+        # Build the config dictionary
+        config: Dict[str, Any] = {
+            "n_timesteps": self.n_timesteps,
+            "n_samples": self.n_samples,
+            "n_dimensions": self.n_dimensions,
+            "normalization": self.normalization,
+            "data_format": self.data_format,
+        }
+
+        # Only include optional parameters if they have non-default values
+        if self.random_state is not None:
+            config["random_state"] = self.random_state
+        if self.normalization_kwargs:
+            config["normalization_kwargs"] = self.normalization_kwargs
+
+        # Convert class definitions
+        classes = []
+        for class_def in self.class_definitions:
+            class_config: Dict[str, Any] = {"id": class_def["label"]}
+
+            if class_def.get("weight", 1.0) != 1.0:
+                class_config["weight"] = class_def["weight"]
+
+            # Combine foundation and noise into signals list
+            signals = []
+            for comp in class_def["components"].get("foundation", []):
+                signals.append(convert_component(comp, role="foundation"))
+            for comp in class_def["components"].get("noise", []):
+                signals.append(convert_component(comp, role="noise"))
+
+            if signals:
+                class_config["signals"] = signals
+
+            # Convert features
+            features = []
+            for comp in class_def["components"].get("features", []):
+                features.append(convert_component(comp))
+
+            if features:
+                class_config["features"] = features
+
+            classes.append(class_config)
+
+        config["classes"] = classes
+
+        return config
