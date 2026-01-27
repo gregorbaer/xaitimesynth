@@ -154,7 +154,9 @@ dataset = builders["my_dataset"].build()
 
 ## Documentation
 
+- [Package Overview](docs/guides/overview.md) - Design philosophy and architecture
 - [Usage Guide](docs/guides/usage.md) - Detailed API walkthrough
+- [Data Structure Reference](docs/guides/data_structure.md) - Internal data format for ML and XAI
 - [Metrics Guide](docs/guides/metrics.md) - Evaluation metrics explained
 - [Adding Generators](docs/guides/adding_generators.md) - Extend with custom components
 

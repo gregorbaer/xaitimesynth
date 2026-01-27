@@ -507,3 +507,5 @@ print(df.head())
 # Specify which dimensions to include
 df = TimeSeriesBuilder().to_df(dataset, dimensions=[0, 1])
 ```
+
+For detailed documentation of the data structure including shapes, keys, and common access patterns, see the [Data Structure Reference](data_structure.md).
