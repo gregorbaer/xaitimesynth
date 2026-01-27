@@ -237,65 +237,50 @@ def test_create_single_builder_from_dict_complex() -> None:
     assert len(class1["components"]["features"]) == 1
 
 
-def test_create_single_builder_missing_classes() -> None:
-    """Test that an error is raised when the 'classes' key is missing."""
-    config = {"n_timesteps": 50, "n_samples": 20}
+def test_create_single_builder_validation() -> None:
+    """Test _create_single_builder_from_dict validation.
 
+    Verifies that appropriate errors are raised for:
+    - Missing 'classes' key
+    - Missing class 'id'
+    - Missing signal 'function'
+    - Non-existent function name
+    """
+    # Missing 'classes' key
     with pytest.raises(ValueError, match="must contain a 'classes' list"):
-        _create_single_builder_from_dict(config)
+        _create_single_builder_from_dict({"n_timesteps": 50, "n_samples": 20})
 
-
-def test_create_single_builder_missing_class_id() -> None:
-    """Test that an error is raised when a class definition is missing an 'id'."""
-    config = {
-        "n_timesteps": 50,
-        "n_samples": 20,
-        "classes": [
-            {
-                # Missing id
-                "signals": [{"function": "random_walk", "params": {"step_size": 0.1}}]
-            }
-        ],
-    }
-
+    # Missing class 'id'
     with pytest.raises(ValueError, match="must have an 'id'"):
-        _create_single_builder_from_dict(config)
-
-
-def test_create_single_builder_missing_signal_function() -> None:
-    """Test that an error is raised when a signal is missing a 'function'."""
-    config = {
-        "n_timesteps": 50,
-        "n_samples": 20,
-        "classes": [
+        _create_single_builder_from_dict(
             {
-                "id": 0,
-                "signals": [
-                    {
-                        # Missing function
-                        "params": {"step_size": 0.1}
-                    }
+                "n_timesteps": 50,
+                "n_samples": 20,
+                "classes": [{"signals": [{"function": "random_walk"}]}],
+            }
+        )
+
+    # Missing signal 'function'
+    with pytest.raises(ValueError, match="must include a 'function' name"):
+        _create_single_builder_from_dict(
+            {
+                "n_timesteps": 50,
+                "n_samples": 20,
+                "classes": [{"id": 0, "signals": [{"params": {"step_size": 0.1}}]}],
+            }
+        )
+
+    # Non-existent function
+    with pytest.raises(AttributeError, match="Could not find signal function"):
+        _create_single_builder_from_dict(
+            {
+                "n_timesteps": 50,
+                "n_samples": 20,
+                "classes": [
+                    {"id": 0, "signals": [{"function": "nonexistent_function"}]}
                 ],
             }
-        ],
-    }
-
-    with pytest.raises(ValueError, match="must include a 'function' name"):
-        _create_single_builder_from_dict(config)
-
-
-def test_create_single_builder_nonexistent_function() -> None:
-    """Test that an error is raised when a non-existent function is specified."""
-    config = {
-        "n_timesteps": 50,
-        "n_samples": 20,
-        "classes": [
-            {"id": 0, "signals": [{"function": "nonexistent_function", "params": {}}]}
-        ],
-    }
-
-    with pytest.raises(AttributeError, match="Could not find signal function"):
-        _create_single_builder_from_dict(config)
+        )
 
 
 def test_load_builders_from_config_dict(minimal_config_dict) -> None:
@@ -342,88 +327,77 @@ def test_load_builders_from_config_string(complex_config_dict) -> None:
     assert builders["dataset_b"].n_dimensions == 1
 
 
-def test_load_builders_from_config_no_source() -> None:
-    """Test that an error is raised when no configuration source is provided."""
-    with pytest.raises(
-        ValueError,
-        match="Exactly one of config_path, config_dict, or config_str must be provided",
-    ):
+def test_load_builders_from_config_validation(
+    minimal_config_dict, complex_config_dict
+) -> None:
+    """Test load_builders_from_config input validation.
+
+    Verifies that appropriate errors are raised for:
+    - No configuration source provided
+    - Multiple configuration sources provided
+    - Invalid file path
+    - Invalid YAML string
+    - Non-dictionary config_dict
+    - Invalid nested path_key
+    """
+    # No source provided
+    with pytest.raises(ValueError, match="Exactly one of"):
         load_builders_from_config()
 
-
-def test_load_builders_from_config_multiple_sources(minimal_config_dict) -> None:
-    """Test that an error is raised when multiple configuration sources are provided."""
-    with pytest.raises(
-        ValueError,
-        match="Exactly one of config_path, config_dict, or config_str must be provided",
-    ):
+    # Multiple sources provided
+    with pytest.raises(ValueError, match="Exactly one of"):
         load_builders_from_config(
             config_dict=minimal_config_dict, config_str=yaml.dump(minimal_config_dict)
         )
 
-
-def test_load_builders_from_config_invalid_path() -> None:
-    """Test that an error is raised when an invalid file path is provided."""
+    # Invalid file path
     with pytest.raises(FileNotFoundError, match="Configuration file not found"):
         load_builders_from_config(config_path="/nonexistent/path.yaml")
 
-
-def test_load_builders_from_config_invalid_yaml_string() -> None:
-    """Test that an error is raised when invalid YAML is provided as a string."""
-    invalid_yaml = "dataset: {n_timesteps: 50, classes: [{id: 0, signals: [{"
-
+    # Invalid YAML string
     with pytest.raises(yaml.YAMLError):
-        load_builders_from_config(config_str=invalid_yaml)
+        load_builders_from_config(config_str="dataset: {n_timesteps: 50, classes: [{")
 
-
-def test_load_builders_from_config_invalid_dict() -> None:
-    """Test that an error is raised when config_dict is not a dictionary."""
+    # Non-dictionary config_dict
     with pytest.raises(ValueError, match="config_dict must be a dictionary"):
         load_builders_from_config(config_dict="not a dictionary")
 
-
-def test_load_builders_from_config_nested_path(complex_config_dict) -> None:
-    """Test loading builders from a nested path within the configuration."""
-    builders = load_builders_from_config(
-        config_dict=complex_config_dict, path_key="nested/datasets"
-    )
-
-    assert len(builders) == 1, "Should return one builder"
-    assert "dataset_c" in builders, "Should include dataset_c"
-    assert builders["dataset_c"].n_timesteps == 80, (
-        "Builder should have correct parameters"
-    )
-
-
-def test_load_builders_from_config_specific_datasets(complex_config_dict) -> None:
-    """Test loading only specific datasets."""
-    builders = load_builders_from_config(
-        config_dict=complex_config_dict, dataset_names=["dataset_b"]
-    )
-
-    assert len(builders) == 1, "Should return one builder"
-    assert "dataset_b" in builders, "Should include dataset_b"
-    assert "dataset_a" not in builders, "Should not include dataset_a"
-
-
-def test_load_builders_from_config_invalid_nested_path(complex_config_dict) -> None:
-    """Test that an error is raised when an invalid nested path is provided."""
+    # Invalid nested path_key
     with pytest.raises(ValueError, match="Path key .* not found in configuration"):
         load_builders_from_config(
             config_dict=complex_config_dict, path_key="nonexistent/path"
         )
 
 
-def test_load_builders_from_config_nonexistent_dataset(complex_config_dict) -> None:
-    """Test behavior when a requested dataset doesn't exist."""
-    # This should not raise an error, just a warning (printed to stdout)
+def test_load_builders_from_config_filtering(complex_config_dict) -> None:
+    """Test load_builders_from_config filtering options.
+
+    Verifies:
+    - Loading from nested path_key
+    - Loading specific datasets by name
+    - Behavior when requested dataset doesn't exist (returns empty dict)
+    """
+    # Loading from nested path_key
+    builders = load_builders_from_config(
+        config_dict=complex_config_dict, path_key="nested/datasets"
+    )
+    assert len(builders) == 1
+    assert "dataset_c" in builders
+    assert builders["dataset_c"].n_timesteps == 80
+
+    # Loading specific datasets by name
+    builders = load_builders_from_config(
+        config_dict=complex_config_dict, dataset_names=["dataset_b"]
+    )
+    assert len(builders) == 1
+    assert "dataset_b" in builders
+    assert "dataset_a" not in builders
+
+    # Nonexistent dataset returns empty dict (no error, just warning)
     builders = load_builders_from_config(
         config_dict=complex_config_dict, dataset_names=["nonexistent_dataset"]
     )
-
-    assert len(builders) == 0, (
-        "Should return empty dictionary when dataset doesn't exist"
-    )
+    assert len(builders) == 0
 
 
 def test_load_builders_from_config_build_dataset(complex_config_dict) -> None:

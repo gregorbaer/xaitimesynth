@@ -373,7 +373,7 @@ def test_shared_features_across_dimensions():
             )
 
 
-def test_add_signal_segment_functionality():
+def test_add_signal_with_segments():
     """Test add_signal with segment parameters (fixed and random locations)."""
     n_samples = 50
     n_timesteps = 200
