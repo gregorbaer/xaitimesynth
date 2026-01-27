@@ -55,12 +55,12 @@ class TestAdders:
         adder = SignalAdder(component, length_pct=None, start_pct=None, end_pct=None)
 
         mock_builder = MagicMock()
-        mock_builder.add_signal_segment.return_value = mock_builder
+        mock_builder.add_signal.return_value = mock_builder
         adder(mock_builder)
 
         # Verify None values are passed through correctly
-        mock_builder.add_signal_segment.assert_called_once()
-        call_kwargs = mock_builder.add_signal_segment.call_args[1]
+        mock_builder.add_signal.assert_called_once()
+        call_kwargs = mock_builder.add_signal.call_args[1]
         assert call_kwargs["start_pct"] is None, "None start_pct should be preserved"
         assert call_kwargs["end_pct"] is None, "None end_pct should be preserved"
         assert call_kwargs["length_pct"] is None, "None length_pct should be preserved"
@@ -89,14 +89,14 @@ class TestAdders:
         component = {"type": "test_component"}
         mock_builder = MagicMock()
         # Make these methods return the mock builder for chaining
-        mock_builder.add_signal_segment.return_value = mock_builder
+        mock_builder.add_signal.return_value = mock_builder
         mock_builder.add_feature_component.return_value = mock_builder
 
         # Test SignalAdder call
         signal_adder = SignalAdder(component, start_pct=0.1, end_pct=0.9)
         result = signal_adder(mock_builder)
 
-        mock_builder.add_signal_segment.assert_called_once_with(
+        mock_builder.add_signal.assert_called_once_with(
             component,
             role="foundation",
             start_pct=0.1,

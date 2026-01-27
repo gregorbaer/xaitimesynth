@@ -374,7 +374,7 @@ def test_shared_features_across_dimensions():
 
 
 def test_add_signal_segment_functionality():
-    """Test add_signal_segment functionality with fixed and random locations."""
+    """Test add_signal with segment parameters (fixed and random locations)."""
     n_samples = 50
     n_timesteps = 200
 
@@ -383,14 +383,14 @@ def test_add_signal_segment_functionality():
         TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
         .for_class(0)
         .add_signal(random_walk())  # Background signal for the entire series
-        .add_signal_segment(
+        .add_signal(
             constant(value=2.0),
             start_pct=0.25,
             end_pct=0.35,
         )  # Signal in first half
         .for_class(1)
         .add_signal(random_walk())  # Background signal for the entire series
-        .add_signal_segment(
+        .add_signal(
             constant(value=2.0),
             start_pct=0.65,
             end_pct=0.75,
@@ -403,14 +403,14 @@ def test_add_signal_segment_functionality():
         TimeSeriesBuilder(n_timesteps=n_timesteps, n_samples=n_samples, random_state=42)
         .for_class(0)
         .add_signal(random_walk())  # Background signal for the entire series
-        .add_signal_segment(
+        .add_signal(
             constant(value=2.0),
             random_location=True,
             length_pct=0.1,
         )
         .for_class(1)
         .add_signal(random_walk())  # Background signal for the entire series
-        .add_signal_segment(
+        .add_signal(
             constant(value=2.0),
             random_location=True,
             length_pct=0.1,

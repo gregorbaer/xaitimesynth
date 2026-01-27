@@ -46,7 +46,7 @@ class SignalAdder:
         """Add the component to the builder.
 
         This method is called when the SignalAdder instance is called as a function.
-        It adds the signal segment to the TimeSeriesBuilder instance.
+        It adds the signal to the TimeSeriesBuilder instance.
 
         Args:
             builder: TimeSeriesBuilder instance.
@@ -54,7 +54,7 @@ class SignalAdder:
         Returns:
             The builder for method chaining.
         """
-        return builder.add_signal_segment(
+        return builder.add_signal(
             self.component,
             role=self.role,
             start_pct=self.start_pct,

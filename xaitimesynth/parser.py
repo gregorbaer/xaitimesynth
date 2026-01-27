@@ -89,31 +89,18 @@ def _create_single_builder_from_dict(
             random_location = signal_config.get("random_location", False)
             shared_location = signal_config.get("shared_location", True)
 
-            # Check if it's a segment or full signal
-            is_segment = (
-                any(k in signal_config for k in ["start_pct", "end_pct", "length_pct"])
-                or random_location
+            # add_signal() handles both full-series and segment modes
+            builder.add_signal(
+                component,
+                role=role,
+                dim=dim,
+                shared_randomness=shared_randomness,
+                start_pct=start_pct,
+                end_pct=end_pct,
+                length_pct=length_pct,
+                random_location=random_location,
+                shared_location=shared_location,
             )
-
-            if is_segment:
-                builder.add_signal_segment(
-                    component,
-                    role=role,
-                    dim=dim,
-                    shared_randomness=shared_randomness,
-                    start_pct=start_pct,
-                    end_pct=end_pct,
-                    length_pct=length_pct,
-                    random_location=random_location,
-                    shared_location=shared_location,
-                )
-            else:
-                builder.add_signal(
-                    component,
-                    role=role,
-                    dim=dim,
-                    shared_randomness=shared_randomness,
-                )
 
         # --- 2b. Add Features ---
         for feature_config in class_config.get("features", []):

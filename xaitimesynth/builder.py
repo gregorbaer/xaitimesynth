@@ -190,74 +190,24 @@ class TimeSeriesBuilder:
         role: str = "foundation",
         dim: Optional[List[int]] = None,
         shared_randomness: bool = False,
-    ) -> "TimeSeriesBuilder":
-        """Add a signal component to the current class.
-
-        Signal components can be either foundation or noise. Foundation components form the
-        base structure of the time series, while noise components add random variations.
-
-        Args:
-            component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
-            role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
-            dim (List[int]): List of dimension indices where this signal should be applied.
-                If None, the signal will be added to all dimensions. Default is None.
-            shared_randomness (bool): If True, the same random pattern will be used across all
-                specified dimensions. If False, each dimension gets its own random pattern
-                (for stochastic components). Default is False.
-
-        Returns:
-            TimeSeriesBuilder: Self for method chaining.
-
-        Raises:
-            ValueError: If no class is selected or if the role is invalid.
-        """
-        if self.current_class is None:
-            raise ValueError("No class selected. Call for_class() first.")
-
-        if role not in ("foundation", "noise"):
-            raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
-
-        if dim is None:
-            dim = list(range(self.n_dimensions))
-        self._validate_dimensions(dim)
-
-        # If shared_randomness is True or only one dimension, store a single component
-        if shared_randomness or len(dim) == 1:
-            component_with_dim = component.copy()
-            component_with_dim["dimensions"] = dim
-            component_with_dim["shared_randomness"] = shared_randomness
-            self.current_class["components"][role].append(component_with_dim)
-
-        # For multiple dimensions with different randomness,
-        # create separate component entries for each dimension
-        else:
-            for d in dim:
-                component_with_dim = component.copy()
-                component_with_dim["dimensions"] = [d]  # Single dimension
-                component_with_dim["shared_randomness"] = shared_randomness
-                self.current_class["components"][role].append(component_with_dim)
-
-        return self
-
-    # TODO: add random time shift parameter over multiple channels
-    def add_signal_segment(
-        self,
-        component: Dict[str, Any],
-        role: str = "foundation",
-        dim: Optional[List[int]] = None,
-        shared_randomness: bool = False,
         start_pct: Optional[float] = None,
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
         random_location: bool = False,
         shared_location: bool = True,
     ) -> "TimeSeriesBuilder":
-        """Add a signal component to the current class for a segment of the time series.
-
-        Use this instead of add_signal() when you want to specify a time range for the signal.
+        """Add a signal component to the current class.
 
         Signal components can be either foundation or noise. Foundation components form the
         base structure of the time series, while noise components add random variations.
+
+        Default behavior: When no location parameters are specified (start_pct, end_pct,
+        length_pct all None and random_location=False), the signal spans the entire time
+        series length.
+
+        Segment mode: To apply a signal to only part of the time series, either:
+        - Specify start_pct and end_pct for a fixed segment, or
+        - Set random_location=True with length_pct for a randomly positioned segment.
 
         Args:
             component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
@@ -268,10 +218,13 @@ class TimeSeriesBuilder:
                 specified dimensions. If False, each dimension gets its own random pattern
                 (for stochastic components). Default is False.
             start_pct (float, optional): Start position as percentage of time series length (0-1).
+                Required together with end_pct for a fixed segment.
             end_pct (float, optional): End position as percentage of time series length (0-1).
+                Required together with start_pct for a fixed segment.
             length_pct (float, optional): Length of signal as percentage of time series length (0-1).
+                Required when random_location is True.
             random_location (bool): Whether to place the signal at a random location.
-                Default is False (applied to entire time series).
+                Requires length_pct. Default is False.
             shared_location (bool): If True and random_location is True, the same random
                 location will be used across all dimensions. If False, each dimension gets
                 its own random location. Default is True.
@@ -280,7 +233,18 @@ class TimeSeriesBuilder:
             TimeSeriesBuilder: Self for method chaining.
 
         Raises:
-            ValueError: If no class is selected or if the role is invalid.
+            ValueError: If no class is selected, if the role is invalid, or if location
+                parameters are inconsistent.
+
+        Examples:
+            # Full time series (default - no location params)
+            builder.add_signal(gaussian(sigma=0.1), role="noise")
+
+            # Fixed segment from 20% to 50% of the series
+            builder.add_signal(constant(value=1.0), start_pct=0.2, end_pct=0.5)
+
+            # Random segment of 30% length
+            builder.add_signal(constant(value=1.0), random_location=True, length_pct=0.3)
         """
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
@@ -292,29 +256,7 @@ class TimeSeriesBuilder:
             dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
-        # Explicitly validate location parameters based on random_location setting
-        # This ensures validation happens even if has_time_range would be False
-        if random_location:
-            if length_pct is None:
-                raise ValueError(
-                    "length_pct must be provided when random_location is True"
-                )
-            if not (0 < length_pct <= 1):
-                raise ValueError("length_pct must be between 0 and 1")
-        else:
-            if start_pct is None or end_pct is None:
-                raise ValueError(
-                    "start_pct and end_pct must be provided when random_location is False"
-                )
-            if start_pct is not None and end_pct is not None:
-                if not (
-                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
-                ):
-                    raise ValueError(
-                        "Invalid start_pct or end_pct. Must be between 0 and 1, with start_pct < end_pct"
-                    )
-
-        # If we have time range parameters, apply them
+        # Determine if this is a segment or full-series signal
         has_time_range = (
             start_pct is not None
             or end_pct is not None
@@ -322,34 +264,58 @@ class TimeSeriesBuilder:
             or random_location
         )
 
+        # Validate location parameters based on mode
         if has_time_range:
-            # Add time range parameters to component
-            component_with_time = component.copy()
-
             if random_location:
-                component_with_time["random_location"] = True
-                component_with_time["length_pct"] = length_pct
-                component_with_time["shared_location"] = shared_location
+                if length_pct is None:
+                    raise ValueError(
+                        "length_pct must be provided when random_location is True"
+                    )
+                if not (0 < length_pct <= 1):
+                    raise ValueError("length_pct must be between 0 and 1")
             else:
-                component_with_time["random_location"] = False
-                component_with_time["start_pct"] = start_pct
-                component_with_time["end_pct"] = end_pct
-        else:
-            component_with_time = component.copy()
+                # Fixed segment mode - requires both start_pct and end_pct
+                if start_pct is None or end_pct is None:
+                    raise ValueError(
+                        "Both start_pct and end_pct must be provided for a fixed segment"
+                    )
+                if not (
+                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
+                ):
+                    raise ValueError(
+                        "Invalid start_pct or end_pct. Must be between 0 and 1, "
+                        "with start_pct < end_pct"
+                    )
 
-        # Add dimensions and randomness settings to a single component
-        # when using shared location/randomness
-        if shared_location and random_location or shared_randomness or len(dim) == 1:
-            component_with_time["dimensions"] = dim
-            component_with_time["shared_randomness"] = shared_randomness
-            component_with_time["shared_location"] = shared_location
-            self.current_class["components"][role].append(component_with_time)
+        # Build the component definition
+        component_with_params = component.copy()
+
+        if has_time_range:
+            if random_location:
+                component_with_params["random_location"] = True
+                component_with_params["length_pct"] = length_pct
+                component_with_params["shared_location"] = shared_location
+            else:
+                component_with_params["random_location"] = False
+                component_with_params["start_pct"] = start_pct
+                component_with_params["end_pct"] = end_pct
+
+        # Add dimensions and randomness settings
+        # Use single component when sharing location/randomness or single dimension
+        if (
+            (has_time_range and shared_location and random_location)
+            or shared_randomness
+            or len(dim) == 1
+        ):
+            component_with_params["dimensions"] = dim
+            component_with_params["shared_randomness"] = shared_randomness
+            component_with_params["shared_location"] = shared_location
+            self.current_class["components"][role].append(component_with_params)
         else:
-            # For multiple dimensions without shared location/randomness,
-            # create separate component entries for each dimension
+            # Create separate component entries for each dimension
             for d in dim:
-                component_with_dim = component_with_time.copy()
-                component_with_dim["dimensions"] = [d]  # Single dimension
+                component_with_dim = component_with_params.copy()
+                component_with_dim["dimensions"] = [d]
                 component_with_dim["shared_randomness"] = shared_randomness
                 component_with_dim["shared_location"] = shared_location
                 self.current_class["components"][role].append(component_with_dim)

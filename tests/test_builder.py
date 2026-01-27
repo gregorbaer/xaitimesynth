@@ -70,141 +70,112 @@ def test_for_class() -> None:
     )
 
 
-def test_add_signal_no_class() -> None:
-    """Test add_signal without selecting a class first."""
+def test_add_signal_validation() -> None:
+    """Test add_signal parameter validation.
+
+    Verifies that add_signal properly validates:
+    - No class selected
+    - Invalid role
+    - Invalid dimension indices
+    - Segment parameter constraints (random_location, start_pct, end_pct, length_pct)
+    """
+    # No class selected
     builder = TimeSeriesBuilder()
     with pytest.raises(ValueError, match="No class selected"):
         builder.add_signal(random_walk(), role="foundation")
 
-
-def test_add_signal_invalid_role() -> None:
-    """Test add_signal with invalid role parameter."""
+    # Invalid role
     builder = TimeSeriesBuilder().for_class(1)
     with pytest.raises(ValueError, match="Invalid role"):
         builder.add_signal(random_walk(), role="invalid_role")
 
-
-def test_add_signal_invalid_dimensions() -> None:
-    """Test add_signal with invalid dimension indices."""
+    # Invalid dimension index
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     with pytest.raises(ValueError, match="Dimension 2 is out of range"):
         builder.add_signal(random_walk(), dim=[2])
 
+    # Segment validation: random_location requires length_pct
+    builder = TimeSeriesBuilder().for_class(1)
+    with pytest.raises(ValueError, match="length_pct must be provided"):
+        builder.add_signal(constant(), random_location=True)
 
-def test_add_signal_shared_randomness() -> None:
-    """Test add_signal with shared_randomness parameter."""
+    # Segment validation: invalid start_pct/end_pct range
+    with pytest.raises(ValueError, match="Invalid start_pct or end_pct"):
+        builder.add_signal(constant(), start_pct=1.1, end_pct=1.2)
+
+    # Segment validation: invalid length_pct
+    with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
+        builder.add_signal(constant(), random_location=True, length_pct=1.5)
+
+    # Segment validation: fixed segment requires both start_pct and end_pct
+    with pytest.raises(ValueError, match="Both start_pct and end_pct must be provided"):
+        builder.add_signal(constant(), start_pct=0.2)
+
+
+def test_add_signal_dimension_and_location_options() -> None:
+    """Test add_signal dimension and location behavior.
+
+    Verifies component creation for:
+    - shared_randomness=True/False
+    - shared_location=True/False (for segments)
+    """
+    # shared_randomness=True -> single component entry
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
-    # With shared_randomness=True, should create a single component with multiple dimensions
     builder.add_signal(random_walk(), dim=[0, 1], shared_randomness=True)
-    assert len(builder.current_class["components"]["foundation"]) == 1, (
-        "With shared_randomness=True, should add a single component entry"
-    )
+    assert len(builder.current_class["components"]["foundation"]) == 1
 
-    # With shared_randomness=False, should create separate components for each dimension
+    # shared_randomness=False -> separate component per dimension
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     builder.add_signal(random_walk(), dim=[0, 1], shared_randomness=False)
-    assert len(builder.current_class["components"]["foundation"]) == 2, (
-        "With shared_randomness=False, should add separate component entries"
-    )
+    assert len(builder.current_class["components"]["foundation"]) == 2
 
-
-def test_add_signal_segment_parameter_validation() -> None:
-    """Test parameter validation in add_signal_segment.
-
-    Verifies that add_signal_segment properly validates:
-    - Missing length_pct when random_location=True
-    - Invalid start_pct/end_pct range
-    - Invalid length_pct range
-    - Missing start_pct/end_pct when random_location=False
-    """
-    builder = TimeSeriesBuilder().for_class(1)
-
-    # Test random location without length_pct
-    with pytest.raises(ValueError, match="length_pct must be provided"):
-        builder.add_signal_segment(constant(), random_location=True)
-
-    # Test invalid range for fixed location
-    with pytest.raises(ValueError, match="Invalid start_pct or end_pct"):
-        builder.add_signal_segment(constant(), start_pct=1.1, end_pct=1.2)
-
-    # Test invalid length_pct
-    with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
-        builder.add_signal_segment(constant(), random_location=True, length_pct=1.5)
-
-    # Test fixed location without start_pct or end_pct
-    with pytest.raises(ValueError, match="start_pct and end_pct must be provided"):
-        builder.add_signal_segment(
-            constant(),
-            random_location=False,  # Just need to specify random_location=False
-        )
-
-
-def test_add_signal_segment_shared_options() -> None:
-    """Test shared_location and shared_randomness options in add_signal_segment.
-
-    Verifies that add_signal_segment properly handles:
-    - shared_location=True/False settings
-    - shared_randomness=True/False settings
-    - Dimension configurations
-    """
-    # Create a builder with 2 dimensions explicitly
+    # shared_location=True with random segment -> single component entry
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
-
-    # Test shared location (should create one component)
-    builder.add_signal_segment(
+    builder.add_signal(
         constant(),
         random_location=True,
         length_pct=0.2,
         dim=[0, 1],
         shared_location=True,
     )
-    assert len(builder.current_class["components"]["foundation"]) == 1, (
-        "With shared_location=True, should add a single component entry"
-    )
+    assert len(builder.current_class["components"]["foundation"]) == 1
 
-    # Test non-shared location (should create separate components)
+    # shared_location=False with random segment -> separate component per dimension
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
-    builder.add_signal_segment(
+    builder.add_signal(
         constant(),
         random_location=True,
         length_pct=0.2,
         dim=[0, 1],
         shared_location=False,
     )
-    assert len(builder.current_class["components"]["foundation"]) == 2, (
-        "With shared_location=False, should add separate component entries"
-    )
+    assert len(builder.current_class["components"]["foundation"]) == 2
 
 
-def test_add_feature_parameter_validation() -> None:
-    """Test add_feature with invalid parameters.
+def test_add_feature_validation() -> None:
+    """Test add_feature parameter validation.
 
     Validates that add_feature correctly checks for:
     - Missing start_pct/end_pct when random_location=False
     - Invalid start_pct/end_pct ranges
     - Missing length_pct when random_location=True
+    - Invalid length_pct range
     """
     builder = TimeSeriesBuilder().for_class(1)
 
-    # Test missing start_pct and end_pct
+    # Missing start_pct and end_pct
     with pytest.raises(ValueError, match="start_pct and end_pct must be provided"):
         builder.add_feature(constant(), random_location=False)
 
-    # Test invalid start_pct and end_pct range
+    # Invalid start_pct and end_pct range
     with pytest.raises(ValueError, match="Invalid start_pct or end_pct"):
         builder.add_feature(constant(), start_pct=1.1, end_pct=1.5)
 
-    # Test random_location without length_pct
+    # random_location without length_pct
     with pytest.raises(ValueError, match="length_pct must be provided"):
         builder.add_feature(constant(), random_location=True)
 
-
-def test_add_feature_random_location() -> None:
-    """Test add_feature with random location parameters.
-
-    Ensures length_pct is validated for random feature placement.
-    """
-    builder = TimeSeriesBuilder().for_class(1)
+    # Invalid length_pct range
     with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
         builder.add_feature(constant(), random_location=True, length_pct=1.5)
 
