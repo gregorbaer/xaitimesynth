@@ -276,7 +276,7 @@ score = auc_pr_score(attributions, dataset)
 from xaitimesynth import plot_components, plot_component
 
 # Plot all components (foundation, features, aggregated) for sample 0, dimension 0
-plot_components(dataset, samples=0, dimensions=[0])
+plot_components(dataset, sample_indices=0, dimensions=[0])
 
 # Or plot individual arrays using plot_component
 sample_idx = 0

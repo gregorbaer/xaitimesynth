@@ -32,7 +32,6 @@ from .registry import (
     register_component_generator,
 )
 from .visualization import (
-    plot_class_comparison,
     plot_component,
     plot_components,
     plot_sample,
@@ -52,11 +51,9 @@ __all__ = [
     "register_component",
     "register_component_generator",
     # Visualization Functions
-    "plot_class_comparison",
     "plot_component",
     "plot_components",
     "plot_sample",
-    "plot_timeseries",
     # Data Generation Components
     "constant",
     "ecg_like",
