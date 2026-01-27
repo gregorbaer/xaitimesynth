@@ -134,23 +134,19 @@ dataset = builders["my_dataset"].build()
 
 ## Available Components
 
-**Signals** (full-length background patterns):
-- `random_walk` - Cumulative sum of random steps
-- `gaussian` - White noise from normal distribution
-- `uniform` - White noise from uniform distribution
-- `seasonal` - Periodic sinusoidal pattern
-- `trend` - Linear trend
-- `red_noise` - Correlated noise (AR(1) process)
-- `ecg_like` - Simulated ECG heartbeat pattern
-- `constant` - Constant value
+Discover available components programmatically:
 
-**Features** (localized discriminative patterns):
-- `peak` - Gaussian-shaped peak
-- `trough` - Inverted peak
-- `gaussian_pulse` - Sharp pulse with configurable width
-- `constant` - Level shift
+```python
+from xaitimesynth import list_signal_components, list_feature_components
 
-**Custom generators**: Use `manual()` to integrate your own functions.
+# Signal components (background patterns): random_walk, gaussian, seasonal, etc.
+print(list_signal_components().keys())
+
+# Feature components (discriminative patterns): peak, trough, constant, etc.
+print(list_feature_components().keys())
+```
+
+Use `manual()` to integrate your own generator functions. See the [Usage Guide](docs/guides/usage.md) for details.
 
 ## Documentation
 

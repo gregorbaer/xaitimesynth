@@ -6,14 +6,15 @@ This guide provides a detailed walkthrough of the xaitimesynth API with examples
 
 1. [Basic Usage](#basic-usage)
 2. [Builder Parameters](#builder-parameters)
-3. [Adding Signals](#adding-signals)
-4. [Adding Features](#adding-features)
-5. [Positioning Features and Signals](#positioning-features-and-signals)
-6. [Multivariate Time Series](#multivariate-time-series)
-7. [Creating Data Splits](#creating-data-splits)
-8. [YAML Configuration](#yaml-configuration)
-9. [Custom Components](#custom-components)
-10. [Accessing Component Data](#accessing-component-data)
+3. [Discovering Available Components](#discovering-available-components)
+4. [Adding Signals](#adding-signals)
+5. [Adding Features](#adding-features)
+6. [Positioning Features and Signals](#positioning-features-and-signals)
+7. [Multivariate Time Series](#multivariate-time-series)
+8. [Creating Data Splits](#creating-data-splits)
+9. [YAML Configuration](#yaml-configuration)
+10. [Custom Components](#custom-components)
+11. [Accessing Component Data](#accessing-component-data)
 
 ## Basic Usage
 
@@ -88,6 +89,38 @@ dataset = TimeSeriesBuilder(n_dimensions=3, data_format="channels_last").build()
 print(dataset["X"].shape)  # (n_samples, n_timesteps, 3)
 ```
 
+## Discovering Available Components
+
+xaitimesynth provides functions to discover available signal and feature components programmatically:
+
+```python
+from xaitimesynth import list_components, list_signal_components, list_feature_components
+
+# List all registered components
+all_components = list_components()
+print(all_components.keys())
+# dict_keys(['constant', 'random_walk', 'gaussian', 'uniform', 'seasonal', ...])
+
+# List components designed for use as signals (background patterns)
+signals = list_signal_components()
+print(signals.keys())
+# dict_keys(['constant', 'random_walk', 'gaussian', 'uniform', 'seasonal', ...])
+
+# List components designed for use as features (discriminative patterns)
+features = list_feature_components()
+print(features.keys())
+# dict_keys(['constant', 'peak', 'trough', 'gaussian_pulse', 'trend', ...])
+```
+
+Each function returns a dictionary mapping component names to their definition functions. To see the available parameters for any component, use Python's help:
+
+```python
+from xaitimesynth import peak, random_walk
+
+help(peak)        # Shows parameters: amplitude, width
+help(random_walk) # Shows parameters: step_size
+```
+
 ## Adding Signals
 
 Signals are full-length background patterns. Use `add_signal()` to add them.
@@ -106,19 +139,6 @@ builder = (
     .add_signal(seasonal(period=20, amplitude=0.5), role="foundation")
 )
 ```
-
-### Available Signal Components
-
-| Component | Parameters | Description |
-|-----------|------------|-------------|
-| `random_walk` | `step_size=0.1` | Cumulative sum of random steps |
-| `gaussian` | `mu=0, sigma=1` | White noise from normal distribution |
-| `uniform` | `low=-1, high=1` | White noise from uniform distribution |
-| `seasonal` | `period=10, amplitude=1.0, phase=0` | Periodic sinusoidal pattern |
-| `trend` | `endpoints=(0, 1)` | Linear trend from start to end value |
-| `red_noise` | `phi=0.9, sigma=1.0` | AR(1) correlated noise |
-| `ecg_like` | `num_heartbeats=5` | Simulated ECG pattern |
-| `constant` | `value=1.0` | Constant value |
 
 ### Signal Roles
 
@@ -151,16 +171,6 @@ builder = (
     .add_feature(constant(value=1.0), length_pct=0.15, random_location=True)
 )
 ```
-
-### Available Feature Components
-
-| Component | Parameters | Description |
-|-----------|------------|-------------|
-| `peak` | `amplitude=1.0, width=10` | Gaussian-shaped peak |
-| `trough` | `amplitude=1.0, width=10` | Inverted peak (downward) |
-| `gaussian_pulse` | `amplitude=1.0, width_ratio=0.5, center=0.5` | Sharp pulse |
-| `constant` | `value=1.0` | Level shift |
-| `trend` | `endpoints=(0, 1)` | Linear ramp |
 
 ## Positioning Features and Signals
 

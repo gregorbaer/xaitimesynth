@@ -134,15 +134,9 @@ Features are the class-discriminating patterns. Each feature in the `features` l
 
 *You must specify either `start_pct`/`end_pct` for fixed position, or `length_pct` with `random_location: true`.
 
-### Available Generator Functions
+### Available Functions
 
-**For signals (background patterns):**
-`random_walk`, `gaussian`, `uniform`, `seasonal`, `trend`, `red_noise`, `constant`, `ecg_like`
-
-**For features (discriminative patterns):**
-`peak`, `trough`, `gaussian_pulse`, `constant`, `trend`, `seasonal`
-
-See the [Usage Guide](usage.md) for parameter details on each function.
+The `function` field must match the name of a component function in the package (e.g., `gaussian`, `peak`, `random_walk`). Use `list_signal_components()` and `list_feature_components()` to discover available functions programmatically. See the [Usage Guide](usage.md#discovering-available-components) for details.
 
 ## Loading Configurations
 
