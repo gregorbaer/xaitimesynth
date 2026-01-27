@@ -15,14 +15,12 @@ class TimeSeriesComponents:
 
     Attributes:
         foundation (np.ndarray): Foundational signal, or base structure component (e.g., constant, random walk).
-        noise (Optional[np.ndarray]): Noise component added to the series. Defaults to None.
         features (Optional[Dict[str, np.ndarray]]): Dictionary mapping feature names to their vector representations. Defaults to None.
         feature_masks (Optional[Dict[str, np.ndarray]]): Dictionary of boolean masks indicating feature locations. Defaults to None.
         aggregated (Optional[np.ndarray]): The final aggregated time series after combining components. Defaults to None.
     """
 
     foundation: np.ndarray
-    noise: Optional[np.ndarray] = None
     features: Optional[Dict[str, np.ndarray]] = None
     feature_masks: Optional[Dict[str, np.ndarray]] = None
     aggregated: Optional[np.ndarray] = None
@@ -30,21 +28,6 @@ class TimeSeriesComponents:
     def __post_init__(self):
         """Validate that components have compatible shapes with the foundation."""
         expected_length = self.foundation.shape[0]  # Time dimension length
-
-        # Check noise component
-        if self.noise is not None:
-            if self.noise.shape[0] != expected_length:
-                raise ValueError(
-                    f"The 'noise' component first dimension {self.noise.shape[0]} doesn't match "
-                    f"foundation first dimension {expected_length}."
-                )
-            # For multivariate case, ensure other dimensions match if present
-            if len(self.noise.shape) > 1 and len(self.foundation.shape) > 1:
-                if self.noise.shape[1] != self.foundation.shape[1]:
-                    raise ValueError(
-                        f"The 'noise' component shape {self.noise.shape} doesn't match "
-                        f"foundation shape {self.foundation.shape} in the second dimension."
-                    )
 
         # Check features components
         if self.features is not None:

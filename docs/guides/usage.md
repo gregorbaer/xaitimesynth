@@ -56,7 +56,6 @@ components = dataset["components"]  # List of TimeSeriesComponents objects
 | `data_format` | "channels_first" | Output format: "channels_first" (N,D,T) or "channels_last" (N,T,D) |
 | `feature_fill_value` | np.nan | Fill value for feature component outside feature window |
 | `foundation_fill_value` | 0.0 | Fill value for foundation component |
-| `noise_fill_value` | np.nan | Fill value for noise component |
 
 ### Normalization Options
 
@@ -131,28 +130,14 @@ from xaitimesynth import random_walk, gaussian, seasonal, trend, red_noise
 builder = (
     TimeSeriesBuilder(n_timesteps=200)
     .for_class(0)
-    # Foundation signal: the base pattern
-    .add_signal(random_walk(step_size=0.2), role="foundation")
-    # Noise signal: stochastic variation
-    .add_signal(gaussian(sigma=0.1), role="noise")
     # Multiple signals are additive
-    .add_signal(seasonal(period=20, amplitude=0.5), role="foundation")
+    .add_signal(random_walk(step_size=0.2))
+    .add_signal(gaussian(sigma=0.1))
+    .add_signal(seasonal(period=20, amplitude=0.5))
 )
 ```
 
-### Signal Roles
-
-The `role` parameter determines how the signal is categorized internally:
-
-```python
-# Foundation: the base pattern the time series is built on
-builder.add_signal(random_walk(step_size=0.2), role="foundation")
-
-# Noise: stochastic variation (default if not specified is "foundation")
-builder.add_signal(gaussian(sigma=0.1), role="noise")
-```
-
-This categorization is stored in `TimeSeriesComponents` and can be useful for visualization and analysis.
+All signals are combined additively into the foundation component.
 
 ## Adding Features
 
@@ -203,8 +188,8 @@ Signals can also be positioned like features using the same parameters:
 # A trend that only appears in the first half
 builder.add_signal(trend(endpoints=(0, 1)), start_pct=0.0, end_pct=0.5)
 
-# A burst of noise at a random location
-builder.add_signal(gaussian(sigma=2.0), length_pct=0.2, random_location=True, role="noise")
+# A burst of signal at a random location
+builder.add_signal(gaussian(sigma=2.0), length_pct=0.2, random_location=True)
 ```
 
 ## Multivariate Time Series
@@ -217,10 +202,10 @@ builder = (
     .for_class(0)
     # Apply to all dimensions
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
+    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
     .for_class(1)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
+    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
     # Feature only in dimensions 0 and 1
     .add_feature(
         constant(value=1.0),
@@ -321,13 +306,11 @@ my_dataset:
       signals:
         - function: gaussian
           params: { sigma: 0.5 }
-          role: noise
     - id: 1
       weight: 1.5  # Sample this class 1.5x as often
       signals:
         - function: gaussian
           params: { sigma: 0.5 }
-          role: noise
       features:
         - function: peak
           params: { amplitude: 2.0, width: 10 }

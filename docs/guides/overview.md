@@ -25,16 +25,15 @@ In real-world time series classification, we rarely have ground truth about whic
 Every time series in xaitimesynth follows an additive composition model:
 
 ```
-x = foundation + noise + feature
+x = foundation + feature
 ```
 
-- **Foundation**: The base signal pattern (random walks, seasonal patterns, trends)
-- **Noise**: Stochastic variation layered on top
+- **Foundation**: The base signal pattern (random walks, seasonal patterns, noise, trends)
 - **Feature**: The class-discriminating pattern in a specific time window
 
 For a two-class problem, you might have:
-- Class 0: foundation + noise + feature A (e.g., downward level shift)
-- Class 1: foundation + noise + feature B (e.g., upward level shift)
+- Class 0: foundation + feature A (e.g., downward level shift)
+- Class 1: foundation + feature B (e.g., upward level shift)
 
 A classifier trained on this data learns to distinguish between the feature types. An XAI method should attribute high importance to the feature window where the discriminative pattern occurs. Since we know exactly where each feature is located, we can directly measure whether the attributions are correct.
 
@@ -62,9 +61,9 @@ xaitimesynth/
 dataset = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=50)  # Initialize canvas
     .for_class(0)                                      # Select class context
-    .add_signal(gaussian(sigma=0.1), role="noise")    # Add a layer
+    .add_signal(gaussian(sigma=0.1))                  # Add a layer
     .for_class(1)
-    .add_signal(gaussian(sigma=0.1), role="noise")
+    .add_signal(gaussian(sigma=0.1))
     .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.7)  # Add another layer
     .build()                                           # Render the result
 )
@@ -96,11 +95,7 @@ register_component(my_custom_component, "feature")
 
 ## Terminology
 
-### Component Types vs Signal Roles
-
-xaitimesynth has two distinct classification systems that can be confusing at first:
-
-#### 1. Component Types (Registry Level)
+### Component Types (Registry Level)
 
 Each component is registered with a type that indicates its **intended use**:
 
@@ -114,25 +109,25 @@ Each component is registered with a type that indicates its **intended use**:
 
 For example, while `gaussian` is registered as a signal (it's typically background noise), nothing prevents you from using it as a feature if that's what your experiment needs. The registration just reflects the component's most common use case.
 
-#### 2. Signal Roles (Builder Level)
+### Signals vs Features (Builder Level)
 
-When adding a signal, you specify its semantic role:
+When building time series, you add two types of components:
 
-| Role | Purpose | Stored in |
-|------|---------|-----------|
-| `"foundation"` | Base pattern the time series is built on | `components.foundation` |
-| `"noise"` | Stochastic variation added to the signal | `components.noise` |
+| Method | Purpose | Stored in |
+|--------|---------|-----------|
+| `add_signal()` | Background patterns (full-length or positioned) | `components.foundation` |
+| `add_feature()` | Class-discriminating patterns with known locations | `components.features` |
 
 ```python
-# This is a SIGNAL with role="foundation"
-builder.add_signal(random_walk(step_size=0.2), role="foundation")
+# Signals form the background pattern
+builder.add_signal(random_walk(step_size=0.2))
+builder.add_signal(gaussian(sigma=0.1))
 
-# This is a SIGNAL with role="noise"
-builder.add_signal(gaussian(sigma=0.1), role="noise")
-
-# This is a FEATURE (no role needed, always stored as feature)
+# Features are the class-discriminating patterns with tracked locations
 builder.add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.7)
 ```
+
+All signals are combined additively into the foundation component. Features are tracked separately so their locations can be used as ground truth for XAI evaluation.
 
 ### Other Key Terms
 
@@ -156,7 +151,7 @@ Here's how data flows through the system when you call `.build()`:
 
 ```
 1. TimeSeriesBuilder stores class definitions
-   └── Each class has: label, weight, components (foundation, noise, features)
+   └── Each class has: label, weight, components (foundation, features)
        └── Each component is a dictionary: {"type": "peak", "amplitude": 1.0, ...}
 
 2. .build() is called
@@ -164,9 +159,8 @@ Here's how data flows through the system when you call `.build()`:
        └── Select class based on weights
        └── For each dimension:
            └── Generate foundation signal(s)
-           └── Generate noise signal(s)
            └── Generate feature(s) at specified locations
-           └── Combine: foundation + noise + feature
+           └── Combine: foundation + feature
 
 3. Output dictionary is created:
    ├── "X": numpy array (n_samples, n_dims, n_timesteps)
@@ -182,12 +176,11 @@ Each sample's component breakdown is stored in a `TimeSeriesComponents` object:
 ```python
 @dataclass
 class TimeSeriesComponents:
-    foundation: np.ndarray  # Shape: (n_dims, n_timesteps)
-    noise: np.ndarray       # Shape: (n_dims, n_timesteps)
-    features: np.ndarray    # Shape: (n_dims, n_timesteps)
-    combined: np.ndarray    # Shape: (n_dims, n_timesteps) - final signal
+    foundation: np.ndarray    # Shape: (n_dims, n_timesteps) - background signals
+    features: np.ndarray      # Shape: (n_dims, n_timesteps) - feature values
+    aggregated: np.ndarray    # Shape: (n_dims, n_timesteps) - final signal
     feature_mask: np.ndarray  # Shape: (n_dims, n_timesteps) - binary mask
-    label: int              # Class label
+    label: int                # Class label
 ```
 
 This allows you to:

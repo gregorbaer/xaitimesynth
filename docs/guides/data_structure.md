@@ -163,22 +163,9 @@ print(foundation.shape)  # (100, 3)
 foundation_dim0 = foundation[:, 0]  # Shape: (100,)
 ```
 
-#### `noise`
-
-Noise components added to the signal.
-
-| Property | Value |
-|----------|-------|
-| Shape | `(n_timesteps, n_dimensions)` |
-
-```python
-noise = comp.noise
-noise_dim0 = noise[:, 0]
-```
-
 #### `aggregated`
 
-Final combined signal (foundation + noise + features). This matches the corresponding row in `X` but with `(T, D)` shape instead of `(D, T)`.
+Final combined signal (foundation + features). This matches the corresponding row in `X` but with `(T, D)` shape instead of `(D, T)`.
 
 | Property | Value |
 |----------|-------|
@@ -286,32 +273,18 @@ score = auc_pr_score(attributions, dataset)
 ### Visualization of Components
 
 ```python
-import matplotlib.pyplot as plt
+from xaitimesynth import plot_components, plot_component
 
+# Plot all components (foundation, features, aggregated) for sample 0, dimension 0
+plot_components(dataset, samples=0, dimensions=[0])
+
+# Or plot individual arrays using plot_component
 sample_idx = 0
 dim_idx = 0
 comp = dataset["components"][sample_idx]
 
-fig, axes = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
-
-axes[0].plot(comp.foundation[:, dim_idx])
-axes[0].set_title("Foundation")
-
-axes[1].plot(comp.noise[:, dim_idx])
-axes[1].set_title("Noise")
-
-# Plot features
-for name, values in comp.features.items():
-    if f"dim{dim_idx}" in name:
-        axes[2].plot(values, label=name)
-axes[2].set_title("Features")
-axes[2].legend()
-
-axes[3].plot(comp.aggregated[:, dim_idx])
-axes[3].set_title("Aggregated (Final Signal)")
-
-plt.tight_layout()
-plt.show()
+plot_component(signal=comp.foundation[:, dim_idx], title="Foundation")
+plot_component(signal=comp.aggregated[:, dim_idx], title="Aggregated")
 ```
 
 ### Get Samples by Class
@@ -352,7 +325,6 @@ sample_mask = comp.feature_masks["feature_0_constant_dim0"]
 | `dataset["y"]` | `(N,)` | |
 | `dataset["feature_masks"][key]` | `(N, T)` | Boolean |
 | `comp.foundation` | `(T, D)` | Per-sample |
-| `comp.noise` | `(T, D)` | Per-sample |
 | `comp.aggregated` | `(T, D)` | Per-sample |
 | `comp.features[key]` | `(T,)` | 1D per feature |
 | `comp.feature_masks[key]` | `(T,)` | 1D per feature |

@@ -40,11 +40,11 @@ dataset = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=200, random_state=42)
     .for_class(0)
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1), role="noise")
+    .add_signal(gaussian(sigma=0.1))
     .add_feature(constant(value=-1.0), start_pct=0.4, end_pct=0.6)  # Downward shift
     .for_class(1)
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1), role="noise")
+    .add_signal(gaussian(sigma=0.1))
     .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)   # Upward shift
     .build()
 )
@@ -87,11 +87,11 @@ base_builder = (
     TimeSeriesBuilder(n_timesteps=100, n_dimensions=3)
     .for_class(0)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
+    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
     .add_feature(constant(-1.0), start_pct=0.4, end_pct=0.6, dim=[0])
     .for_class(1)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), role="noise", dim=[0, 1, 2])
+    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
     .add_feature(constant(1.0), start_pct=0.4, end_pct=0.6, dim=[0])
 )
 
@@ -114,13 +114,13 @@ my_dataset:
     - id: 0
       signals:
         - { function: random_walk, params: { step_size: 0.2 } }
-        - { function: gaussian, params: { sigma: 0.1 }, role: noise }
+        - { function: gaussian, params: { sigma: 0.1 } }
       features:
         - { function: constant, params: { value: -1.0 }, start_pct: 0.4, end_pct: 0.6 }
     - id: 1
       signals:
         - { function: random_walk, params: { step_size: 0.2 } }
-        - { function: gaussian, params: { sigma: 0.1 }, role: noise }
+        - { function: gaussian, params: { sigma: 0.1 } }
       features:
         - { function: constant, params: { value: 1.0 }, start_pct: 0.4, end_pct: 0.6 }
 ```

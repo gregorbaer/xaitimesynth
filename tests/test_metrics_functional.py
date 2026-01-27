@@ -37,9 +37,9 @@ def simple_dataset():
     return (
         TimeSeriesBuilder(n_timesteps=10, n_samples=2, random_state=42)
         .for_class(0)
-        .add_signal(constant(value=0.0), role="foundation")
+        .add_signal(constant(value=0.0))
         .for_class(1)
-        .add_signal(constant(value=0.0), role="foundation")
+        .add_signal(constant(value=0.0))
         .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.8)
         .build()
     )

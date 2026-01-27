@@ -54,13 +54,11 @@ def complex_config_dict() -> Dict:
                         {
                             "function": "random_walk",
                             "params": {"step_size": 0.1},
-                            "role": "foundation",
                             "dimensions": [0],
                         },
                         {
                             "function": "gaussian",
                             "params": {"sigma": 0.05},
-                            "role": "noise",
                         },
                     ],
                 },
@@ -71,7 +69,6 @@ def complex_config_dict() -> Dict:
                         {
                             "function": "random_walk",
                             "params": {"step_size": 0.1},
-                            "role": "foundation",
                         }
                     ],
                     "features": [
@@ -158,13 +155,11 @@ def test_create_single_builder_from_dict() -> None:
                     {
                         "function": "random_walk",
                         "params": {"step_size": 0.1},
-                        "role": "foundation",
                         "dimensions": [0],
                     },
                     {
                         "function": "gaussian",
                         "params": {"sigma": 0.05},
-                        "role": "noise",
                     },
                 ],
             },
@@ -175,7 +170,6 @@ def test_create_single_builder_from_dict() -> None:
                     {
                         "function": "random_walk",
                         "params": {"step_size": 0.1},
-                        "role": "foundation",
                     }
                 ],
                 "features": [
@@ -196,8 +190,7 @@ def test_create_single_builder_from_dict() -> None:
     assert builder.random_state == 42
     assert len(builder.class_definitions) == 2
     assert builder.class_definitions[1]["weight"] == 1.5
-    assert len(builder.class_definitions[0]["components"]["foundation"]) == 1
-    assert len(builder.class_definitions[0]["components"]["noise"]) == 1
+    assert len(builder.class_definitions[0]["components"]["foundation"]) == 2
     assert len(builder.class_definitions[1]["components"]["features"]) == 1
 
 
@@ -341,10 +334,9 @@ common: &common
   random_state: 42
   n_dimensions: 1
 
-gaussian_noise: &gaussian_noise
+gaussian_signal: &gaussian_signal
   function: gaussian
   params: { sigma: 0.5 }
-  role: foundation
 
 level_shift: &level_shift
   function: constant
@@ -359,11 +351,11 @@ datasets:
     <<: *common
     classes:
       - id: 0
-        signals: [*gaussian_noise]
+        signals: [*gaussian_signal]
         features:
           - <<: [*level_shift, *short_feature]
       - id: 1
-        signals: [*gaussian_noise]
+        signals: [*gaussian_signal]
         features:
           - <<: *level_shift
             start_pct: 0.4
@@ -391,9 +383,9 @@ def test_to_config() -> None:
     builder = (
         xts.TimeSeriesBuilder(n_timesteps=100, n_samples=50, random_state=42)
         .for_class(0)
-        .add_signal(xts.gaussian(sigma=0.1), role="noise")
+        .add_signal(xts.gaussian(sigma=0.1))
         .for_class(1)
-        .add_signal(xts.gaussian(sigma=0.1), role="noise")
+        .add_signal(xts.gaussian(sigma=0.1))
         .add_feature(xts.constant(value=1.0), start_pct=0.3, end_pct=0.6)
     )
     config = builder.to_config()
@@ -438,11 +430,11 @@ def test_to_config_round_trip() -> None:
             n_timesteps=80, n_samples=30, n_dimensions=2, random_state=123
         )
         .for_class(0)
-        .add_signal(xts.random_walk(step_size=0.1), role="foundation", dim=[0, 1])
-        .add_signal(xts.gaussian(sigma=0.05), role="noise")
+        .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1])
+        .add_signal(xts.gaussian(sigma=0.05))
         .for_class(1)
-        .add_signal(xts.random_walk(step_size=0.1), role="foundation", dim=[0, 1])
-        .add_signal(xts.gaussian(sigma=0.05), role="noise")
+        .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1])
+        .add_signal(xts.gaussian(sigma=0.05))
         .add_feature(
             xts.peak(amplitude=1.5, width=3), length_pct=0.2, random_location=True
         )

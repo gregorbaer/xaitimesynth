@@ -67,7 +67,6 @@ dataset_name:
           params: { step_size: 0.2 }
         - function: gaussian
           params: { sigma: 0.1 }
-          role: noise
       features:
         - function: constant
           params: { value: -1.0 }
@@ -113,7 +112,6 @@ Signals define the background patterns in your time series. Each signal in the `
 |-----|------|----------|-------------|
 | `function` | str | Yes | Generator name (e.g., "random_walk", "gaussian") |
 | `params` | dict | No | Parameters passed to the generator |
-| `role` | str | No | "foundation" (default) or "noise" |
 | `dimensions` | list | No | Which dimensions to apply to (null = all) |
 | `start_pct`, `end_pct` | float | No | Position (0-1) for partial coverage |
 | `length_pct` | float | No | Length as fraction for random placement |
@@ -187,7 +185,6 @@ common: &common
 gaussian_background: &gaussian_background
   function: gaussian
   params: { sigma: 1.0 }
-  role: foundation
 
 # Use anchors in dataset definitions
 dataset_a:
@@ -229,9 +226,9 @@ from xaitimesynth import TimeSeriesBuilder, gaussian, peak
 builder = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=200)
     .for_class(0)
-    .add_signal(gaussian(sigma=0.1), role="noise")
+    .add_signal(gaussian(sigma=0.1))
     .for_class(1)
-    .add_signal(gaussian(sigma=0.1), role="noise")
+    .add_signal(gaussian(sigma=0.1))
     .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.6)
 )
 

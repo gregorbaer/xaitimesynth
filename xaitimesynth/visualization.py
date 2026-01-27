@@ -161,7 +161,7 @@ def prepare_plot_data(
             - int: Single sample index (e.g., 5)
             - None: Use first sample of each class (default)
         components_to_include (Optional[List[str]]): List of components to include. If None, include all.
-            Default components: ["aggregated", "features", "foundation", "noise"].
+            Default components: ["aggregated", "features", "foundation"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
 
     Returns:
@@ -411,7 +411,6 @@ def prepare_feature_highlights(
     return rect_df
 
 
-# TODO: remove noise component from default components (since we only separate between background, aggregated, and feature now)
 def plot_components(
     dataset: Dict,
     samples: Union[int, List[int], Dict[int, int], None] = None,
@@ -433,7 +432,7 @@ def plot_components(
     """Create time series visualization with feature indicators as rectangles.
 
     This function visualizes time series data by showing its components (aggregated series,
-    foundation, features, noise) with options to highlight feature locations.
+    foundation, features) with options to highlight feature locations.
 
     Args:
         dataset (Dict): Dataset containing time series data and components.
@@ -868,7 +867,7 @@ def plot_by_class(
         sample_indices (Optional[Dict[int, int]]): Dictionary mapping class labels to sample indices.
             If None, use first sample of each class.
         components (Optional[List[str]]): List of components to include.
-            Default: ["aggregated", "features", "foundation", "noise"].
+            Default: ["aggregated", "features", "foundation"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
         show_indicators (bool): Whether to show feature indicators.
         line_color (str): Color of the time series lines.
@@ -887,7 +886,7 @@ def plot_by_class(
     dataset = _ensure_visualization_format(dataset)
 
     # Default components
-    default_components = ["aggregated", "features", "foundation", "noise"]
+    default_components = ["aggregated", "features", "foundation"]
     components_to_use = components if components is not None else default_components
 
     # Determine sample indices if not provided

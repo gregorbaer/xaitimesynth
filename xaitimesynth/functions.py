@@ -8,14 +8,12 @@ class SignalAdder:
 
     This class encapsulates the parameters needed to add a signal component
     to a time series being built using the TimeSeriesBuilder. It allows for
-    specifying the component, its role (foundation or noise), and its
-    temporal placement within the time series.
+    specifying the component and its temporal placement within the time series.
     """
 
     def __init__(
         self,
         component: Dict[str, Any],
-        role: str = "foundation",
         start_pct: Optional[float] = None,
         end_pct: Optional[float] = None,
         length_pct: Optional[float] = None,
@@ -26,7 +24,6 @@ class SignalAdder:
 
         Args:
             component (Dict[str, Any]): Component definition dictionary.
-            role (str): Role of the component (foundation, noise). Defaults to "foundation".
             start_pct (Optional[float]): Start position as percentage of time series length (0-1). Defaults to None.
             end_pct (Optional[float]): End position as percentage of time series length (0-1). Defaults to None.
             length_pct (Optional[float]): Length of feature as percentage of time series length (0-1). Defaults to None.
@@ -35,7 +32,6 @@ class SignalAdder:
                 location will be used across all dimensions. Default is True.
         """
         self.component = component
-        self.role = role
         self.start_pct = start_pct
         self.end_pct = end_pct
         self.length_pct = length_pct
@@ -56,7 +52,6 @@ class SignalAdder:
         """
         return builder.add_signal(
             self.component,
-            role=self.role,
             start_pct=self.start_pct,
             end_pct=self.end_pct,
             length_pct=self.length_pct,
@@ -119,7 +114,6 @@ class FeatureAdder:
 
 def add_signal(
     component: Dict[str, Any],
-    role: str = "foundation",
     start_pct: Optional[float] = None,
     end_pct: Optional[float] = None,
     length_pct: Optional[float] = None,
@@ -135,7 +129,6 @@ def add_signal(
 
     Args:
         component (Dict[str, Any]): Component definition dictionary.
-        role (str): Role of the component (foundation, noise). Defaults to "foundation".
         start_pct (Optional[float]): Start position as percentage of time series length (0-1). Defaults to None.
         end_pct (Optional[float]): End position as percentage of time series length (0-1). Defaults to None.
         length_pct (Optional[float]): Length of signal as percentage of time series length (0-1). Defaults to None.
@@ -148,7 +141,6 @@ def add_signal(
     """
     return SignalAdder(
         component,
-        role=role,
         start_pct=start_pct,
         end_pct=end_pct,
         length_pct=length_pct,

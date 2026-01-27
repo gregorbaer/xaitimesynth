@@ -75,19 +75,13 @@ def test_add_signal_validation() -> None:
 
     Verifies that add_signal properly validates:
     - No class selected
-    - Invalid role
     - Invalid dimension indices
     - Segment parameter constraints (random_location, start_pct, end_pct, length_pct)
     """
     # No class selected
     builder = TimeSeriesBuilder()
     with pytest.raises(ValueError, match="No class selected"):
-        builder.add_signal(random_walk(), role="foundation")
-
-    # Invalid role
-    builder = TimeSeriesBuilder().for_class(1)
-    with pytest.raises(ValueError, match="Invalid role"):
-        builder.add_signal(random_walk(), role="invalid_role")
+        builder.add_signal(random_walk())
 
     # Invalid dimension index
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
@@ -238,7 +232,6 @@ def test_custom_fill_values() -> None:
         n_samples=2,
         feature_fill_value=-999.0,
         foundation_fill_value=-1.0,
-        noise_fill_value=-2.0,
         random_state=42,
     )
 

@@ -31,7 +31,6 @@ def test_time_series_components_initialization(standard_foundation):
         "Foundation not properly stored. "
         f"Expected {standard_foundation}, got {ts_components.foundation}"
     )
-    assert ts_components.noise is None, "Noise should be None by default"
     assert ts_components.features is None, "Features should be None by default"
     assert ts_components.feature_masks is None, (
         "Feature masks should be None by default"
@@ -39,14 +38,12 @@ def test_time_series_components_initialization(standard_foundation):
     assert ts_components.aggregated is None, "Aggregated should be None by default"
 
     # Complete initialization with all components
-    noise = np.array([0.1, 0.2, 0.3])
     features = {"feature1": np.array([0.4, 0.5, 0.6])}
     feature_masks = {"feature1": np.array([True, False, True])}
-    aggregated = standard_foundation + noise + features["feature1"]
+    aggregated = standard_foundation + features["feature1"]
 
     ts_components = TimeSeriesComponents(
         foundation=standard_foundation,
-        noise=noise,
         features=features,
         feature_masks=feature_masks,
         aggregated=aggregated,
@@ -54,9 +51,6 @@ def test_time_series_components_initialization(standard_foundation):
 
     assert np.array_equal(ts_components.foundation, standard_foundation), (
         "Foundation not correctly stored with full initialization"
-    )
-    assert np.array_equal(ts_components.noise, noise), (
-        f"Noise array not correctly stored. Expected {noise}, got {ts_components.noise}"
     )
     assert "feature1" in ts_components.features, (
         "Feature key 'feature1' missing from features dictionary"
@@ -108,8 +102,6 @@ def test_shape_validation(standard_foundation, multidim_foundation):
     # Test cases with standard 1D arrays
     def test_with_foundation(foundation):
         # Test with correct shapes first
-        correct_noise = np.ones_like(foundation)
-
         # For features, only the time dimension (first dimension) needs to match
         # So if foundation is 2D with shape (3, 2), features can be 1D with length 3
         time_length = foundation.shape[0]
@@ -121,7 +113,6 @@ def test_shape_validation(standard_foundation, multidim_foundation):
         # This should not raise any errors
         ts = TimeSeriesComponents(
             foundation=foundation,
-            noise=correct_noise,
             features=features_time_match,  # Only time dimension needs to match
             feature_masks=correct_masks,  # Only time dimension needs to match
             aggregated=correct_aggregated,  # Exact shape match required
@@ -130,9 +121,6 @@ def test_shape_validation(standard_foundation, multidim_foundation):
         # Verify all components were stored correctly
         assert np.array_equal(ts.foundation, foundation), (
             "Foundation not correctly stored in shape validation test"
-        )
-        assert np.array_equal(ts.noise, correct_noise), (
-            "Noise with correct shape not properly stored"
         )
         assert np.array_equal(
             ts.features["feature1"], features_time_match["feature1"]
@@ -158,13 +146,6 @@ def test_shape_validation(standard_foundation, multidim_foundation):
 
         # Test each component type with wrong dimensions
         component_types = [
-            (
-                "noise",
-                lambda: TimeSeriesComponents(
-                    foundation=foundation, noise=wrong_time_dim
-                ),
-                "first dimension",
-            ),
             (
                 "feature",
                 lambda: TimeSeriesComponents(

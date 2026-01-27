@@ -471,7 +471,7 @@ dataset = (
     TimeSeriesBuilder(n_timesteps=200, n_samples=100)
     .for_class(0)
     .add_signal(sine_wave(frequency=0.05, amplitude=1.5))
-    .add_signal(gaussian(sigma=0.1), role="noise")
+    .add_signal(gaussian(sigma=0.1))
     .build()
 )
 

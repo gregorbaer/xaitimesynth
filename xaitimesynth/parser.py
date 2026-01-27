@@ -37,7 +37,6 @@ def _create_single_builder_from_dict(
         "normalization_kwargs": dataset_config.get("normalization_kwargs", {}),
         "feature_fill_value": dataset_config.get("feature_fill_value", np.nan),
         "foundation_fill_value": dataset_config.get("foundation_fill_value", 0.0),
-        "noise_fill_value": dataset_config.get("noise_fill_value", np.nan),
         "data_format": dataset_config.get("data_format", "channels_first"),
     }
     builder = xaitimesynth.TimeSeriesBuilder(**builder_args)
@@ -71,7 +70,6 @@ def _create_single_builder_from_dict(
             component = func(**params)  # Create the component definition dict
 
             # Extract common and segment-specific arguments
-            role = signal_config.get("role", "foundation")
             dim = signal_config.get("dimensions")  # None if not present or null
 
             # Default shared_randomness based on whether dimensions are specified.
@@ -92,7 +90,6 @@ def _create_single_builder_from_dict(
             # add_signal() handles both full-series and segment modes
             builder.add_signal(
                 component,
-                role=role,
                 dim=dim,
                 shared_randomness=shared_randomness,
                 start_pct=start_pct,
@@ -195,7 +192,6 @@ def load_builders_from_config(
             - `signals` (list, optional): List of signal component dictionaries.
                 - `function` (str, mandatory): Name of a signal generator function (e.g., "random_walk").
                 - `params` (dict, optional): Parameters for the generator function.
-                - `role` (str, optional): "foundation" or "noise".
                 - `dimensions` (list, optional): Dimensions to apply to.
                 - `shared_randomness` (bool, optional).
                 - Location keys (optional): `start_pct`, `end_pct`, `length_pct`, `random_location`, `shared_location`.
@@ -221,19 +217,17 @@ def load_builders_from_config(
               signals:
                 - function: random_walk
                   params: { step_size: 0.1 }
-                  role: foundation
                   dimensions: [0, 1] # Apply to both dimensions
                 - function: gaussian
                   params: { sigma: 0.05 }
-                  role: noise
                   # dimensions omitted -> applies to all
               features: [] # No specific features for class 0
 
             - id: 1 # Class 1 definition
               weight: 1.5 # Sample class 1 more often
               signals:
-                - { function: random_walk, params: { step_size: 0.1 }, role: foundation, dimensions: [0, 1] }
-                - { function: gaussian, params: { sigma: 0.05 }, role: noise }
+                - { function: random_walk, params: { step_size: 0.1 }, dimensions: [0, 1] }
+                - { function: gaussian, params: { sigma: 0.05 } }
               features:
                 - function: peak
                   params: { amplitude: 1.5, width: 3 }
@@ -277,7 +271,6 @@ def load_builders_from_config(
           function: random_walk
           params:
             step_size: 0.1
-          role: foundation
 
         # Use aliases (*) to reference the anchors
         dataset_a:
@@ -287,8 +280,6 @@ def load_builders_from_config(
             - id: 0
               signals:
                 - <<: *base_signal  # Use the common signal definition
-                  # Can override specific values
-                  role: noise
 
         dataset_b:
           <<: *common_settings
