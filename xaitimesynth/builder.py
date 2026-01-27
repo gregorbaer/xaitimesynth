@@ -178,7 +178,6 @@ class TimeSeriesBuilder:
                     f"Valid dimensions are 0 to {self.n_dimensions - 1}."
                 )
 
-    # Future: add random time shift parameter for multivariate jitter between channels
     def add_signal(
         self,
         component: Dict[str, Any],
@@ -317,7 +316,6 @@ class TimeSeriesBuilder:
 
         return self
 
-    # Future: add random time shift parameter for multivariate jitter between channels
     def add_feature(
         self,
         component: Dict[str, Any],
