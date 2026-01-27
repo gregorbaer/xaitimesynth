@@ -3,11 +3,6 @@ XAITimeSynth - A package for generating synthetic time series with ground truth 
 
 This package provides a fluent, composable API for creating time series datasets
 with precise control over signal components, noise, and discriminative features.
-
-Example usage:
-    ```python
-    TODO: Add example usage here once API is stable.
-    ```
 """
 
 from .builder import TimeSeriesBuilder

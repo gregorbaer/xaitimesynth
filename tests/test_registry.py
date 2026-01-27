@@ -1,7 +1,3 @@
-# TODO: check tests again whether...
-# - they could be consolidated, and
-# - whether all tests do what they should
-
 import sys
 
 import numpy as np
@@ -441,8 +437,8 @@ def test_all_registered_components_have_generators():
     other tests) to verify the real components are properly configured.
     """
     # Import the actual registries from the package
-    from xaitimesynth.registry import _COMPONENT_REGISTRY
     from xaitimesynth.generators import GENERATOR_FUNCS
+    from xaitimesynth.registry import _COMPONENT_REGISTRY
 
     # Get all registered component names
     registered_components = set(_COMPONENT_REGISTRY.keys())

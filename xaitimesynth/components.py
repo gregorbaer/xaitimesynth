@@ -242,9 +242,6 @@ def trend(
     return {"type": "trend", "slope": slope, "endpoints": endpoints, **kwargs}
 
 
-# TODO: combine peak and trough into one?
-# also, maybe use "value" instead of "amplitude" for consistency?
-# also, maybe we can use "constant" signal function for peak/trough, to avoid code duplication?
 def peak(amplitude: float = 1.0, width: int = 3, **kwargs) -> Dict[str, Any]:
     """Create a definition for a peak feature component.
 

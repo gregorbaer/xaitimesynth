@@ -38,11 +38,6 @@ class TimeSeriesBuilder:
     - Training/test splits with consistent class distributions
     - Built-in visualization and conversion utilities
 
-    Example usage (univariate):
-        ```python
-        TODO: Add example usage here once API is stable.
-        ```
-
     Advanced usage:
     - Components can be configured with various parameters
     - Features can be positioned at fixed or random locations
@@ -183,7 +178,7 @@ class TimeSeriesBuilder:
                     f"Valid dimensions are 0 to {self.n_dimensions - 1}."
                 )
 
-    # TODO: add random time shift parameter over multiple channels
+    # Future: add random time shift parameter for multivariate jitter between channels
     def add_signal(
         self,
         component: Dict[str, Any],
@@ -322,7 +317,7 @@ class TimeSeriesBuilder:
 
         return self
 
-    # TODO: add random time shift parameter over multiple channels
+    # Future: add random time shift parameter for multivariate jitter between channels
     def add_feature(
         self,
         component: Dict[str, Any],
@@ -903,7 +898,6 @@ class TimeSeriesBuilder:
                     )
 
                 # Normalize if required (apply to each dimension separately)
-                # #TODO: check whether normalisation works as intended
                 for dim_idx in range(self.n_dimensions):
                     aggregated[:, dim_idx] = normalize(
                         aggregated[:, dim_idx],
