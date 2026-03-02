@@ -169,9 +169,82 @@ def test_add_feature_validation() -> None:
     with pytest.raises(ValueError, match="length_pct must be provided"):
         builder.add_feature(constant(), random_location=True)
 
-    # Invalid length_pct range
+    # Invalid length_pct range (scalar)
     with pytest.raises(ValueError, match="length_pct must be between 0 and 1"):
         builder.add_feature(constant(), random_location=True, length_pct=1.5)
+
+    # Tuple: wrong order
+    with pytest.raises(ValueError, match="length_pct tuple must be"):
+        builder.add_feature(constant(), random_location=True, length_pct=(0.75, 0.25))
+
+    # Tuple: lower bound is 0 (must be strictly positive)
+    with pytest.raises(ValueError, match="length_pct tuple must be"):
+        builder.add_feature(constant(), random_location=True, length_pct=(0.0, 0.5))
+
+    # Tuple: wrong number of elements
+    with pytest.raises(ValueError, match="length_pct tuple must be"):
+        builder.add_feature(
+            constant(), random_location=True, length_pct=(0.1, 0.3, 0.6)
+        )
+
+    # List: empty
+    with pytest.raises(ValueError, match="length_pct list must be non-empty"):
+        builder.add_feature(constant(), random_location=True, length_pct=[])
+
+    # List: contains a zero (out of bounds)
+    with pytest.raises(ValueError, match="length_pct list must be non-empty"):
+        builder.add_feature(constant(), random_location=True, length_pct=[0.0, 0.5])
+
+
+def test_add_feature_stochastic_length() -> None:
+    """Test stochastic length_pct: uniform range (tuple) and discrete choices (list).
+
+    Verifies that:
+    - tuple produces variation within declared bounds
+    - list produces only the declared discrete lengths, both values sampled
+    - same random_state gives identical masks (reproducibility)
+    """
+    n_timesteps, n_samples = 100, 50
+
+    def build(length_pct):
+        return (
+            TimeSeriesBuilder(
+                n_timesteps=n_timesteps, n_samples=n_samples, random_state=42
+            )
+            .for_class(0)
+            .add_signal(constant())
+            .for_class(1)
+            .add_signal(constant())
+            .add_feature(
+                constant(value=1.0), random_location=True, length_pct=length_pct
+            )
+            .build()
+        )
+
+    # --- Uniform range (tuple) ---
+    lo, hi = 0.25, 0.75
+    ds = build((lo, hi))
+    key = list(ds["feature_masks"].keys())[0]
+    lengths = ds["feature_masks"][key].sum(axis=1)[ds["y"] == 1]
+    assert len(set(lengths.tolist())) > 1, "Tuple range must produce length variation"
+    assert all(
+        int(lo * n_timesteps) <= length <= int(hi * n_timesteps) for length in lengths
+    )
+
+    # --- Discrete choices (list) ---
+    choices = [0.25, 0.5]
+    expected = {int(c * n_timesteps) for c in choices}
+    ds2 = build(choices)
+    key2 = list(ds2["feature_masks"].keys())[0]
+    found = set(ds2["feature_masks"][key2].sum(axis=1)[ds2["y"] == 1].tolist())
+    assert found <= expected, f"Unexpected lengths: {found - expected}"
+    assert len(found) == 2, "Both discrete choices must appear"
+
+    # --- Reproducibility ---
+    ds_rep = build((lo, hi))
+    np.testing.assert_array_equal(
+        ds["feature_masks"][key], ds_rep["feature_masks"][key]
+    )
 
 
 def test_build_no_classes() -> None:

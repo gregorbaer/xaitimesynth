@@ -120,6 +120,9 @@ def _create_single_builder_from_dict(
             start_pct = feature_config.get("start_pct")
             end_pct = feature_config.get("end_pct")
             length_pct = feature_config.get("length_pct")
+            # YAML has no tuple type; support {range: [min, max]} for uniform ranges
+            if isinstance(length_pct, dict) and "range" in length_pct:
+                length_pct = tuple(length_pct["range"])
             random_location = feature_config.get("random_location", False)
             dim = feature_config.get("dimensions")  # None if not present or null
             shared_location = feature_config.get("shared_location", True)
@@ -194,11 +197,15 @@ def load_builders_from_config(
                 - `params` (dict, optional): Parameters for the generator function.
                 - `dimensions` (list, optional): Dimensions to apply to.
                 - `shared_randomness` (bool, optional).
-                - Location keys (optional): `start_pct`, `end_pct`, `length_pct`, `random_location`, `shared_location`.
+                - Location keys (optional): `start_pct`, `end_pct`, `length_pct` (float only),
+                  `random_location`, `shared_location`. Note: `length_pct` for signals only
+                  accepts a scalar float; stochastic forms (tuple/list/range) are not supported.
             - `features` (list, optional): List of feature component dictionaries.
                 - `function` (str, mandatory): Name of a feature generator function (e.g., "peak").
                 - `params` (dict, optional): Parameters for the generator function.
-                - Location keys (optional): `start_pct`, `end_pct`, `length_pct`, `random_location`, `shared_location`.
+                - Location keys (optional): `start_pct`, `end_pct`, `length_pct`, `random_location`,
+                  `shared_location`. `length_pct` accepts a scalar float, a list of floats
+                  (discrete choices), or ``{range: [min, max]}`` for uniform per-sample sampling.
                 - `dimensions` (list, optional): Dimensions to apply to.
                 - `shared_randomness` (bool, optional).
 

@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -310,7 +310,7 @@ class TimeSeriesBuilder:
         component: Dict[str, Any],
         start_pct: Optional[float] = None,
         end_pct: Optional[float] = None,
-        length_pct: Optional[float] = None,
+        length_pct: Optional[Union[float, Tuple[float, float], List[float]]] = None,
         random_location: bool = False,
         dim: Optional[List[int]] = None,
         shared_location: bool = True,
@@ -327,8 +327,11 @@ class TimeSeriesBuilder:
                 Required when random_location is False.
             end_pct (float, optional): End position as percentage of time series length (0-1).
                 Required when random_location is False.
-            length_pct (float, optional): Length of feature as percentage of time series length (0-1).
-                Required when random_location is True.
+            length_pct (float | tuple | list, optional): Length of feature as percentage of time
+                series length. Required when random_location is True. Three forms accepted:
+                - float: fixed length, e.g. ``0.5``
+                - tuple (min, max): sample uniformly per sample in range, e.g. ``(0.25, 0.75)``
+                - list of floats: sample from discrete choices per sample, e.g. ``[0.25, 0.5]``
             random_location (bool): Whether to place the feature at a random location.
                 Default is False (fixed position).
             dim (List[int]): List of dimension indices where this feature should be applied.
@@ -362,8 +365,19 @@ class TimeSeriesBuilder:
                 raise ValueError(
                     "length_pct must be provided when random_location is True"
                 )
-            if not (0 < length_pct <= 1):
-                raise ValueError("length_pct must be between 0 and 1")
+            if isinstance(length_pct, tuple):
+                if len(length_pct) != 2 or not (0 < length_pct[0] < length_pct[1] <= 1):
+                    raise ValueError(
+                        "length_pct tuple must be (min, max) with 0 < min < max <= 1"
+                    )
+            elif isinstance(length_pct, list):
+                if not length_pct or not all(0 < v <= 1 for v in length_pct):
+                    raise ValueError(
+                        "length_pct list must be non-empty with all values in (0, 1]"
+                    )
+            else:
+                if not (0 < length_pct <= 1):
+                    raise ValueError("length_pct must be between 0 and 1")
 
             feature_def["random_location"] = True
             feature_def["length_pct"] = length_pct
@@ -432,6 +446,27 @@ class TimeSeriesBuilder:
             component_type, self.n_timesteps, self.rng, **component_params
         )
 
+    def _resolve_length_pct(
+        self,
+        raw: Union[float, Tuple[float, float], List[float]],
+        rng: np.random.RandomState,
+    ) -> float:
+        """Resolve a length_pct specification to a concrete float for one sample.
+
+        Args:
+            raw: Either a fixed float, a (min, max) tuple for uniform sampling, or a list
+                of floats for discrete choice sampling.
+            rng: Random number generator used for sampling.
+
+        Returns:
+            float: Resolved length as a fraction of the series length.
+        """
+        if isinstance(raw, tuple):
+            return rng.uniform(raw[0], raw[1])
+        elif isinstance(raw, list):
+            return raw[rng.randint(0, len(raw))]
+        return raw
+
     def _generate_feature_vector(
         self,
         feature_def: Dict[str, Any],
@@ -466,7 +501,9 @@ class TimeSeriesBuilder:
                 # Use the cached shared location
                 start_idx, end_idx = shared_location_cache
             else:
-                length_pct = feature_def["length_pct"]
+                length_pct = self._resolve_length_pct(
+                    feature_def["length_pct"], self.rng
+                )
                 feature_length = max(1, int(length_pct * self.n_timesteps))
 
                 # Generate random start position
@@ -728,7 +765,9 @@ class TimeSeriesBuilder:
                         "shared_location", True
                     ):
                         # Pre-calculate the shared location to ensure it's the same across dimensions
-                        length_pct = feature_def["length_pct"]
+                        length_pct = self._resolve_length_pct(
+                            feature_def["length_pct"], self.rng
+                        )
                         feature_length = max(1, int(length_pct * self.n_timesteps))
                         max_start = self.n_timesteps - feature_length
                         shared_start_idx = self.rng.randint(0, max_start + 1)
@@ -1378,7 +1417,11 @@ class TimeSeriesBuilder:
             if comp.get("random_location"):
                 result["random_location"] = True
                 if "length_pct" in comp:
-                    result["length_pct"] = comp["length_pct"]
+                    lp = comp["length_pct"]
+                    # Serialize tuples as {range: [min, max]} for YAML roundtrip fidelity
+                    result["length_pct"] = (
+                        {"range": list(lp)} if isinstance(lp, tuple) else lp
+                    )
             elif "start_pct" in comp or "end_pct" in comp:
                 if "start_pct" in comp:
                     result["start_pct"] = comp["start_pct"]

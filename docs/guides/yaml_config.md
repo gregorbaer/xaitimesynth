@@ -114,7 +114,7 @@ Signals define the background patterns in your time series. Each signal in the `
 | `params` | dict | No | Parameters passed to the generator |
 | `dimensions` | list | No | Which dimensions to apply to (null = all) |
 | `start_pct`, `end_pct` | float | No | Position (0-1) for partial coverage |
-| `length_pct` | float | No | Length as fraction for random placement |
+| `length_pct` | float | No | Length as fraction for random placement (scalar only; stochastic forms not supported for signals) |
 | `random_location` | bool | No | Place at random position each sample |
 
 ### Feature Configuration
@@ -126,11 +126,55 @@ Features are the class-discriminating patterns. Each feature in the `features` l
 | `function` | str | Yes | Generator name (e.g., "peak", "constant") |
 | `params` | dict | No | Parameters passed to the generator |
 | `start_pct`, `end_pct` | float | No* | Fixed position (0-1) |
-| `length_pct` | float | No* | Length for random placement |
+| `length_pct` | see below | No* | Length for random placement |
 | `random_location` | bool | No | Place randomly (requires `length_pct`) |
 | `dimensions` | list | No | Which dimensions to apply to |
 
 *You must specify either `start_pct`/`end_pct` for fixed position, or `length_pct` with `random_location: true`.
+
+#### Stochastic feature lengths with `length_pct`
+
+`length_pct` controls the feature window size. It accepts three forms, both in Python and YAML:
+
+| Form | Python API | YAML syntax | Effect |
+|------|-----------|-------------|--------|
+| Fixed | `length_pct=0.5` | `length_pct: 0.5` | Same length every sample |
+| Discrete choices | `length_pct=[0.25, 0.5]` | `length_pct: [0.25, 0.5]` | Randomly pick one value per sample |
+| Uniform range | `length_pct=(0.25, 0.75)` | `length_pct: {range: [0.25, 0.75]}` | Sample uniformly per sample |
+
+> **YAML note:** YAML has no tuple type, so a plain list like `[0.25, 0.75]` is always treated as **discrete choices**, not a range. Use the `{range: [...]}` dict form to express a uniform range in YAML.
+
+```yaml
+features:
+  # Fixed length — always 30% of the series
+  - function: peak
+    params: { amplitude: 1.5 }
+    random_location: true
+    length_pct: 0.3
+
+  # Discrete choices — randomly pick 25% or 50% per sample
+  - function: constant
+    params: { value: 1.0 }
+    random_location: true
+    length_pct: [0.25, 0.5]
+
+  # Uniform range — sample any length between 25% and 75% per sample
+  - function: trend
+    params: { slope: 0.05 }
+    random_location: true
+    length_pct: {range: [0.25, 0.75]}
+```
+
+The Python API uses a tuple for ranges:
+
+```python
+# Python equivalents of the three YAML forms above
+.add_feature(peak(amplitude=1.5),   random_location=True, length_pct=0.3)
+.add_feature(constant(value=1.0),   random_location=True, length_pct=[0.25, 0.5])
+.add_feature(trend(slope=0.05),     random_location=True, length_pct=(0.25, 0.75))
+```
+
+`to_config()` serializes tuples as `{range: [...]}` so configurations round-trip faithfully through YAML.
 
 ### Available Functions
 
