@@ -1,0 +1,69 @@
+site_name: XAITimeSynth
+site_description: A Python package for generating synthetic time series with ground truth for XAI evaluation
+site_url: https://github.com/your-username/xaitimesynth # Update with your actual URL
+repo_url: https://github.com/your-username/xaitimesynth # Update with your actual URL
+repo_name: xaitimesynth
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 2
+            members_order: source
+            show_signature_annotations: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - pymdownx.details
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Overview: guides/overview.md
+      - Usage: guides/usage.md
+      - Data Structure: guides/data_structure.md
+      - YAML Configuration: guides/yaml_config.md
+      - Metrics: guides/metrics.md
+      - Adding Data Generators: guides/adding_generators.md
+  - API Reference:
+      - Builder: api/builder.md
+      - Components: api/components.md
+      - Visualization: api/visualization.md
+      - Metrics: api/metrics.md
+      - Registry: api/registry.md
+  - Contributing:
+      - Commit Guidelines: contributing/commit-guidelines.md
+      - Documentation: contributing/documentation.md

@@ -17,3 +17,7 @@ data/01_raw/Univariate2018_ts
 data/03_models/
 data/imgs/ucr_dataset_plots
 data/04_benchmark
+
+
+/scripts/
+/site/
