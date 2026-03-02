@@ -21,6 +21,7 @@ from .components import (
     uniform,
 )
 from .data_structures import TimeSeriesComponents
+from .datasets import generate_cylinder_bell_funnel
 from .functions import normalize
 from .parser import load_builders_from_config
 from .registry import (
@@ -41,6 +42,7 @@ from .visualization import (
 __all__ = [
     # Classes and Functions
     "TimeSeriesBuilder",
+    "generate_cylinder_bell_funnel",
     "load_builders_from_config",
     "TimeSeriesComponents",
     "normalize",

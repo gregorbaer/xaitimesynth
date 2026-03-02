@@ -5,16 +5,17 @@ This guide provides a detailed walkthrough of the xaitimesynth API with examples
 ## Table of Contents
 
 1. [Basic Usage](#basic-usage)
-2. [Builder Parameters](#builder-parameters)
-3. [Discovering Available Components](#discovering-available-components)
-4. [Adding Signals](#adding-signals)
-5. [Adding Features](#adding-features)
-6. [Positioning Features and Signals](#positioning-features-and-signals)
-7. [Multivariate Time Series](#multivariate-time-series)
-8. [Creating Data Splits](#creating-data-splits)
-9. [YAML Configuration](#yaml-configuration)
-10. [Custom Components](#custom-components)
-11. [Accessing Component Data](#accessing-component-data)
+2. [Pre-built Datasets](#pre-built-datasets)
+3. [Builder Parameters](#builder-parameters)
+4. [Discovering Available Components](#discovering-available-components)
+5. [Adding Signals](#adding-signals)
+6. [Adding Features](#adding-features)
+7. [Positioning Features and Signals](#positioning-features-and-signals)
+8. [Multivariate Time Series](#multivariate-time-series)
+9. [Creating Data Splits](#creating-data-splits)
+10. [YAML Configuration](#yaml-configuration)
+11. [Custom Components](#custom-components)
+12. [Accessing Component Data](#accessing-component-data)
 
 ## Basic Usage
 
@@ -40,6 +41,70 @@ y = dataset["y"]              # (200,) - class labels
 masks = dataset["feature_masks"]  # (200, 1, 100) - ground truth locations
 components = dataset["components"]  # List of TimeSeriesComponents objects
 ```
+
+## Pre-built Datasets
+
+For well-known benchmarks, xaitimesynth provides ready-made convenience functions that produce ground-truth feature masks alongside the data — no manual builder setup required.
+
+### Cylinder-Bell-Funnel (CBF)
+
+The classic CBF benchmark (Saito, 2000) is a three-class synthetic dataset where each class is defined by a differently shaped pattern placed inside a random window on top of Gaussian noise:
+
+| Class | Label | Pattern in window `[a, b]` |
+|-------|-------|---------------------------|
+| Cylinder | 0 | Constant plateau of amplitude `(6 + η)` |
+| Bell | 1 | Linearly increasing ramp `0 → (6 + η)` |
+| Funnel | 2 | Linearly decreasing ramp `(6 + η) → 0` |
+
+The amplitude noise `η ~ N(0, 1)` is drawn fresh for every sample; the background outside the window is `ε(t) ~ N(0, 1)`.
+
+```python
+from xaitimesynth import generate_cylinder_bell_funnel
+
+dataset = generate_cylinder_bell_funnel(n_samples=300, random_state=42)
+
+X = dataset["X"]              # (300, 1, 128)  channels-first
+y = dataset["y"]              # (300,)  labels: 0=Cylinder, 1=Bell, 2=Funnel
+masks = dataset["feature_masks"]  # dict  name → bool array (300, 128)
+```
+
+**Function signature:**
+
+```python
+generate_cylinder_bell_funnel(
+    n_samples: int = 300,
+    n_timesteps: int = 128,
+    weights: list[float] | None = None,  # per-class sampling weights; balanced if None
+    random_state: int | None = None,
+    normalization: str = "none",         # "none" | "zscore" | "minmax"
+    data_format: str = "channels_first", # "channels_first" | "channels_last"
+) -> dict
+```
+
+#### Differences from the original CBF formulation
+
+The original Saito (2000) formulation constrains the window start:
+
+```
+a ~ Uniform[16, 32]     # window never starts before timestep 16
+b = a + Uniform[32, 96] # window length uniform in [32, 96]
+```
+
+xaitimesynth's implementation differs in two intentional ways:
+
+| Property | Original (Saito) | xaitimesynth |
+|----------|-------------------------|--------------|
+| Window start | `a ~ Uniform[16, 32]` — never at the very beginning | Fully random; window can start at timestep 0 |
+| Window length | `b - a ~ Uniform[32, 96]` (faithful) | `length ~ Uniform[32, 96]` — same distribution |
+| Output format | `X` shape `(n_samples, 128)` — 2-D array | `X` shape `(n_samples, 1, 128)` — channels-first 3-D tensor |
+| Ground truth | Not provided | `feature_masks` boolean arrays included |
+
+The length distribution is identical; only the start-position constraint is relaxed.  For XAI benchmarking the ground-truth mask is what matters, so this wider start distribution is intentional — it creates harder cases where discriminative windows can appear at the edges of the series.
+
+**Reference:**
+
+> Saito, N. (2000). Local feature extraction and its applications using a library of bases.
+> *Topics in Analysis and Its Applications: Selected Theses*, 269–451. World Scientific.
 
 ## Builder Parameters
 
