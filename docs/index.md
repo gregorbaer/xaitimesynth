@@ -45,12 +45,3 @@ If you use xaitimesynth in your work, please consider citing the following paper
 ```
 TODO: Add reference
 ```
-
-
-## Where to Go Next
-
-1. **[Usage Guide](guides/usage.md)** — Full API: signals, features, positioning, multivariate, splits
-2. **[Metrics Guide](guides/metrics.md)** — Evaluate XAI attributions against ground truth
-3. **[Data Structure Reference](guides/data_structure.md)** — Output shapes, keys, and access patterns
-4. **[YAML Configuration](guides/yaml_config.md)** — Define datasets in config files
-5. **[Adding Generators](guides/adding_generators.md)** — Create custom signal and feature components

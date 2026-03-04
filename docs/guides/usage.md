@@ -4,81 +4,16 @@ This guide provides a detailed walkthrough of the xaitimesynth API. For a quick 
 
 ## Table of Contents
 
-1. [Pre-built Datasets](#pre-built-datasets)
-2. [Builder Parameters](#builder-parameters)
-3. [Discovering Available Components](#discovering-available-components)
-4. [Adding Signals](#adding-signals)
-5. [Adding Features](#adding-features)
-6. [Positioning Features and Signals](#positioning-features-and-signals)
-7. [Multivariate Time Series](#multivariate-time-series)
-8. [Creating Data Splits](#creating-data-splits)
-9. [YAML Configuration](#yaml-configuration)
-10. [Custom Components](#custom-components)
-11. [Accessing Component Data](#accessing-component-data)
-
-## Pre-built Datasets
-
-For well-known benchmarks, xaitimesynth provides ready-made convenience functions that produce ground-truth feature masks alongside the data — no manual builder setup required.
-
-### Cylinder-Bell-Funnel (CBF)
-
-The classic CBF benchmark (Saito, 2000) is a three-class synthetic dataset where each class is defined by a differently shaped pattern placed inside a random window on top of Gaussian noise:
-
-| Class | Label | Pattern in window `[a, b]` |
-|-------|-------|---------------------------|
-| Cylinder | 0 | Constant plateau of amplitude `(6 + η)` |
-| Bell | 1 | Linearly increasing ramp `0 → (6 + η)` |
-| Funnel | 2 | Linearly decreasing ramp `(6 + η) → 0` |
-
-The amplitude noise `η ~ N(0, 1)` is drawn fresh for every sample; the background outside the window is `ε(t) ~ N(0, 1)`.
-
-```python
-from xaitimesynth import generate_cylinder_bell_funnel
-
-dataset = generate_cylinder_bell_funnel(n_samples=300, random_state=42)
-
-X = dataset["X"]              # (300, 1, 128)  channels-first
-y = dataset["y"]              # (300,)  labels: 0=Cylinder, 1=Bell, 2=Funnel
-masks = dataset["feature_masks"]  # dict  name → bool array (300, 128)
-```
-
-**Function signature:**
-
-```python
-generate_cylinder_bell_funnel(
-    n_samples: int = 300,
-    n_timesteps: int = 128,
-    weights: list[float] | None = None,  # per-class sampling weights; balanced if None
-    random_state: int | None = None,
-    normalization: str = "none",         # "none" | "zscore" | "minmax"
-    data_format: str = "channels_first", # "channels_first" | "channels_last"
-) -> dict
-```
-
-#### Differences from the original CBF formulation
-
-The original Saito (2000) formulation constrains the window start:
-
-```
-a ~ Uniform[16, 32]     # window never starts before timestep 16
-b = a + Uniform[32, 96] # window length uniform in [32, 96]
-```
-
-xaitimesynth's implementation differs in two intentional ways:
-
-| Property | Original (Saito) | xaitimesynth |
-|----------|-------------------------|--------------|
-| Window start | `a ~ Uniform[16, 32]` — never at the very beginning | Fully random; window can start at timestep 0 |
-| Window length | `b - a ~ Uniform[32, 96]` (faithful) | `length ~ Uniform[32, 96]` — same distribution |
-| Output format | `X` shape `(n_samples, 128)` — 2-D array | `X` shape `(n_samples, 1, 128)` — channels-first 3-D tensor |
-| Ground truth | Not provided | `feature_masks` boolean arrays included |
-
-The length distribution is identical; only the start-position constraint is relaxed.  For XAI benchmarking the ground-truth mask is what matters, so this wider start distribution is intentional — it creates harder cases where discriminative windows can appear at the edges of the series.
-
-**Reference:**
-
-> Saito, N. (2000). Local feature extraction and its applications using a library of bases.
-> *Topics in Analysis and Its Applications: Selected Theses*, 269–451. World Scientific.
+1. [Builder Parameters](#builder-parameters)
+2. [Discovering Available Components](#discovering-available-components)
+3. [Adding Signals](#adding-signals)
+4. [Adding Features](#adding-features)
+5. [Positioning Features and Signals](#positioning-features-and-signals)
+6. [Multivariate Time Series](#multivariate-time-series)
+7. [Creating Data Splits](#creating-data-splits)
+8. [YAML Configuration](#yaml-configuration)
+9. [Custom Components](#custom-components)
+10. [Accessing Component Data](#accessing-component-data)
 
 ## Builder Parameters
 
@@ -96,24 +31,6 @@ The length distribution is identical; only the start-position constraint is rela
 | `feature_fill_value` | np.nan | Fill value for feature component outside feature window |
 | `background_fill_value` | 0.0 | Fill value for background component |
 
-### Normalization Options
-
-```python
-# Z-score normalization (default): mean=0, std=1
-builder = TimeSeriesBuilder(normalization="zscore")
-
-# Min-max normalization to [0, 1]
-builder = TimeSeriesBuilder(normalization="minmax")
-
-# Min-max to custom range
-builder = TimeSeriesBuilder(
-    normalization="minmax",
-    normalization_kwargs={"feature_range": (-1, 1)}
-)
-
-# No normalization
-builder = TimeSeriesBuilder(normalization="none")
-```
 
 ### Data Format
 
@@ -129,7 +46,7 @@ print(dataset["X"].shape)  # (n_samples, n_timesteps, 3)
 
 ## Discovering Available Components
 
-xaitimesynth provides functions to discover available signal and feature components programmatically:
+xaitimesynth provides functions to discover available signal and feature components programmatically. Each function returns a dictionary mapping component names to their definition functions:
 
 ```python
 from xaitimesynth import list_components, list_signal_components, list_feature_components
@@ -150,18 +67,10 @@ print(features.keys())
 # dict_keys(['constant', 'peak', 'trough', 'gaussian_pulse', 'trend', ...])
 ```
 
-Each function returns a dictionary mapping component names to their definition functions. To see the available parameters for any component, use Python's help:
-
-```python
-from xaitimesynth import peak, random_walk
-
-help(peak)        # Shows parameters: amplitude, width
-help(random_walk) # Shows parameters: step_size
-```
 
 ## Adding Signals
 
-Signals are full-length background patterns. Use `add_signal()` to add them.
+Signals are full-length background patterns. They are used for the general shape of the time series. Use `add_signal()` to add them. All signals are combined additively into the background component.
 
 ```python
 from xaitimesynth import TimeSeriesBuilder, random_walk, gaussian_noise, seasonal, trend, red_noise
@@ -176,7 +85,6 @@ builder = (
 )
 ```
 
-All signals are combined additively into the background component.
 
 ## Adding Features
 
@@ -205,9 +113,6 @@ Use `start_pct` and `end_pct` together to place a component at a fixed location:
 ```python
 # Feature from 30% to 50% of the time series (20% of total length)
 builder.add_feature(constant(value=1.0), start_pct=0.3, end_pct=0.5)
-
-# Another feature from 60% to 80%
-builder.add_feature(constant(value=-1.0), start_pct=0.6, end_pct=0.8)
 ```
 
 ### Random Position
@@ -233,59 +138,8 @@ builder.add_signal(gaussian_noise(sigma=2.0), length_pct=0.2, random_location=Tr
 
 ## Multivariate Time Series
 
-For multi-channel data, specify `n_dimensions` and use the `dim` parameter.
-
-```python
-builder = (
-    TimeSeriesBuilder(n_timesteps=100, n_samples=50, n_dimensions=3)
-    .for_class(0)
-    # Apply to all dimensions
-    .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
-    .for_class(1)
-    .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
-    # Feature only in dimensions 0 and 1
-    .add_feature(
-        constant(value=1.0),
-        dim=[0, 1],
-        length_pct=0.15,
-        random_location=True,
-        shared_location=True,  # Same position in both dimensions
-    )
-    # Feature in dimension 2 only
-    .add_feature(
-        peak(amplitude=2.0, width=5),
-        dim=[2],
-        start_pct=0.4,
-        end_pct=0.6,
-    )
-)
-```
-
-### Shared Location vs Independent Location
-
-When using `random_location=True` with multiple dimensions:
-
-```python
-# shared_location=True (default): Feature appears at same position in all specified dims
-builder.add_feature(peak(), dim=[0, 1], random_location=True, shared_location=True)
-
-# shared_location=False: Feature appears at different random positions in each dim
-builder.add_feature(peak(), dim=[0, 1], random_location=True, shared_location=False)
-```
-
-### Shared Randomness
-
-For stochastic components, `shared_randomness` controls whether the same random values are used across dimensions:
-
-```python
-# shared_randomness=True: Same noise pattern in all dimensions
-builder.add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2], shared_randomness=True)
-
-# shared_randomness=False (default): Independent noise in each dimension
-builder.add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2], shared_randomness=False)
-```
+See the [Multivariate Time Series example notebook](../examples/multivariate.ipynb) for
+runnable examples covering `n_dimensions`, `dim`, `shared_location`, and `shared_randomness`.
 
 ## Creating Data Splits
 

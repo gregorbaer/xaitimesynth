@@ -57,11 +57,12 @@ nav:
   - Guides:
       - Overview: guides/overview.md
       - Usage: guides/usage.md
-      - Data Structure: guides/data_structure.md
       - YAML Configuration: guides/yaml_config.md
       - Metrics: guides/metrics.md
       - Adding Data Generators: guides/adding_generators.md
   - Examples:
+      - Data Structure: examples/data_structure.ipynb
+      - Multivariate Time Series: examples/multivariate.ipynb
       - Custom Generator Functions: examples/custom_generators.ipynb
   - API Reference:
       - Builder: api/builder.md
