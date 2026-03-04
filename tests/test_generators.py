@@ -15,6 +15,7 @@ from xaitimesynth.generators import (
     generate_gaussian_pulse,
     generate_manual,
     generate_peak,
+    generate_pseudo_periodic,
     generate_random_walk,
     generate_red_noise,
     generate_seasonal,
@@ -42,6 +43,7 @@ STANDARD_GENERATORS = [
     generate_trough,
     generate_red_noise,
     generate_gaussian_pulse,
+    generate_pseudo_periodic,
 ]
 
 STOCHASTIC_GENERATORS = [
@@ -49,6 +51,7 @@ STOCHASTIC_GENERATORS = [
     generate_gaussian,
     generate_uniform,
     generate_red_noise,
+    generate_pseudo_periodic,
 ]
 
 
@@ -125,6 +128,25 @@ def test_manual_raises_without_values_or_generator():
     """Manual generator raises error if neither values nor generator provided."""
     with pytest.raises(ValueError, match="Either 'values' or 'generator'"):
         generate_manual(n_timesteps=10)
+
+
+# =============================================================================
+# seasonal phase parameter
+# =============================================================================
+
+
+def test_seasonal_phase_shifts_output(rng):
+    """Phase parameter shifts seasonal output; cosine (phase=π/2) differs from sine (phase=0)."""
+    import math
+
+    sine = generate_seasonal(
+        n_timesteps=50, period=20, amplitude=1.0, phase=0.0, rng=rng
+    )
+    cosine = generate_seasonal(
+        n_timesteps=50, period=20, amplitude=1.0, phase=math.pi / 2, rng=rng
+    )
+    assert not np.allclose(sine, cosine)
+    np.testing.assert_allclose(np.max(np.abs(sine)), np.max(np.abs(cosine)), rtol=0.05)
 
 
 # =============================================================================

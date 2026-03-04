@@ -67,21 +67,31 @@ def uniform(low: float = 0, high: float = 1, **kwargs) -> Dict[str, Any]:
     return {"type": "uniform", "low": low, "high": high, **kwargs}
 
 
-def seasonal(period: int = 10, amplitude: float = 1.0, **kwargs) -> Dict[str, Any]:
+def seasonal(
+    period: int = 10, amplitude: float = 1.0, phase: float = 0.0, **kwargs
+) -> Dict[str, Any]:
     """Create a definition for a seasonal (sine wave) signal component.
 
-    This component represents a periodic pattern based on a sine wave.
+    This component represents a periodic pattern based on a sine wave. Use the ``phase``
+    parameter to shift the wave — for example, ``phase=math.pi / 2`` yields a cosine.
 
     Args:
         period (int): The number of timesteps in one full cycle of the sine wave.
             Defaults to 10.
         amplitude (float): The peak amplitude of the sine wave. Defaults to 1.0.
+        phase (float): Phase offset in radians. Defaults to 0.0 (pure sine wave).
         **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
         Dict[str, Any]: A dictionary defining the 'seasonal' component with its parameters.
     """
-    return {"type": "seasonal", "period": period, "amplitude": amplitude, **kwargs}
+    return {
+        "type": "seasonal",
+        "period": period,
+        "amplitude": amplitude,
+        "phase": phase,
+        **kwargs,
+    }
 
 
 def red_noise(
@@ -106,6 +116,46 @@ def red_noise(
         Dict[str, Any]: A dictionary defining the 'red_noise' component with its parameters.
     """
     return {"type": "red_noise", "mean": mean, "std": std, "phi": phi, **kwargs}
+
+
+def pseudo_periodic(
+    period: float = 10.0,
+    amplitude: float = 1.0,
+    frequency_std: float = 0.05,
+    amplitude_std: float = 0.1,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Create a definition for a pseudo-periodic signal component.
+
+    Produces a sine wave whose instantaneous frequency and amplitude vary randomly
+    at each timestep, yielding a more realistic background signal than a perfectly
+    periodic wave. Useful when simulating real-world oscillatory data (respiration,
+    heart rate, economic cycles) where regularity is approximate rather than exact.
+
+    Ported and adapted from the ``PseudoPeriodic`` generator in the timesynth package
+    (MIT License, https://github.com/TimeSynth/TimeSynth).
+
+    Args:
+        period (float): Mean number of timesteps per full cycle. Defaults to 10.0.
+        amplitude (float): Mean amplitude of the oscillation. Defaults to 1.0.
+        frequency_std (float): Standard deviation of per-step frequency perturbations,
+            expressed as a fraction of the base frequency. Larger values produce more
+            irregular periodicity. Defaults to 0.05.
+        amplitude_std (float): Standard deviation of per-step amplitude perturbations.
+            Larger values produce more variable amplitude. Defaults to 0.1.
+        **kwargs: Additional parameters passed to the generator during build time.
+
+    Returns:
+        Dict[str, Any]: A dictionary defining the 'pseudo_periodic' component with its parameters.
+    """
+    return {
+        "type": "pseudo_periodic",
+        "period": period,
+        "amplitude": amplitude,
+        "frequency_std": frequency_std,
+        "amplitude_std": amplitude_std,
+        **kwargs,
+    }
 
 
 def ecg_like(

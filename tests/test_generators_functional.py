@@ -9,6 +9,7 @@ from xaitimesynth import (
     gaussian_pulse,
     manual,
     peak,
+    pseudo_periodic,
     random_walk,
     red_noise,
     seasonal,
@@ -30,6 +31,7 @@ ALL_COMPONENT_FUNCS = [
     trough,
     gaussian_pulse,
     ecg_like,
+    pseudo_periodic,
 ]
 
 

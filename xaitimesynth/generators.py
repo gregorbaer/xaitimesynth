@@ -222,15 +222,17 @@ def generate_seasonal(
     n_timesteps: int,
     period: int = 10,
     amplitude: float = 1.0,
+    phase: float = 0.0,
     rng: Optional[np.random.RandomState] = None,
     length: Optional[int] = None,
     **kwargs,
 ) -> np.ndarray:
     """Generate a seasonal (sine wave) time series.
 
-    The function generates a sine wave with the specified period and amplitude. To ensure
-    the exact amplitude is achieved even for short periods where discrete sampling might
-    not hit the peak values, the signal is automatically scaled when necessary.
+    The function generates a sine wave with the specified period, amplitude, and phase
+    offset. To ensure the exact amplitude is achieved even for short periods where
+    discrete sampling might not hit the peak values, the signal is automatically scaled
+    when necessary.
 
     Args:
         n_timesteps (int): The nominal length of the time series context. The actual output
@@ -239,6 +241,8 @@ def generate_seasonal(
             Defaults to 10.
         amplitude (float): The peak amplitude of the sine wave. The output is guaranteed
             to have exactly this maximum absolute value. Defaults to 1.0.
+        phase (float): Phase offset in radians applied to the sine wave. Use ``math.pi / 2``
+            to get a cosine wave. Defaults to 0.0.
         rng (Optional[np.random.RandomState]): Random number generator instance. Included for
             API consistency but unused in this deterministic generator. Defaults to None.
         length (Optional[int]): The exact desired length of the output time series array.
@@ -267,8 +271,8 @@ def generate_seasonal(
     output_length = length if length is not None else n_timesteps
     time = np.arange(output_length)
 
-    # Generate the base sine wave
-    signal = amplitude * np.sin(2 * np.pi * time / period)
+    # Generate the base sine wave with optional phase offset
+    signal = amplitude * np.sin(2 * np.pi * time / period + phase)
 
     # For short periods, ensure we actually achieve the specified amplitude
     # by scaling if the actual maximum is significantly different
@@ -819,6 +823,66 @@ def generate_gaussian_pulse(
     return gaussian_pulse
 
 
+def generate_pseudo_periodic(
+    n_timesteps: int,
+    period: float = 10.0,
+    amplitude: float = 1.0,
+    frequency_std: float = 0.05,
+    amplitude_std: float = 0.1,
+    rng: Optional[np.random.RandomState] = None,
+    length: Optional[int] = None,
+    **kwargs,
+) -> np.ndarray:
+    """Generate a pseudo-periodic signal with stochastic amplitude and frequency variations.
+
+    Produces a sine wave where the instantaneous frequency and amplitude vary randomly
+    at each timestep. This creates a more realistic background signal than a perfectly
+    periodic sine wave — useful when simulating real-world data where oscillations are
+    not exactly regular (e.g. respiration, heart rate, seasonal economic cycles).
+
+    Ported and adapted from the ``PseudoPeriodic`` generator in the timesynth package
+    (MIT License, https://github.com/TimeSynth/TimeSynth).
+
+    Args:
+        n_timesteps (int): The nominal length of the time series context. The actual output
+            length is determined by the `length` parameter if provided, otherwise `n_timesteps`.
+        period (float): Mean number of timesteps per full cycle. Defaults to 10.0.
+        amplitude (float): Mean amplitude of the oscillation. Defaults to 1.0.
+        frequency_std (float): Standard deviation of per-step frequency perturbations,
+            expressed as a fraction of the base frequency (``1 / period``). Larger values
+            produce more irregular periodicity. Defaults to 0.05.
+        amplitude_std (float): Standard deviation of per-step amplitude perturbations.
+            Larger values produce more variable amplitude. Defaults to 0.1.
+        rng (Optional[np.random.RandomState]): Random number generator for reproducibility.
+            If None, a fresh unseeded generator is used. Defaults to None.
+        length (Optional[int]): The exact desired length of the output array.
+            If provided, this overrides `n_timesteps`. Defaults to None.
+        **kwargs: Catches unused parameters passed by TimeSeriesBuilder for compatibility.
+
+    Returns:
+        np.ndarray: A 1D numpy array of the specified length.
+
+    Example:
+        >>> rng = np.random.RandomState(0)
+        >>> sig = generate_pseudo_periodic(n_timesteps=100, period=20, rng=rng)
+        >>> len(sig)
+        100
+    """
+    output_length = length if length is not None else n_timesteps
+    if rng is None:
+        rng = np.random.RandomState()
+
+    base_freq = 1.0 / period
+    freq_noise = rng.normal(0, frequency_std * base_freq, output_length)
+    local_freq = base_freq + freq_noise
+
+    amp_noise = rng.normal(0, amplitude_std, output_length)
+    local_amp = amplitude + amp_noise
+
+    cumulative_phase = 2 * np.pi * np.cumsum(local_freq)
+    return local_amp * np.sin(cumulative_phase)
+
+
 # Dictionary mapping component types to generator functions
 #
 # When adding a new generator:
@@ -841,6 +905,7 @@ GENERATOR_FUNCS = {
     "red_noise": generate_red_noise,
     "ecg_like": generate_ecg_like,
     "gaussian_pulse": generate_gaussian_pulse,
+    "pseudo_periodic": generate_pseudo_periodic,
 }
 
 
