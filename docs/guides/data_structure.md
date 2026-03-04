@@ -50,12 +50,13 @@ X_class_1 = X[class_1_mask]  # All samples from class 1
 The default format is `channels_first` (PyTorch/tsai compatible). To use `channels_last`:
 
 ```python
+from xaitimesynth import TimeSeriesBuilder
+
 # Option 1: Set at build time
 builder = TimeSeriesBuilder(data_format="channels_last")
 
 # Option 2: Convert existing dataset
-from xaitimesynth import TimeSeriesBuilder
-dataset_cl = TimeSeriesBuilder.convert_data_format(dataset, "channels_last")
+# dataset_cl = TimeSeriesBuilder.convert_data_format(dataset, "channels_last")
 # Shape changes: (n_samples, n_dims, n_timesteps) -> (n_samples, n_timesteps, n_dims)
 ```
 
@@ -243,20 +244,6 @@ print(metadata.keys())
 | `shuffled` | Whether samples were shuffled |
 
 ## Common Use Cases
-
-### ML Training
-
-```python
-from sklearn.model_selection import train_test_split
-
-dataset = builder.build()
-
-# Extract data
-X, y = dataset["X"], dataset["y"]
-
-# Split for training
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
-```
 
 ### XAI Evaluation
 

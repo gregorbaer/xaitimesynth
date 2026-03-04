@@ -1,51 +1,12 @@
-# YAML Configuration Guide
+# YAML Configuration Reference
 
-If you want to save dataset definitions in configuration files rather than Python code, you can use YAML. This is useful for:
+This page is the format reference for YAML dataset definitions. For a how-to introduction, see the [YAML Configuration section in the Usage Guide](usage.md#yaml-configuration).
 
-- **Reproducibility**: Share exact dataset configurations with collaborators
-- **Experiment management**: Define multiple dataset variants in one file
-- **Version control**: Track configuration changes in git
-- **Avoid code duplication**: Keep data generation settings separate from analysis code and avoid code duplication for multiple datasets
-
-## Quick Start
-
-Create a YAML file with your dataset definition, for example:
-
-```yaml
-# config.yaml
-my_dataset:
-  n_timesteps: 100
-  n_samples: 200
-  random_state: 42
-  classes:
-    - id: 0
-      signals:
-        - function: gaussian_noise
-          params: { sigma: 0.5 }
-      features:
-        - function: constant
-          params: { value: -1.0 }
-          start_pct: 0.4
-          end_pct: 0.6
-    - id: 1
-      signals:
-        - function: gaussian_noise
-          params: { sigma: 0.5 }
-      features:
-        - function: constant
-          params: { value: 1.0 }
-          start_pct: 0.4
-          end_pct: 0.6
-```
-
-Then load and build in Python:
-
-```python
-from xaitimesynth.parser import load_builders_from_config
-
-builders = load_builders_from_config(config_path="config.yaml")
-dataset = builders["my_dataset"].build()
-```
+Reasons to use YAML:
+- Share exact dataset configurations with collaborators
+- Define multiple dataset variants in one file
+- Track configuration changes in git
+- Keep data generation settings separate from analysis code
 
 ## Basic Structure
 
@@ -243,19 +204,6 @@ dataset_b:
   classes:
     - id: 0
       signals: [*gaussian_background]
-```
-
-## Creating Train/Test Splits
-
-A common pattern is to load a configuration once and create multiple splits with different random seeds:
-
-```python
-builders = load_builders_from_config(config_path="config.yaml")
-
-# Same data distribution, different random realizations
-train = builders["my_dataset"].clone(n_samples=1000, random_state=42).build()
-test = builders["my_dataset"].clone(n_samples=200, random_state=43).build()
-val = builders["my_dataset"].clone(n_samples=100, random_state=44).build()
 ```
 
 ## Exporting Python Configurations to YAML

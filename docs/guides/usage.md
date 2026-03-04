@@ -1,46 +1,20 @@
 # Usage Guide
 
-This guide provides a detailed walkthrough of the xaitimesynth API with examples for common use cases.
+This guide provides a detailed walkthrough of the xaitimesynth API. For a quick overview, see the [Quick Start](../index.md).
 
 ## Table of Contents
 
-1. [Basic Usage](#basic-usage)
-2. [Pre-built Datasets](#pre-built-datasets)
-3. [Builder Parameters](#builder-parameters)
-4. [Discovering Available Components](#discovering-available-components)
-5. [Adding Signals](#adding-signals)
-6. [Adding Features](#adding-features)
-7. [Positioning Features and Signals](#positioning-features-and-signals)
-8. [Multivariate Time Series](#multivariate-time-series)
-9. [Creating Data Splits](#creating-data-splits)
-10. [YAML Configuration](#yaml-configuration)
-11. [Custom Components](#custom-components)
-12. [Accessing Component Data](#accessing-component-data)
-
-## Basic Usage
-
-The core workflow is: create a builder, define classes with signals and features, then build.
-
-```python
-from xaitimesynth import TimeSeriesBuilder, gaussian_noise, peak
-
-# Create a simple two-class dataset
-dataset = (
-    TimeSeriesBuilder(n_timesteps=100, n_samples=200)
-    .for_class(0)
-    .add_signal(gaussian_noise(sigma=0.5))
-    .for_class(1)
-    .add_signal(gaussian_noise(sigma=0.5))
-    .add_feature(peak(amplitude=2.0, width=10), start_pct=0.3, end_pct=0.7)
-    .build()
-)
-
-# Access the results
-X = dataset["X"]              # (200, 1, 100) - samples x dims x timesteps
-y = dataset["y"]              # (200,) - class labels
-masks = dataset["feature_masks"]  # (200, 1, 100) - ground truth locations
-components = dataset["components"]  # List of TimeSeriesComponents objects
-```
+1. [Pre-built Datasets](#pre-built-datasets)
+2. [Builder Parameters](#builder-parameters)
+3. [Discovering Available Components](#discovering-available-components)
+4. [Adding Signals](#adding-signals)
+5. [Adding Features](#adding-features)
+6. [Positioning Features and Signals](#positioning-features-and-signals)
+7. [Multivariate Time Series](#multivariate-time-series)
+8. [Creating Data Splits](#creating-data-splits)
+9. [YAML Configuration](#yaml-configuration)
+10. [Custom Components](#custom-components)
+11. [Accessing Component Data](#accessing-component-data)
 
 ## Pre-built Datasets
 
@@ -190,7 +164,7 @@ help(random_walk) # Shows parameters: step_size
 Signals are full-length background patterns. Use `add_signal()` to add them.
 
 ```python
-from xaitimesynth import random_walk, gaussian_noise, seasonal, trend, red_noise
+from xaitimesynth import TimeSeriesBuilder, random_walk, gaussian_noise, seasonal, trend, red_noise
 
 builder = (
     TimeSeriesBuilder(n_timesteps=200)
@@ -209,7 +183,7 @@ All signals are combined additively into the background component.
 Features are localized discriminative patterns. Use `add_feature()` to add them.
 
 ```python
-from xaitimesynth import peak, trough, constant, gaussian_pulse
+from xaitimesynth import TimeSeriesBuilder, peak, trough, constant, gaussian_pulse, gaussian_noise
 
 builder = (
     TimeSeriesBuilder(n_timesteps=100)
@@ -354,25 +328,20 @@ variant = base_builder.clone(
 
 ## YAML Configuration
 
-For reproducible experiments, define datasets in YAML files.
-
-### Basic YAML Structure
+For reproducible experiments, define datasets in YAML files. The YAML structure mirrors the builder API:
 
 ```yaml
 # config.yaml
 my_dataset:
   n_timesteps: 100
   n_samples: 200
-  n_dimensions: 1
   random_state: 42
-  normalization: zscore
   classes:
     - id: 0
       signals:
         - function: gaussian_noise
           params: { sigma: 0.5 }
     - id: 1
-      weight: 1.5  # Sample this class 1.5x as often
       signals:
         - function: gaussian_noise
           params: { sigma: 0.5 }
@@ -383,84 +352,14 @@ my_dataset:
           end_pct: 0.7
 ```
 
-### Loading from YAML
-
 ```python
 from xaitimesynth.parser import load_builders_from_config
 
-# Load all datasets from file
 builders = load_builders_from_config(config_path="config.yaml")
 dataset = builders["my_dataset"].build()
-
-# Load specific datasets
-builders = load_builders_from_config(
-    config_path="config.yaml",
-    dataset_names=["my_dataset"]
-)
-
-# Load from nested path in config
-builders = load_builders_from_config(
-    config_path="config.yaml",
-    path_key="experiments/datasets"
-)
 ```
 
-### YAML Anchors for Reuse
-
-Use YAML anchors to avoid repetition:
-
-```yaml
-# Define common settings
-common: &common_settings
-  n_timesteps: 100
-  random_state: 42
-  normalization: zscore
-
-# Reuse with aliases
-dataset_a:
-  <<: *common_settings
-  n_samples: 500
-  classes:
-    - id: 0
-      signals: [{ function: gaussian_noise, params: { sigma: 0.5 } }]
-
-dataset_b:
-  <<: *common_settings
-  n_samples: 1000
-  classes:
-    - id: 0
-      signals: [{ function: gaussian_noise, params: { sigma: 0.5 } }]
-```
-
-### Loading from Dictionary or String
-
-```python
-# From dictionary
-config = {
-    "my_dataset": {
-        "n_timesteps": 100,
-        "n_samples": 50,
-        "classes": [
-            {"id": 0, "signals": [{"function": "gaussian_noise", "params": {"sigma": 0.5}}]}
-        ]
-    }
-}
-builders = load_builders_from_config(config_dict=config)
-
-# From YAML string
-yaml_str = """
-my_dataset:
-  n_timesteps: 100
-  classes:
-    - id: 0
-      signals:
-        - function: gaussian_noise
-          params: { sigma: 0.5 }
-"""
-builders = load_builders_from_config(config_str=yaml_str)
-```
-
-For complete YAML configuration documentation including anchors, aliases, merge keys, and nested configurations, see the [YAML Configuration Guide](yaml_config.md).
+For the full reference (config options, stochastic lengths, YAML anchors, export), see the [YAML Configuration Guide](yaml_config.md).
 
 ## Custom Components
 
@@ -527,45 +426,26 @@ See [Adding Generators](adding_generators.md) for the complete guide on creating
 
 ## Accessing Component Data
 
-Each sample's data is broken down in the `components` list:
+`builder.build()` returns a dictionary with these top-level keys:
 
 ```python
-dataset = builder.build()
-
-# Get the first sample's components
-sample = dataset["components"][0]
-
-print(sample.background.shape)    # (n_timesteps, n_dims) - background signals
-print(sample.noise.shape)         # (n_timesteps, n_dims) - noise signals
-print(sample.aggregated.shape)    # (n_timesteps, n_dims) - final combined signal
-print(sample.features)            # Dict of feature name -> array of feature values
-print(sample.feature_masks)       # Dict of feature name -> boolean mask array
+dataset["X"]               # (n_samples, n_dims, n_timesteps) — time series data
+dataset["y"]               # (n_samples,) — class labels
+dataset["feature_masks"]   # Dict[str, (n_samples, n_timesteps)] — ground truth locations
+dataset["components"]      # List[TimeSeriesComponents] — per-sample breakdown
+dataset["metadata"]        # Dict — configuration info
 ```
+
+See the [Data Structure Reference](data_structure.md) for shapes, key naming conventions, and access patterns.
 
 ### Visualization
 
 ```python
-from xaitimesynth import plot_components, plot_sample
+from xaitimesynth import plot_components
 
-# Plot multiple samples showing component breakdown
+# Plot background, features, and aggregated signal for a sample
 plot_components(dataset).show()
-
-# Plot a specific sample
-plot_sample(dataset, sample_idx=0).show()
 
 # For multivariate data, specify dimensions
 plot_components(dataset, dimensions=[0, 1]).show()
 ```
-
-### Converting to DataFrame
-
-```python
-# Convert to pandas DataFrame for analysis
-df = TimeSeriesBuilder().to_df(dataset)
-print(df.head())
-
-# Specify which dimensions to include
-df = TimeSeriesBuilder().to_df(dataset, dimensions=[0, 1])
-```
-
-For detailed documentation of the data structure including shapes, keys, and common access patterns, see the [Data Structure Reference](data_structure.md).

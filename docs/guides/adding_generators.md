@@ -1,76 +1,14 @@
-# Adding a New Generator to XAITimeSynth: Step-by-Step Guide
+# Adding Custom Generators
 
-This guide walks you through the process of adding a new generator function to the xaitimesynth package. By following these steps, you'll be able to create custom time series components that can be used in the TimeSeriesBuilder API.
+This guide explains how to create custom time series components for use in the TimeSeriesBuilder API. There are two approaches: the `manual()` component for one-off patterns (see [Custom Components in the Usage Guide](usage.md#custom-components)), and registering a proper reusable component covered here.
 
 ## Table of Contents
 
-1. [Overview of the Generator System](#overview-of-the-generator-system)
-2. [How Generators Work Internally](#how-generators-work-internally)
-3. [The Two-Function Pattern](#the-two-function-pattern)
-4. [Standard Parameters Explained](#standard-parameters-explained)
-5. [Adding a New Generator](#adding-a-new-generator)
-6. [Complete Example](#complete-example)
-7. [Testing Your Generator](#testing-your-generator)
-
-## Overview of the Generator System
-
-The xaitimesynth package has a flexible, three-layer system for creating and registering components:
-
-1. **Component Functions** (`components.py`) - User-facing API that creates component definitions
-2. **Generator Functions** (`generators.py`) - Internal functions that produce the actual numpy arrays
-3. **Registration System** (`registry.py`) - Connects components to generators and tracks component types
-
-```
-User Code → Component Function → Component Dict → Builder → generate_component() → Generator Function → numpy array
-```
-
-## How Generators Work Internally
-
-### The Flow from User Code to Generated Data
-
-When you write code like this:
-
-```python
-builder = TimeSeriesBuilder(n_timesteps=100, n_samples=50)
-builder.add_signal(random_walk(step_size=0.2))
-```
-
-Here's what happens internally:
-
-1. **Component Definition Creation**: `random_walk(step_size=0.2)` returns a dictionary:
-   ```python
-   {"type": "random_walk", "step_size": 0.2}
-   ```
-
-2. **Builder Storage**: The builder stores this component definition in its internal structure, along with positioning info (whether it's a signal or feature, start/end positions, etc.)
-
-3. **Generation Time**: When `.build()` is called, the builder:
-   - Iterates through all component definitions
-   - Calls `generate_component(component_type="random_walk", n_timesteps=100, rng=builder_rng, step_size=0.2)`
-
-4. **Dispatch**: `generate_component()` looks up "random_walk" in the `GENERATOR_FUNCS` dictionary and calls:
-   ```python
-   generate_random_walk(n_timesteps=100, rng=builder_rng, step_size=0.2)
-   ```
-
-5. **Generation**: The generator function produces and returns a numpy array
-
-6. **Assembly**: The builder combines all generated components into the final time series according to the specified composition (signals + features)
-
-### The GENERATOR_FUNCS Dictionary
-
-At the bottom of `generators.py`, there's a dictionary that maps component type names to generator functions:
-
-```python
-GENERATOR_FUNCS = {
-    "constant": generate_constant,
-    "random_walk": generate_random_walk,
-    "gaussian_noise": generate_gaussian_noise,
-    # ...
-}
-```
-
-This is the lookup table that `generate_component()` uses to find the right generator for each component type.
+1. [The Two-Function Pattern](#the-two-function-pattern)
+2. [Standard Parameters Explained](#standard-parameters-explained)
+3. [Adding a New Generator](#adding-a-new-generator)
+4. [Complete Example](#complete-example)
+5. [Alternative: Decorator Approach](#alternative-quick-extension-with-decorators)
 
 ## The Two-Function Pattern
 
@@ -303,40 +241,17 @@ def your_component(param1: type = default_value, param2: type = default_value, *
 - Returns a dictionary with at least a `"type"` key matching the generator name
 - All parameters should be included in the returned dictionary
 
-### Step 4: Register the Component
+### Step 4: Register and Export (for package integration)
 
-In `__init__.py`, import and register your component:
+If adding to the package itself (rather than user-side code), add to `__init__.py`:
 
 ```python
-from .components import (
-    # ...existing imports...
-    your_component,
-)
-
-# In the registration section
+from .components import your_component
 register_component(your_component, "signal")  # Or "feature" or "both"
+# Add "your_component" to __all__
 ```
 
-Component types:
-- `"signal"`: Can be used with `.add_signal()` (full-length background patterns)
-- `"feature"`: Can be used with `.add_feature()` (localized discriminative patterns)
-- `"both"`: Can be used with either method
-
-### Step 5: Export the Component
-
-Add your component to the `__all__` list in `__init__.py`:
-
-```python
-__all__ = [
-    # ...existing exports...
-    "your_component",
-]
-```
-
-This makes it importable directly from the package:
-```python
-from xaitimesynth import your_component
-```
+For user-side use, the [decorator approach](#alternative-quick-extension-with-decorators) below is simpler.
 
 ## Complete Example: Sine Wave Generator
 
@@ -440,27 +355,6 @@ def sine_wave(
     }
 ```
 
-### In `__init__.py`:
-
-```python
-from .components import (
-    # ...existing imports...
-    sine_wave,
-)
-
-# ...
-
-# In the registration section
-register_component(sine_wave, "both")  # Can be used as signal or feature
-
-# ...
-
-__all__ = [
-    # ...existing exports...
-    "sine_wave",
-]
-```
-
 ### Usage:
 
 ```python
@@ -485,81 +379,6 @@ dataset = (
     .add_feature(sine_wave(frequency=0.2, amplitude=2.0), start_pct=0.3, end_pct=0.7)
     .build()
 )
-```
-
-## Testing Your Generator
-
-After implementing your generator, you should test it thoroughly:
-
-### 1. Unit Tests for the Generator Function
-
-Test the generator function directly in `tests/test_generators.py`:
-
-```python
-def test_generate_sine_wave_shape():
-    """Test sine_wave generator produces correct output shape."""
-    result = generate_sine_wave(n_timesteps=100, frequency=0.1)
-    assert result.shape == (100,)
-    assert result.dtype == np.float64
-
-def test_generate_sine_wave_with_length():
-    """Test sine_wave generator respects length parameter."""
-    result = generate_sine_wave(n_timesteps=100, length=50, frequency=0.1)
-    assert result.shape == (50,)
-
-def test_generate_sine_wave_amplitude():
-    """Test sine_wave generator produces correct amplitude."""
-    amplitude = 2.5
-    result = generate_sine_wave(n_timesteps=100, amplitude=amplitude, frequency=0.1)
-    assert np.max(np.abs(result)) == pytest.approx(amplitude, rel=1e-10)
-
-def test_generate_sine_wave_reproducible():
-    """Test sine_wave generator is deterministic."""
-    result1 = generate_sine_wave(n_timesteps=50, frequency=0.1)
-    result2 = generate_sine_wave(n_timesteps=50, frequency=0.1)
-    np.testing.assert_array_equal(result1, result2)
-```
-
-### 2. Unit Tests for the Component Function
-
-Test the component function in `tests/test_components.py`:
-
-```python
-def test_sine_wave_default():
-    """Test sine_wave component with default parameters."""
-    comp = sine_wave()
-    assert comp["type"] == "sine_wave"
-    assert comp["frequency"] == 0.1
-    assert comp["amplitude"] == 1.0
-    assert comp["phase"] == 0.0
-
-def test_sine_wave_custom():
-    """Test sine_wave component with custom parameters."""
-    comp = sine_wave(frequency=0.2, amplitude=3.0, phase=np.pi/2)
-    assert comp["type"] == "sine_wave"
-    assert comp["frequency"] == 0.2
-    assert comp["amplitude"] == 3.0
-    assert comp["phase"] == np.pi/2
-```
-
-### 3. Integration Tests with TimeSeriesBuilder
-
-Test that your component works correctly in the builder pipeline:
-
-```python
-def test_sine_wave_in_builder():
-    """Test sine_wave component works in TimeSeriesBuilder."""
-    dataset = (
-        TimeSeriesBuilder(n_timesteps=100, n_samples=10, random_state=42)
-        .for_class(0)
-        .add_signal(sine_wave(frequency=0.1, amplitude=1.0))
-        .build()
-    )
-
-    assert dataset["X"].shape == (10, 1, 100)
-    # Verify the signal has the expected properties
-    signal = dataset["X"][0, 0, :]
-    assert np.max(np.abs(signal)) == pytest.approx(1.0, rel=1e-10)
 ```
 
 ## Alternative: Quick Extension with Decorators
@@ -598,13 +417,4 @@ def generate_sine_wave(
 
 ## Summary
 
-Adding a generator to xaitimesynth involves:
-
-1. **Generator function** in `generators.py` - implements the actual data generation
-2. **Component function** in `components.py` - provides user-friendly API
-3. **GENERATOR_FUNCS registration** - enables lookup
-4. **Component registration** in `__init__.py` - makes it available to users
-5. **Export** in `__all__` - enables direct import
-6. **Tests** in `tests/` - ensures correctness
-
-The two-function pattern with standardized signatures provides a clean separation between the user-facing API and the internal implementation, while the registration system keeps everything organized and discoverable.
+For user-side custom generators, the **decorator approach** is the quickest path. For reusable generators integrated into the package, follow the two-function pattern: a generator function in `generators.py` + a component function in `components.py`, then register in `__init__.py`.

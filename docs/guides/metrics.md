@@ -14,43 +14,28 @@ This guide explains how to evaluate XAI attribution methods using xaitimesynth's
 
 ```python
 import numpy as np
-from xaitimesynth import TimeSeriesBuilder, constant, gaussian_noise, random_walk
-from xaitimesynth.metrics import (
-    relevance_mass_accuracy,
-    relevance_rank_accuracy,
-    auc_roc_score,
-    auc_pr_score,
-    nac_score,
-    pointing_game,
-    mean_absolute_error,
-    mean_squared_error,
-)
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, gaussian_pulse, seasonal
+from xaitimesynth.metrics import auc_pr_score, relevance_mass_accuracy
 
-# Create a dataset with known feature locations
-# Both classes have a level shift feature, but in opposite directions
-dataset = (
-    TimeSeriesBuilder(n_timesteps=100, n_samples=40, random_state=42)
+base_builder = (
+    TimeSeriesBuilder(n_timesteps=100, normalization="zscore")
     .for_class(0)
-    .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian_noise(sigma=0.1))
-    .add_feature(constant(value=-1.0), start_pct=0.4, end_pct=0.6)  # Downward shift
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(gaussian_pulse(amplitude=3.0), random_location=True, length_pct=0.3)
     .for_class(1)
-    .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian_noise(sigma=0.1))
-    .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)   # Upward shift
-    .build()
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3)
 )
 
-# Evaluate attributions for class-1 samples
-class1_indices = np.where(dataset["y"] == 1)[0].tolist()
+train = base_builder.clone(n_samples=200, random_state=42).build()
+test  = base_builder.clone(n_samples=50,  random_state=43).build()
 
-# Simulate attributions (in practice, these come from your XAI method)
-# Shape: (n_samples, n_timesteps, n_dims)
-attributions = np.random.rand(len(class1_indices), 100, 1)
+# Replace with your XAI method; shape must be (n_samples, n_dims, n_timesteps)
+attributions = np.random.rand(*test["X"].shape)
 
-# Evaluate
-score = relevance_mass_accuracy(attributions, dataset, sample_indices=class1_indices)
-print(f"RMA score: {score:.3f}")
+auc = auc_pr_score(attributions, test, normalize=True)
+rma = relevance_mass_accuracy(attributions, test)
+print(f"AUC-PR: {auc:.3f}, RMA: {rma:.3f}")
 ```
 
 ## Available Metrics
@@ -234,78 +219,36 @@ raw = relevance_mass_accuracy(attr, dataset, sample_indices=indices, average=Non
 
 ## Working with External XAI Packages
 
-Attribution methods from packages like Captum, SHAP, or lime may return arrays in different formats. Here's how to prepare them for xaitimesynth metrics.
-
-### General Approach
-
-1. **Check the output shape** of your XAI method
-2. **Reshape to** `(n_samples, n_timesteps, n_dims)` if needed
-3. **Match sample indices** between attributions and dataset
-
-### Example Workflow with Train/Test/Validation Splits
-
-This example shows a realistic workflow: define a base builder, create train/test/val splits with different random seeds, train a model, and evaluate attributions on the test set.
+Attribution methods from packages like Captum, SHAP, or lime may return arrays in different formats. The canonical input format is `(n_samples, n_timesteps, n_dims)` — see the [Input Format](#input-format) table above. If your method returns `(n_samples, n_dims, n_timesteps)`, transpose before passing:
 
 ```python
 import numpy as np
-from xaitimesynth import TimeSeriesBuilder, gaussian_noise, constant, random_walk
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, gaussian_pulse, seasonal
 from xaitimesynth.metrics import relevance_mass_accuracy, auc_pr_score
 
-# 1. Define a base builder with class definitions
-#    Both classes have level shift features in opposite directions
 base_builder = (
-    TimeSeriesBuilder(n_timesteps=100, n_dimensions=3)
+    TimeSeriesBuilder(n_timesteps=100, normalization="zscore")
     .for_class(0)
-    .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
-    .add_feature(constant(-1.0), start_pct=0.4, end_pct=0.6, dim=[0])  # Downward shift
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(gaussian_pulse(amplitude=3.0), random_location=True, length_pct=0.3)
     .for_class(1)
-    .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
-    .add_feature(constant(1.0), start_pct=0.4, end_pct=0.6, dim=[0])   # Upward shift
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3)
 )
-
-# 2. Create train/test/val splits with different random seeds
-train_dataset = base_builder.clone(n_samples=200, random_state=42).build()
 test_dataset = base_builder.clone(n_samples=50, random_state=43).build()
-val_dataset = base_builder.clone(n_samples=30, random_state=44).build()
 
-X_train, y_train = train_dataset["X"], train_dataset["y"]
-X_test, y_test = test_dataset["X"], test_dataset["y"]
+# attributions_raw shape: (n_samples, n_dims, n_timesteps) from your XAI method
+attributions_raw = np.random.rand(*test_dataset["X"].shape)
 
-# 3. Train your model on train set (placeholder)
-# model.fit(X_train, y_train)
+# Transpose to (n_samples, n_timesteps, n_dims)
+attributions = np.transpose(attributions_raw, (0, 2, 1))
 
-# 4. Get attributions for test set from your XAI method
-#    (placeholder - replace with your actual explainer)
-#    Suppose your explainer returns shape (batch, dims, timesteps)
-class1_test_mask = y_test == 1
-class1_test_indices = np.where(class1_test_mask)[0].tolist()
-X_test_class1 = X_test[class1_test_mask]
-
-attributions_raw = np.random.rand(*X_test_class1.shape)  # (n, 3, 100)
-
-# 5. Reshape to (samples, timesteps, dims) if needed
-attributions = np.transpose(attributions_raw, (0, 2, 1))  # (n, 100, 3)
-
-# 6. Evaluate on test set
-rma = relevance_mass_accuracy(attributions, test_dataset, sample_indices=class1_test_indices)
-auc = auc_pr_score(attributions, test_dataset, sample_indices=class1_test_indices, normalize=True)
-
-print(f"Test set RMA: {rma:.3f}")
-print(f"Test set normalized AUC-PR: {auc:.3f}")
-
-# 7. Per-dimension analysis
-per_dim = relevance_mass_accuracy(
-    attributions, test_dataset, sample_indices=class1_test_indices, average='per_dimension'
-)
-for dim, score in per_dim.items():
-    print(f"  Dimension {dim}: {score:.3f}")
+# Evaluate (optionally filter to specific class)
+class1_indices = np.where(test_dataset["y"] == 1)[0].tolist()
+rma = relevance_mass_accuracy(attributions, test_dataset, sample_indices=class1_indices)
+auc = auc_pr_score(attributions, test_dataset, sample_indices=class1_indices, normalize=True)
 ```
 
-### Tips
-
-- **Normalize attributions** to [0, 1] before using MAE/MSE metrics
-- **Use `dim_indices`** to evaluate specific dimensions in multivariate data
-- **Check for NaN/Inf** in attributions before evaluation - these can cause unexpected results
-- **Use `.clone()`** to create multiple datasets with the same structure but different samples/seeds
+**Tips:**
+- Normalize attributions to [0, 1] before using MAE/MSE metrics
+- Check for NaN/Inf in attributions before evaluation

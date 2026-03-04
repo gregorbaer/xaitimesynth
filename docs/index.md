@@ -6,24 +6,34 @@ A Python package for benchmarking explainable AI (XAI) algorithms on time series
 
 Generate synthetic time series data where the location of class-discriminating features is known, enabling direct evaluation of whether attribution methods correctly identify important time points.
 
-**Core concept:** `x = n + f` (background signal + localized feature)
-
 ## Quick Start
 
 ```python
-from xaitimesynth import TimeSeriesBuilder, gaussian_noise, peak
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, gaussian_pulse, seasonal
+from xaitimesynth.metrics import auc_pr_score, relevance_mass_accuracy
+import numpy as np
 
-dataset = (
-    TimeSeriesBuilder(n_timesteps=100, n_samples=50)
+# Define dataset structure once
+base_builder = (
+    TimeSeriesBuilder(n_timesteps=100, normalization="zscore")
     .for_class(0)
-    .add_signal(gaussian_noise(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(gaussian_pulse(amplitude=3.0), random_location=True, length_pct=0.3)
     .for_class(1)
-    .add_signal(gaussian_noise(sigma=0.1))
-    .add_feature(peak(amplitude=1.0, width=10), start_pct=0.3, end_pct=0.7)
-    .build()
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3)
 )
 
-X, y, feature_masks = dataset["X"], dataset["y"], dataset["feature_masks"]
+# Generate train and test sets with different seeds
+train = base_builder.clone(n_samples=200, random_state=42).build()
+test  = base_builder.clone(n_samples=50,  random_state=43).build()
+
+# Replace with your XAI method; shape must be (n_samples, n_dims, n_timesteps)
+attributions = np.random.rand(*test["X"].shape)
+
+# Evaluate against ground truth feature locations
+auc = auc_pr_score(attributions, test, normalize=True)
+rma = relevance_mass_accuracy(attributions, test)
 ```
 
 ## Installation
@@ -32,11 +42,10 @@ X, y, feature_masks = dataset["X"], dataset["y"], dataset["feature_masks"]
 pip install xaitimesynth
 ```
 
-## Documentation
+## Where to Go Next
 
-- **[Overview](guides/overview.md)** - Introduction and core concepts
-- **[Usage Guide](guides/usage.md)** - Detailed usage examples
-- **[Data Structure](guides/data_structure.md)** - Understanding the output format
-- **[YAML Configuration](guides/yaml_config.md)** - Define datasets in config files
-- **[Metrics](guides/metrics.md)** - XAI evaluation metrics
-- **[API Reference](api/builder.md)** - Full API documentation
+1. **[Usage Guide](guides/usage.md)** — Full API: signals, features, positioning, multivariate, splits
+2. **[Metrics Guide](guides/metrics.md)** — Evaluate XAI attributions against ground truth
+3. **[Data Structure Reference](guides/data_structure.md)** — Output shapes, keys, and access patterns
+4. **[YAML Configuration](guides/yaml_config.md)** — Define datasets in config files
+5. **[Adding Generators](guides/adding_generators.md)** — Create custom signal and feature components
