@@ -5,8 +5,11 @@ Since we cannot verify visual output, we focus on essential functionality
 and error handling rather than exhaustive parameter coverage.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
+from lets_plot.export import ggsave
 
 from xaitimesynth import (
     TimeSeriesBuilder,
@@ -102,6 +105,25 @@ def test_plot_components_univariate(univariate_dataset):
         univariate_dataset, components=["aggregated"], show_indicators=False
     )
     assert p is not None
+
+
+def test_plot_components_facet_component_order(univariate_dataset, tmp_path: Path):
+    """Test component facets render in Background -> Features -> Aggregated order."""
+    p = plot_components(univariate_dataset)
+    output_path = tmp_path / "plot_components_facets.svg"
+    ggsave(p, str(output_path))
+
+    svg_text = output_path.read_text(encoding="utf-8")
+    assert "Internal error: NoSuchElementException" not in svg_text
+
+    background_pos = svg_text.find("Background")
+    features_pos = svg_text.find("Features")
+    aggregated_pos = svg_text.find("Aggregated")
+
+    assert background_pos != -1
+    assert features_pos != -1
+    assert aggregated_pos != -1
+    assert background_pos < features_pos < aggregated_pos
 
 
 def test_plot_components_multivariate(multivariate_dataset):

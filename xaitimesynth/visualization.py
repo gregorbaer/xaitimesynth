@@ -25,6 +25,14 @@ LetsPlot.set_theme(theme_light())
 # Module constants
 DEFAULT_COMPONENTS = ["aggregated", "features", "background"]
 DEFAULT_Y_PADDING = 0.05  # 5% padding for y-axis limits
+COMPONENT_DISPLAY_ORDER = ["Background", "Features", "Aggregated"]
+# as_discrete() does not work in facet_grid() in lets-plot, so we enforce a stable facet
+# order with invisible prefix characters and default alpha sorting (hacky, but it works)
+COMPONENT_FACET_ORDER_PREFIXES = {
+    "Background": "\u200b",  # zero width space
+    "Features": "\u200c",  # zero width non-joiner
+    "Aggregated": "\u200d",  # zero width joiner
+}
 
 
 def _extract_dim_from_feature_name(feature_name: str) -> Union[int, None]:
@@ -136,17 +144,38 @@ def _capitalize_components(df: pd.DataFrame) -> pd.DataFrame:
         DataFrame with capitalized component names as ordered categorical.
     """
     df = df.copy()
-    if hasattr(df["component"], "cat"):
-        current_categories = df["component"].cat.categories
-    else:
-        current_categories = df["component"].unique()
-    component_display_names = [c.capitalize() for c in current_categories]
+    component_display_values = [c.capitalize() for c in df["component"].astype(str)]
+    unique_values = pd.Index(component_display_values).unique()
+    ordered_defaults = [c for c in COMPONENT_DISPLAY_ORDER if c in unique_values]
+    remaining = sorted(c for c in unique_values if c not in COMPONENT_DISPLAY_ORDER)
+    component_display_names = ordered_defaults + remaining
     df["component"] = pd.Categorical(
-        [c.capitalize() for c in df["component"].astype(str)],
+        component_display_values,
         categories=component_display_names,
         ordered=True,
     )
     return df
+
+
+def _apply_component_facet_order(
+    df: Union[pd.DataFrame, None],
+) -> Union[pd.DataFrame, None]:
+    """Apply an internal sortable representation to component facet labels.
+
+    lets-plot currently fails with `as_discrete()` inside `facet_grid()`, so this helper
+    prepends invisible characters to known component names. Facet strip labels stay
+    visually unchanged while alphabetical ordering becomes deterministic.
+    """
+    if df is None or "component" not in df.columns:
+        return df
+
+    result = df.copy()
+    component_values = result["component"].astype(str)
+    result["component"] = (
+        component_values.map(COMPONENT_FACET_ORDER_PREFIXES).fillna("")
+        + component_values
+    )
+    return result
 
 
 def _build_rectangles_from_mask(
@@ -613,6 +642,7 @@ def plot_components(
 
     is_multivariate = len(df["dim"].unique()) > 1
     df = _capitalize_components(df)
+    df = _apply_component_facet_order(df)
 
     # Prepare rectangles for feature highlighting
     rectangles = None
@@ -623,6 +653,7 @@ def plot_components(
         if rectangles is not None and "component" in rectangles.columns:
             rectangles = rectangles.copy()
             rectangles["component"] = rectangles["component"].str.capitalize()
+            rectangles = _apply_component_facet_order(rectangles)
 
     # For multivariate time series, use specialized dimension-based plotting
     if is_multivariate:
