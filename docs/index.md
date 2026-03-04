@@ -1,10 +1,12 @@
-# XAITimeSynth
+# xaitimesynth
 
-A Python package for benchmarking explainable AI (XAI) algorithms on time series classification tasks using synthetic data with known ground truth feature locations.
+A Python package for benchmarking explainable AI (XAI) algorithms (mostly feature attributions) on time series classification tasks using synthetic data with known ground truth feature locations.
 
-## Purpose
+## Installation
 
-Generate synthetic time series data where the location of class-discriminating features is known, enabling direct evaluation of whether attribution methods correctly identify important time points.
+```bash
+pip install xaitimesynth
+```
 
 ## Quick Start
 
@@ -28,7 +30,7 @@ base_builder = (
 train = base_builder.clone(n_samples=200, random_state=42).build()
 test  = base_builder.clone(n_samples=50,  random_state=43).build()
 
-# Replace with your XAI method; shape must be (n_samples, n_dims, n_timesteps)
+# Replace with your XAI method output; shape must be (n_samples, n_dims, n_timesteps)
 attributions = np.random.rand(*test["X"].shape)
 
 # Evaluate against ground truth feature locations
@@ -36,11 +38,14 @@ auc = auc_pr_score(attributions, test, normalize=True)
 rma = relevance_mass_accuracy(attributions, test)
 ```
 
-## Installation
+## Citation
 
-```bash
-pip install xaitimesynth
+If you use xaitimesynth in your work, please consider citing the following paper. It also contains more context about the motivation for this package and some related work.
+
 ```
+TODO: Add reference
+```
+
 
 ## Where to Go Next
 

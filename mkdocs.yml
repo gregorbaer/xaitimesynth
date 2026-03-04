@@ -27,6 +27,9 @@ theme:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      include: ["*.ipynb"]
+      execute: false
   - mkdocstrings:
       handlers:
         python:
@@ -58,12 +61,15 @@ nav:
       - YAML Configuration: guides/yaml_config.md
       - Metrics: guides/metrics.md
       - Adding Data Generators: guides/adding_generators.md
+  - Examples:
+      - Custom Generator Functions: examples/custom_generators.ipynb
   - API Reference:
       - Builder: api/builder.md
       - Components: api/components.md
       - Visualization: api/visualization.md
       - Metrics: api/metrics.md
       - Registry: api/registry.md
+      - Datasets: api/datasets.md
   - Contributing:
       - Commit Guidelines: contributing/commit-guidelines.md
       - Documentation: contributing/documentation.md
