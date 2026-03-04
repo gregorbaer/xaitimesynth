@@ -44,7 +44,7 @@ A classifier trained on this data learns to distinguish between the feature type
 ```
 xaitimesynth/
 ├── builder.py        # TimeSeriesBuilder - fluent API for dataset construction
-├── components.py     # Component definition functions (gaussian, peak, etc.)
+├── components.py     # Component definition functions (gaussian_noise, peak, etc.)
 ├── generators.py     # Implementation that produces actual arrays
 ├── registry.py       # Component registration system
 ├── data_structures.py # TimeSeriesComponents dataclass
@@ -61,9 +61,9 @@ xaitimesynth/
 dataset = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=50)  # Initialize canvas
     .for_class(0)                                      # Select class context
-    .add_signal(gaussian(sigma=0.1))                  # Add a layer
+    .add_signal(gaussian_noise(sigma=0.1))                  # Add a layer
     .for_class(1)
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.7)  # Add another layer
     .build()                                           # Render the result
 )
@@ -101,13 +101,13 @@ Each component is registered with a type that indicates its **intended use**:
 
 | Type | Intended use | Examples |
 |------|--------------|----------|
-| `"signal"` | Full-length background patterns | `random_walk`, `gaussian`, `seasonal` |
+| `"signal"` | Full-length background patterns | `random_walk`, `gaussian_noise`, `seasonal` |
 | `"feature"` | Localized discriminative patterns | `peak`, `trough`, `gaussian_pulse` |
 | `"both"` | Works well either way | `constant`, `trend`, `manual` |
 
 **Important:** This is purely for discoverability via `list_signal_components()` and `list_feature_components()`. It does **not** restrict usage. You can use any component with `add_signal()` or `add_feature()` regardless of its registered type.
 
-For example, while `gaussian` is registered as a signal (it's typically background noise), nothing prevents you from using it as a feature if that's what your experiment needs. The registration just reflects the component's most common use case.
+For example, while `gaussian_noise` is registered as a signal (it's typically background noise), nothing prevents you from using it as a feature if that's what your experiment needs. The registration just reflects the component's most common use case.
 
 ### Signals vs Features (Builder Level)
 
@@ -121,7 +121,7 @@ When building time series, you add two types of components:
 ```python
 # Signals form the background pattern
 builder.add_signal(random_walk(step_size=0.2))
-builder.add_signal(gaussian(sigma=0.1))
+builder.add_signal(gaussian_noise(sigma=0.1))
 
 # Features are the class-discriminating patterns with tracked locations
 builder.add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.7)

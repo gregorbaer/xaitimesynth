@@ -75,7 +75,7 @@ def generate_random_walk(
     return np.cumsum(steps)
 
 
-def generate_gaussian(
+def generate_gaussian_noise(
     n_timesteps: int,
     mu: float = 0.0,
     sigma: float = 0.1,
@@ -103,7 +103,7 @@ def generate_gaussian(
 
     Example:
         >>> rng = np.random.RandomState(1)
-        >>> generate_gaussian(n_timesteps=5, mu=0, sigma=1, rng=rng)
+        >>> generate_gaussian_noise(n_timesteps=5, mu=0, sigma=1, rng=rng)
         array([ 1.62434536, -0.61175641, -0.52817175, -1.07296862,  0.86540763])
     """
     if rng is None:
@@ -895,7 +895,7 @@ def generate_pseudo_periodic(
 GENERATOR_FUNCS = {
     "constant": generate_constant,
     "random_walk": generate_random_walk,
-    "gaussian": generate_gaussian,
+    "gaussian_noise": generate_gaussian_noise,
     "uniform": generate_uniform,
     "seasonal": generate_seasonal,
     "trend": generate_trend,
@@ -918,7 +918,7 @@ def generate_component(
     `component_type`.
 
     Args:
-        component_type (str): The type of component to generate (e.g., 'constant', 'gaussian').
+        component_type (str): The type of component to generate (e.g., 'constant', 'gaussian_noise').
             Must be a key in the `GENERATOR_FUNCS` dictionary.
         n_timesteps (int): The nominal length of the time series context.
         rng (np.random.RandomState): Random number generator instance.

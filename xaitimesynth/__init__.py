@@ -9,7 +9,7 @@ from .builder import TimeSeriesBuilder
 from .components import (
     constant,
     ecg_like,
-    gaussian,
+    gaussian_noise,
     gaussian_pulse,
     manual,
     peak,
@@ -60,7 +60,7 @@ __all__ = [
     # Data Generation Components
     "constant",
     "ecg_like",
-    "gaussian",
+    "gaussian_noise",
     "gaussian_pulse",
     "manual",
     "peak",
@@ -84,7 +84,7 @@ register_component(trend, "both")
 register_component(manual, "both")
 
 register_component(random_walk, "signal")
-register_component(gaussian, "signal")
+register_component(gaussian_noise, "signal")
 register_component(uniform, "signal")
 register_component(ecg_like, "signal")
 register_component(red_noise, "signal")

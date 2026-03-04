@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from .builder import TimeSeriesBuilder
-from .components import gaussian, manual
+from .components import gaussian_noise, manual
 
 
 def generate_cylinder_bell_funnel(
@@ -137,21 +137,21 @@ def generate_cylinder_bell_funnel(
             data_format=data_format,
         )
         .for_class(0, weight=weights[0])  # Cylinder
-        .add_signal(gaussian(mu=0, sigma=1))
+        .add_signal(gaussian_noise(mu=0, sigma=1))
         .add_feature(
             manual(generator=_cylinder),
             random_location=True,
             length_pct=(0.25, 0.75),  # b-a ~ Uniform[32, 96] out of 128 timesteps
         )
         .for_class(1, weight=weights[1])  # Bell
-        .add_signal(gaussian(mu=0, sigma=1))
+        .add_signal(gaussian_noise(mu=0, sigma=1))
         .add_feature(
             manual(generator=_bell),
             random_location=True,
             length_pct=(0.25, 0.75),
         )
         .for_class(2, weight=weights[2])  # Funnel
-        .add_signal(gaussian(mu=0, sigma=1))
+        .add_signal(gaussian_noise(mu=0, sigma=1))
         .add_feature(
             manual(generator=_funnel),
             random_location=True,

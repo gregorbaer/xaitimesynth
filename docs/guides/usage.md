@@ -22,15 +22,15 @@ This guide provides a detailed walkthrough of the xaitimesynth API with examples
 The core workflow is: create a builder, define classes with signals and features, then build.
 
 ```python
-from xaitimesynth import TimeSeriesBuilder, gaussian, peak
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, peak
 
 # Create a simple two-class dataset
 dataset = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=200)
     .for_class(0)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     .for_class(1)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     .add_feature(peak(amplitude=2.0, width=10), start_pct=0.3, end_pct=0.7)
     .build()
 )
@@ -163,12 +163,12 @@ from xaitimesynth import list_components, list_signal_components, list_feature_c
 # List all registered components
 all_components = list_components()
 print(all_components.keys())
-# dict_keys(['constant', 'random_walk', 'gaussian', 'uniform', 'seasonal', ...])
+# dict_keys(['constant', 'random_walk', 'gaussian_noise', 'uniform', 'seasonal', ...])
 
 # List components designed for use as signals (background patterns)
 signals = list_signal_components()
 print(signals.keys())
-# dict_keys(['constant', 'random_walk', 'gaussian', 'uniform', 'seasonal', ...])
+# dict_keys(['constant', 'random_walk', 'gaussian_noise', 'uniform', 'seasonal', ...])
 
 # List components designed for use as features (discriminative patterns)
 features = list_feature_components()
@@ -190,14 +190,14 @@ help(random_walk) # Shows parameters: step_size
 Signals are full-length background patterns. Use `add_signal()` to add them.
 
 ```python
-from xaitimesynth import random_walk, gaussian, seasonal, trend, red_noise
+from xaitimesynth import random_walk, gaussian_noise, seasonal, trend, red_noise
 
 builder = (
     TimeSeriesBuilder(n_timesteps=200)
     .for_class(0)
     # Multiple signals are additive
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_signal(seasonal(period=20, amplitude=0.5))
 )
 ```
@@ -214,7 +214,7 @@ from xaitimesynth import peak, trough, constant, gaussian_pulse
 builder = (
     TimeSeriesBuilder(n_timesteps=100)
     .for_class(1)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     # Fixed position: 30% to 60% of the time series (30 timesteps)
     .add_feature(peak(amplitude=2.0, width=5), start_pct=0.3, end_pct=0.6)
     # Random position: feature takes up 15% of length, placed randomly
@@ -254,7 +254,7 @@ Signals can also be positioned like features using the same parameters:
 builder.add_signal(trend(endpoints=(0, 1)), start_pct=0.0, end_pct=0.5)
 
 # A burst of signal at a random location
-builder.add_signal(gaussian(sigma=2.0), length_pct=0.2, random_location=True)
+builder.add_signal(gaussian_noise(sigma=2.0), length_pct=0.2, random_location=True)
 ```
 
 ## Multivariate Time Series
@@ -267,10 +267,10 @@ builder = (
     .for_class(0)
     # Apply to all dimensions
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
+    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
     .for_class(1)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
+    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
     # Feature only in dimensions 0 and 1
     .add_feature(
         constant(value=1.0),
@@ -307,10 +307,10 @@ For stochastic components, `shared_randomness` controls whether the same random 
 
 ```python
 # shared_randomness=True: Same noise pattern in all dimensions
-builder.add_signal(gaussian(sigma=0.1), dim=[0, 1, 2], shared_randomness=True)
+builder.add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2], shared_randomness=True)
 
 # shared_randomness=False (default): Independent noise in each dimension
-builder.add_signal(gaussian(sigma=0.1), dim=[0, 1, 2], shared_randomness=False)
+builder.add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2], shared_randomness=False)
 ```
 
 ## Creating Data Splits
@@ -322,9 +322,9 @@ Use `clone()` to create train/test/validation splits from the same data distribu
 base_builder = (
     TimeSeriesBuilder(n_timesteps=100)
     .for_class(0)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     .for_class(1)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     .add_feature(peak(amplitude=2.0), length_pct=0.2, random_location=True)
 )
 
@@ -369,12 +369,12 @@ my_dataset:
   classes:
     - id: 0
       signals:
-        - function: gaussian
+        - function: gaussian_noise
           params: { sigma: 0.5 }
     - id: 1
       weight: 1.5  # Sample this class 1.5x as often
       signals:
-        - function: gaussian
+        - function: gaussian_noise
           params: { sigma: 0.5 }
       features:
         - function: peak
@@ -422,14 +422,14 @@ dataset_a:
   n_samples: 500
   classes:
     - id: 0
-      signals: [{ function: gaussian, params: { sigma: 0.5 } }]
+      signals: [{ function: gaussian_noise, params: { sigma: 0.5 } }]
 
 dataset_b:
   <<: *common_settings
   n_samples: 1000
   classes:
     - id: 0
-      signals: [{ function: gaussian, params: { sigma: 0.5 } }]
+      signals: [{ function: gaussian_noise, params: { sigma: 0.5 } }]
 ```
 
 ### Loading from Dictionary or String
@@ -441,7 +441,7 @@ config = {
         "n_timesteps": 100,
         "n_samples": 50,
         "classes": [
-            {"id": 0, "signals": [{"function": "gaussian", "params": {"sigma": 0.5}}]}
+            {"id": 0, "signals": [{"function": "gaussian_noise", "params": {"sigma": 0.5}}]}
         ]
     }
 }
@@ -454,7 +454,7 @@ my_dataset:
   classes:
     - id: 0
       signals:
-        - function: gaussian
+        - function: gaussian_noise
           params: { sigma: 0.5 }
 """
 builders = load_builders_from_config(config_str=yaml_str)
@@ -469,7 +469,7 @@ For complete YAML configuration documentation including anchors, aliases, merge 
 For one-off custom patterns, use `manual()` with either values or a generator function:
 
 ```python
-from xaitimesynth import TimeSeriesBuilder, manual, gaussian
+from xaitimesynth import TimeSeriesBuilder, manual, gaussian_noise
 import numpy as np
 
 # With pre-computed values (must match n_timesteps or use as feature with matching length)

@@ -225,7 +225,7 @@ def load_builders_from_config(
                 - function: random_walk
                   params: { step_size: 0.1 }
                   dimensions: [0, 1] # Apply to both dimensions
-                - function: gaussian
+                - function: gaussian_noise
                   params: { sigma: 0.05 }
                   # dimensions omitted -> applies to all
               features: [] # No specific features for class 0
@@ -234,7 +234,7 @@ def load_builders_from_config(
               weight: 1.5 # Sample class 1 more often
               signals:
                 - { function: random_walk, params: { step_size: 0.1 }, dimensions: [0, 1] }
-                - { function: gaussian, params: { sigma: 0.05 } }
+                - { function: gaussian_noise, params: { sigma: 0.05 } }
               features:
                 - function: peak
                   params: { amplitude: 1.5, width: 3 }

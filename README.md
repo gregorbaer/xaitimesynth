@@ -33,18 +33,18 @@ pip install xaitimesynth
 ## Quick Start
 
 ```python
-from xaitimesynth import TimeSeriesBuilder, gaussian, random_walk, constant
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, random_walk, constant
 
 # Create a dataset where both classes have features (level shifts in opposite directions)
 dataset = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=200, random_state=42)
     .for_class(0)
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_feature(constant(value=-1.0), start_pct=0.4, end_pct=0.6)  # Downward shift
     .for_class(1)
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)   # Upward shift
     .build()
 )
@@ -80,18 +80,18 @@ print(f"Relevance Mass Accuracy: {rma:.3f}")  # Fraction of attribution in groun
 ## Creating Train/Test Splits
 
 ```python
-from xaitimesynth import TimeSeriesBuilder, gaussian, random_walk, constant
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, random_walk, constant
 
 # Define the data structure once (both classes have features)
 base_builder = (
     TimeSeriesBuilder(n_timesteps=100, n_dimensions=3)
     .for_class(0)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
+    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
     .add_feature(constant(-1.0), start_pct=0.4, end_pct=0.6, dim=[0])
     .for_class(1)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
+    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
     .add_feature(constant(1.0), start_pct=0.4, end_pct=0.6, dim=[0])
 )
 
@@ -114,13 +114,13 @@ my_dataset:
     - id: 0
       signals:
         - { function: random_walk, params: { step_size: 0.2 } }
-        - { function: gaussian, params: { sigma: 0.1 } }
+        - { function: gaussian_noise, params: { sigma: 0.1 } }
       features:
         - { function: constant, params: { value: -1.0 }, start_pct: 0.4, end_pct: 0.6 }
     - id: 1
       signals:
         - { function: random_walk, params: { step_size: 0.2 } }
-        - { function: gaussian, params: { sigma: 0.1 } }
+        - { function: gaussian_noise, params: { sigma: 0.1 } }
       features:
         - { function: constant, params: { value: 1.0 }, start_pct: 0.4, end_pct: 0.6 }
 ```
@@ -139,7 +139,7 @@ Discover available components programmatically:
 ```python
 from xaitimesynth import list_signal_components, list_feature_components
 
-# Signal components (background patterns): random_walk, gaussian, seasonal, etc.
+# Signal components (background patterns): random_walk, gaussian_noise, seasonal, etc.
 print(list_signal_components().keys())
 
 # Feature components (discriminative patterns): peak, trough, constant, etc.

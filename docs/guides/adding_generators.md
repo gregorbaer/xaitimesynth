@@ -65,7 +65,7 @@ At the bottom of `generators.py`, there's a dictionary that maps component type 
 GENERATOR_FUNCS = {
     "constant": generate_constant,
     "random_walk": generate_random_walk,
-    "gaussian": generate_gaussian,
+    "gaussian_noise": generate_gaussian_noise,
     # ...
 }
 ```
@@ -160,7 +160,7 @@ All generator functions must follow a standardized signature. Here's why each st
 #### 2. Standard Generator-Specific Parameters
 
 - These are the parameters that control the generator's behavior
-- Examples: `step_size` for random_walk, `mu` and `sigma` for gaussian
+- Examples: `step_size` for random_walk, `mu` and `sigma` for gaussian_noise
 - Placed after `n_timesteps` but before the standard optional parameters
 
 #### 3. `rng: Optional[np.random.RandomState]`
@@ -464,14 +464,14 @@ __all__ = [
 ### Usage:
 
 ```python
-from xaitimesynth import TimeSeriesBuilder, sine_wave, gaussian
+from xaitimesynth import TimeSeriesBuilder, sine_wave, gaussian_noise
 
 # As a signal (full-length background)
 dataset = (
     TimeSeriesBuilder(n_timesteps=200, n_samples=100)
     .for_class(0)
     .add_signal(sine_wave(frequency=0.05, amplitude=1.5))
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .build()
 )
 
@@ -479,9 +479,9 @@ dataset = (
 dataset = (
     TimeSeriesBuilder(n_timesteps=200, n_samples=100)
     .for_class(0)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     .for_class(1)
-    .add_signal(gaussian(sigma=0.5))
+    .add_signal(gaussian_noise(sigma=0.5))
     .add_feature(sine_wave(frequency=0.2, amplitude=2.0), start_pct=0.3, end_pct=0.7)
     .build()
 )

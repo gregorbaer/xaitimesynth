@@ -8,13 +8,15 @@ Components typically used as background signals.
 
 ::: xaitimesynth.components.random_walk
 
-::: xaitimesynth.components.gaussian
+::: xaitimesynth.components.gaussian_noise
 
 ::: xaitimesynth.components.uniform
 
 ::: xaitimesynth.components.red_noise
 
 ::: xaitimesynth.components.ecg_like
+
+::: xaitimesynth.components.pseudo_periodic
 
 ## Feature Components
 

@@ -35,7 +35,7 @@ def random_walk(step_size: float = 0.1, **kwargs) -> Dict[str, Any]:
     return {"type": "random_walk", "step_size": step_size, **kwargs}
 
 
-def gaussian(mu: float = 0.0, sigma: float = 1, **kwargs) -> Dict[str, Any]:
+def gaussian_noise(mu: float = 0.0, sigma: float = 1, **kwargs) -> Dict[str, Any]:
     """Create a definition for a Gaussian noise component.
 
     This component represents a time series with values drawn from a Gaussian (normal) distribution.
@@ -46,9 +46,9 @@ def gaussian(mu: float = 0.0, sigma: float = 1, **kwargs) -> Dict[str, Any]:
         **kwargs: Additional parameters passed to the generator during build time.
 
     Returns:
-        Dict[str, Any]: A dictionary defining the 'gaussian' component with its parameters.
+        Dict[str, Any]: A dictionary defining the 'gaussian_noise' component with its parameters.
     """
-    return {"type": "gaussian", "mu": mu, "sigma": sigma, **kwargs}
+    return {"type": "gaussian_noise", "mu": mu, "sigma": sigma, **kwargs}
 
 
 def uniform(low: float = 0, high: float = 1, **kwargs) -> Dict[str, Any]:

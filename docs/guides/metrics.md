@@ -14,7 +14,7 @@ This guide explains how to evaluate XAI attribution methods using xaitimesynth's
 
 ```python
 import numpy as np
-from xaitimesynth import TimeSeriesBuilder, constant, gaussian, random_walk
+from xaitimesynth import TimeSeriesBuilder, constant, gaussian_noise, random_walk
 from xaitimesynth.metrics import (
     relevance_mass_accuracy,
     relevance_rank_accuracy,
@@ -32,11 +32,11 @@ dataset = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=40, random_state=42)
     .for_class(0)
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_feature(constant(value=-1.0), start_pct=0.4, end_pct=0.6)  # Downward shift
     .for_class(1)
     .add_signal(random_walk(step_size=0.2))
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_feature(constant(value=1.0), start_pct=0.4, end_pct=0.6)   # Upward shift
     .build()
 )
@@ -248,7 +248,7 @@ This example shows a realistic workflow: define a base builder, create train/tes
 
 ```python
 import numpy as np
-from xaitimesynth import TimeSeriesBuilder, gaussian, constant, random_walk
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, constant, random_walk
 from xaitimesynth.metrics import relevance_mass_accuracy, auc_pr_score
 
 # 1. Define a base builder with class definitions
@@ -257,11 +257,11 @@ base_builder = (
     TimeSeriesBuilder(n_timesteps=100, n_dimensions=3)
     .for_class(0)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
+    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
     .add_feature(constant(-1.0), start_pct=0.4, end_pct=0.6, dim=[0])  # Downward shift
     .for_class(1)
     .add_signal(random_walk(step_size=0.2), dim=[0, 1, 2])
-    .add_signal(gaussian(sigma=0.1), dim=[0, 1, 2])
+    .add_signal(gaussian_noise(sigma=0.1), dim=[0, 1, 2])
     .add_feature(constant(1.0), start_pct=0.4, end_pct=0.6, dim=[0])   # Upward shift
 )
 

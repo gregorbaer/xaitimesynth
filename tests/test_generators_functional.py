@@ -5,7 +5,7 @@ from xaitimesynth import (
     TimeSeriesBuilder,
     constant,
     ecg_like,
-    gaussian,
+    gaussian_noise,
     gaussian_pulse,
     manual,
     peak,
@@ -24,7 +24,7 @@ ALL_COMPONENT_FUNCS = [
     trend,
     manual,
     random_walk,
-    gaussian,
+    gaussian_noise,
     uniform,
     red_noise,
     peak,
@@ -57,9 +57,9 @@ def test_all_components_build_as_feature(component_func):
             normalization="zscore",
         )
         .for_class(0)
-        .add_signal(gaussian(sigma=0.1))
+        .add_signal(gaussian_noise(sigma=0.1))
         .for_class(1)
-        .add_signal(gaussian(sigma=0.1))
+        .add_signal(gaussian_noise(sigma=0.1))
         .add_feature(feature, start_pct=0.3, end_pct=0.7)
         .build()
     )

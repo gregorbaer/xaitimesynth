@@ -11,7 +11,7 @@ from xaitimesynth.generators import (
     generate_component,
     generate_constant,
     generate_ecg_like,
-    generate_gaussian,
+    generate_gaussian_noise,
     generate_gaussian_pulse,
     generate_manual,
     generate_peak,
@@ -35,7 +35,7 @@ def rng():
 STANDARD_GENERATORS = [
     generate_constant,
     generate_random_walk,
-    generate_gaussian,
+    generate_gaussian_noise,
     generate_uniform,
     generate_seasonal,
     generate_trend,
@@ -48,7 +48,7 @@ STANDARD_GENERATORS = [
 
 STOCHASTIC_GENERATORS = [
     generate_random_walk,
-    generate_gaussian,
+    generate_gaussian_noise,
     generate_uniform,
     generate_red_noise,
     generate_pseudo_periodic,

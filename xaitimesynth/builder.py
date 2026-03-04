@@ -222,7 +222,7 @@ class TimeSeriesBuilder:
 
         Examples:
             # Full time series (default - no location params)
-            builder.add_signal(gaussian(sigma=0.1))
+            builder.add_signal(gaussian_noise(sigma=0.1))
 
             # Fixed segment from 20% to 50% of the series
             builder.add_signal(constant(value=1.0), start_pct=0.2, end_pct=0.5)
@@ -1362,9 +1362,9 @@ class TimeSeriesBuilder:
             builder = (
                 TimeSeriesBuilder(n_timesteps=100, n_samples=200)
                 .for_class(0)
-                .add_signal(gaussian(sigma=0.1))
+                .add_signal(gaussian_noise(sigma=0.1))
                 .for_class(1)
-                .add_signal(gaussian(sigma=0.1))
+                .add_signal(gaussian_noise(sigma=0.1))
                 .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.6)
             )
 

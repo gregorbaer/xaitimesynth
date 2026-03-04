@@ -57,7 +57,7 @@ def complex_config_dict() -> Dict:
                             "dimensions": [0],
                         },
                         {
-                            "function": "gaussian",
+                            "function": "gaussian_noise",
                             "params": {"sigma": 0.05},
                         },
                     ],
@@ -158,7 +158,7 @@ def test_create_single_builder_from_dict() -> None:
                         "dimensions": [0],
                     },
                     {
-                        "function": "gaussian",
+                        "function": "gaussian_noise",
                         "params": {"sigma": 0.05},
                     },
                 ],
@@ -335,7 +335,7 @@ common: &common
   n_dimensions: 1
 
 gaussian_signal: &gaussian_signal
-  function: gaussian
+  function: gaussian_noise
   params: { sigma: 0.5 }
 
 level_shift: &level_shift
@@ -383,9 +383,9 @@ def test_to_config() -> None:
     builder = (
         xts.TimeSeriesBuilder(n_timesteps=100, n_samples=50, random_state=42)
         .for_class(0)
-        .add_signal(xts.gaussian(sigma=0.1))
+        .add_signal(xts.gaussian_noise(sigma=0.1))
         .for_class(1)
-        .add_signal(xts.gaussian(sigma=0.1))
+        .add_signal(xts.gaussian_noise(sigma=0.1))
         .add_feature(xts.constant(value=1.0), start_pct=0.3, end_pct=0.6)
     )
     config = builder.to_config()
@@ -394,16 +394,16 @@ def test_to_config() -> None:
     assert config["n_samples"] == 50
     assert config["random_state"] == 42
     assert len(config["classes"]) == 2
-    assert config["classes"][0]["signals"][0]["function"] == "gaussian"
+    assert config["classes"][0]["signals"][0]["function"] == "gaussian_noise"
     assert config["classes"][1]["features"][0]["start_pct"] == 0.3
 
     # Weights: default (1.0) should be omitted, non-default should be included
     builder_weights = (
         xts.TimeSeriesBuilder(n_timesteps=50, n_samples=20)
         .for_class(0, weight=1.0)
-        .add_signal(xts.gaussian(sigma=0.1))
+        .add_signal(xts.gaussian_noise(sigma=0.1))
         .for_class(1, weight=2.0)
-        .add_signal(xts.gaussian(sigma=0.1))
+        .add_signal(xts.gaussian_noise(sigma=0.1))
     )
     config_weights = builder_weights.to_config()
     assert "weight" not in config_weights["classes"][0]
@@ -431,10 +431,10 @@ def test_to_config_round_trip() -> None:
         )
         .for_class(0)
         .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1])
-        .add_signal(xts.gaussian(sigma=0.05))
+        .add_signal(xts.gaussian_noise(sigma=0.05))
         .for_class(1)
         .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1])
-        .add_signal(xts.gaussian(sigma=0.05))
+        .add_signal(xts.gaussian_noise(sigma=0.05))
         .add_feature(
             xts.peak(amplitude=1.5, width=3), length_pct=0.2, random_location=True
         )

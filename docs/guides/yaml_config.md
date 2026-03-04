@@ -20,7 +20,7 @@ my_dataset:
   classes:
     - id: 0
       signals:
-        - function: gaussian
+        - function: gaussian_noise
           params: { sigma: 0.5 }
       features:
         - function: constant
@@ -29,7 +29,7 @@ my_dataset:
           end_pct: 0.6
     - id: 1
       signals:
-        - function: gaussian
+        - function: gaussian_noise
           params: { sigma: 0.5 }
       features:
         - function: constant
@@ -65,7 +65,7 @@ dataset_name:
       signals:
         - function: random_walk
           params: { step_size: 0.2 }
-        - function: gaussian
+        - function: gaussian_noise
           params: { sigma: 0.1 }
       features:
         - function: constant
@@ -110,7 +110,7 @@ Signals define the background patterns in your time series. Each signal in the `
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
-| `function` | str | Yes | Generator name (e.g., "random_walk", "gaussian") |
+| `function` | str | Yes | Generator name (e.g., "random_walk", "gaussian_noise") |
 | `params` | dict | No | Parameters passed to the generator |
 | `dimensions` | list | No | Which dimensions to apply to (null = all) |
 | `start_pct`, `end_pct` | float | No | Position (0-1) for partial coverage |
@@ -178,7 +178,7 @@ The Python API uses a tuple for ranges:
 
 ### Available Functions
 
-The `function` field must match the name of a component function in the package (e.g., `gaussian`, `peak`, `random_walk`). Use `list_signal_components()` and `list_feature_components()` to discover available functions programmatically. See the [Usage Guide](usage.md#discovering-available-components) for details.
+The `function` field must match the name of a component function in the package (e.g., `gaussian_noise`, `peak`, `random_walk`). Use `list_signal_components()` and `list_feature_components()` to discover available functions programmatically. See the [Usage Guide](usage.md#discovering-available-components) for details.
 
 ## Loading Configurations
 
@@ -227,7 +227,7 @@ common: &common
 
 # Define reusable signal configurations
 gaussian_background: &gaussian_background
-  function: gaussian
+  function: gaussian_noise
   params: { sigma: 1.0 }
 
 # Use anchors in dataset definitions
@@ -264,15 +264,15 @@ If you've built a dataset programmatically and want to save its configuration fo
 
 ```python
 import yaml
-from xaitimesynth import TimeSeriesBuilder, gaussian, peak
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, peak
 
 # Define dataset in Python
 builder = (
     TimeSeriesBuilder(n_timesteps=100, n_samples=200)
     .for_class(0)
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .for_class(1)
-    .add_signal(gaussian(sigma=0.1))
+    .add_signal(gaussian_noise(sigma=0.1))
     .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.6)
 )
 
