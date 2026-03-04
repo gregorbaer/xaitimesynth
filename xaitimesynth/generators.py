@@ -403,17 +403,13 @@ def generate_peak(
             if center_index + 1 < end_index:
                 peak_signal[center_index + 1 : end_index] = peak_values[:-1][::-1]
         else:  # Even width, plateau
-            # Ascending part
-            peak_signal[start_index:center_index] = peak_values[
-                :-1
-            ]  # Exclude final amplitude
-            # Plateau
-            peak_signal[center_index : center_index + 2] = (
-                amplitude  # Assuming even width means 2 center points
-            )
+            # Ascending part: half_width - 1 values from 0 up to (not including) amplitude
+            peak_signal[start_index : center_index - 1] = peak_values[:-1]
+            # Plateau: two center points at amplitude
+            peak_signal[center_index - 1 : center_index + 1] = amplitude
             # Descending part
-            if center_index + 2 < end_index:
-                peak_signal[center_index + 2 : end_index] = peak_values[:-1][::-1]
+            if center_index + 1 < end_index:
+                peak_signal[center_index + 1 : end_index] = peak_values[:-1][::-1]
 
     # More sophisticated peak shapes could be implemented here (e.g., Gaussian)
     # Example: Gaussian peak
