@@ -190,7 +190,7 @@ def test_create_single_builder_from_dict() -> None:
     assert builder.random_state == 42
     assert len(builder.class_definitions) == 2
     assert builder.class_definitions[1]["weight"] == 1.5
-    assert len(builder.class_definitions[0]["components"]["foundation"]) == 2
+    assert len(builder.class_definitions[0]["components"]["background"]) == 2
     assert len(builder.class_definitions[1]["components"]["features"]) == 1
 
 

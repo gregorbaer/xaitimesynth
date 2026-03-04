@@ -146,7 +146,7 @@ comp = components[sample_idx]  # Get one sample's breakdown
 
 Each `TimeSeriesComponents` has these attributes:
 
-#### `foundation`
+#### `background`
 
 Base signal pattern (random walks, seasonal patterns, etc.).
 
@@ -156,16 +156,16 @@ Base signal pattern (random walks, seasonal patterns, etc.).
 | Note | Shape is (T, D), not (D, T) |
 
 ```python
-foundation = comp.foundation
-print(foundation.shape)  # (100, 3)
+background = comp.background
+print(background.shape)  # (100, 3)
 
-# Get foundation for dimension 0
-foundation_dim0 = foundation[:, 0]  # Shape: (100,)
+# Get background for dimension 0
+background_dim0 = background[:, 0]  # Shape: (100,)
 ```
 
 #### `aggregated`
 
-Final combined signal (foundation + features). This matches the corresponding row in `X` but with `(T, D)` shape instead of `(D, T)`.
+Final combined signal (background + features). This matches the corresponding row in `X` but with `(T, D)` shape instead of `(D, T)`.
 
 | Property | Value |
 |----------|-------|
@@ -275,7 +275,7 @@ score = auc_pr_score(attributions, dataset)
 ```python
 from xaitimesynth import plot_components, plot_component
 
-# Plot all components (foundation, features, aggregated) for sample 0, dimension 0
+# Plot all components (background, features, aggregated) for sample 0, dimension 0
 plot_components(dataset, sample_indices=0, dimensions=[0])
 
 # Or plot individual arrays using plot_component
@@ -283,7 +283,7 @@ sample_idx = 0
 dim_idx = 0
 comp = dataset["components"][sample_idx]
 
-plot_component(signal=comp.foundation[:, dim_idx], title="Foundation")
+plot_component(signal=comp.background[:, dim_idx], title="Background")
 plot_component(signal=comp.aggregated[:, dim_idx], title="Aggregated")
 ```
 
@@ -324,7 +324,7 @@ sample_mask = comp.feature_masks["feature_0_constant_dim0"]
 | `dataset["X"]` | `(N, D, T)` | `channels_first` format |
 | `dataset["y"]` | `(N,)` | |
 | `dataset["feature_masks"][key]` | `(N, T)` | Boolean |
-| `comp.foundation` | `(T, D)` | Per-sample |
+| `comp.background` | `(T, D)` | Per-sample |
 | `comp.aggregated` | `(T, D)` | Per-sample |
 | `comp.features[key]` | `(T,)` | 1D per feature |
 | `comp.feature_masks[key]` | `(T,)` | 1D per feature |

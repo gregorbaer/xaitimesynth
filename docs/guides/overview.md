@@ -25,15 +25,15 @@ In real-world time series classification, we rarely have ground truth about whic
 Every time series in xaitimesynth follows an additive composition model:
 
 ```
-x = foundation + feature
+x = background + feature
 ```
 
-- **Foundation**: The base signal pattern (random walks, seasonal patterns, noise, trends)
+- **Background**: The base signal pattern (random walks, seasonal patterns, noise, trends)
 - **Feature**: The class-discriminating pattern in a specific time window
 
 For a two-class problem, you might have:
-- Class 0: foundation + feature A (e.g., downward level shift)
-- Class 1: foundation + feature B (e.g., upward level shift)
+- Class 0: background + feature A (e.g., downward level shift)
+- Class 1: background + feature B (e.g., upward level shift)
 
 A classifier trained on this data learns to distinguish between the feature types. An XAI method should attribute high importance to the feature window where the discriminative pattern occurs. Since we know exactly where each feature is located, we can directly measure whether the attributions are correct.
 
@@ -115,7 +115,7 @@ When building time series, you add two types of components:
 
 | Method | Purpose | Stored in |
 |--------|---------|-----------|
-| `add_signal()` | Background patterns (full-length or positioned) | `components.foundation` |
+| `add_signal()` | Background patterns (full-length or positioned) | `components.background` |
 | `add_feature()` | Class-discriminating patterns with known locations | `components.features` |
 
 ```python
@@ -127,7 +127,7 @@ builder.add_signal(gaussian_noise(sigma=0.1))
 builder.add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.7)
 ```
 
-All signals are combined additively into the foundation component. Features are tracked separately so their locations can be used as ground truth for XAI evaluation.
+All signals are combined additively into the background component. Features are tracked separately so their locations can be used as ground truth for XAI evaluation.
 
 ### Other Key Terms
 
@@ -151,16 +151,16 @@ Here's how data flows through the system when you call `.build()`:
 
 ```
 1. TimeSeriesBuilder stores class definitions
-   └── Each class has: label, weight, components (foundation, features)
+   └── Each class has: label, weight, components (background, features)
        └── Each component is a dictionary: {"type": "peak", "amplitude": 1.0, ...}
 
 2. .build() is called
    └── For each sample:
        └── Select class based on weights
        └── For each dimension:
-           └── Generate foundation signal(s)
+           └── Generate background signal(s)
            └── Generate feature(s) at specified locations
-           └── Combine: foundation + feature
+           └── Combine: background + feature
 
 3. Output dictionary is created:
    ├── "X": numpy array (n_samples, n_dims, n_timesteps)
@@ -176,7 +176,7 @@ Each sample's component breakdown is stored in a `TimeSeriesComponents` object:
 ```python
 @dataclass
 class TimeSeriesComponents:
-    foundation: np.ndarray    # Shape: (n_dims, n_timesteps) - background signals
+    background: np.ndarray    # Shape: (n_dims, n_timesteps) - background signals
     features: np.ndarray      # Shape: (n_dims, n_timesteps) - feature values
     aggregated: np.ndarray    # Shape: (n_dims, n_timesteps) - final signal
     feature_mask: np.ndarray  # Shape: (n_dims, n_timesteps) - binary mask

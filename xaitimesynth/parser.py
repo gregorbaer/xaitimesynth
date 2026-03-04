@@ -36,7 +36,7 @@ def _create_single_builder_from_dict(
         "random_state": dataset_config.get("random_state"),
         "normalization_kwargs": dataset_config.get("normalization_kwargs", {}),
         "feature_fill_value": dataset_config.get("feature_fill_value", np.nan),
-        "foundation_fill_value": dataset_config.get("foundation_fill_value", 0.0),
+        "background_fill_value": dataset_config.get("background_fill_value", 0.0),
         "data_format": dataset_config.get("data_format", "channels_first"),
     }
     builder = xaitimesynth.TimeSeriesBuilder(**builder_args)

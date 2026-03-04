@@ -116,12 +116,12 @@ def test_add_signal_dimension_and_location_options() -> None:
     # shared_randomness=True -> single component entry
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     builder.add_signal(random_walk(), dim=[0, 1], shared_randomness=True)
-    assert len(builder.current_class["components"]["foundation"]) == 1
+    assert len(builder.current_class["components"]["background"]) == 1
 
     # shared_randomness=False -> separate component per dimension
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
     builder.add_signal(random_walk(), dim=[0, 1], shared_randomness=False)
-    assert len(builder.current_class["components"]["foundation"]) == 2
+    assert len(builder.current_class["components"]["background"]) == 2
 
     # shared_location=True with random segment -> single component entry
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
@@ -132,7 +132,7 @@ def test_add_signal_dimension_and_location_options() -> None:
         dim=[0, 1],
         shared_location=True,
     )
-    assert len(builder.current_class["components"]["foundation"]) == 1
+    assert len(builder.current_class["components"]["background"]) == 1
 
     # shared_location=False with random segment -> separate component per dimension
     builder = TimeSeriesBuilder(n_dimensions=2).for_class(1)
@@ -143,7 +143,7 @@ def test_add_signal_dimension_and_location_options() -> None:
         dim=[0, 1],
         shared_location=False,
     )
-    assert len(builder.current_class["components"]["foundation"]) == 2
+    assert len(builder.current_class["components"]["background"]) == 2
 
 
 def test_add_feature_validation() -> None:
@@ -304,7 +304,7 @@ def test_custom_fill_values() -> None:
         n_timesteps=20,
         n_samples=2,
         feature_fill_value=-999.0,
-        foundation_fill_value=-1.0,
+        background_fill_value=-1.0,
         random_state=42,
     )
 
@@ -414,7 +414,7 @@ def test_to_df_basic(n_dimensions, dim_arg) -> None:
     # Check component types
     components = df["component"].unique()
     assert "aggregated" in components, "DataFrame should contain aggregated component"
-    assert "foundation" in components, "DataFrame should contain foundation component"
+    assert "background" in components, "DataFrame should contain background component"
 
     # For multivariate, check all dimensions are present
     if n_dimensions > 1:
@@ -462,7 +462,7 @@ def test_clone(n_dimensions, dim_arg) -> None:
     assert clone1.class_definitions[1]["label"] == 1, "Second class label should be 1"
 
     # Verify components are copied
-    assert len(clone1.class_definitions[0]["components"]["foundation"]) >= 1, (
+    assert len(clone1.class_definitions[0]["components"]["background"]) >= 1, (
         "Foundation components should be copied"
     )
     assert len(clone1.class_definitions[1]["components"]["features"]) >= 1, (
@@ -470,9 +470,9 @@ def test_clone(n_dimensions, dim_arg) -> None:
     )
 
     # Verify independence (deep copy)
-    clone1.class_definitions[0]["components"]["foundation"][0]["step_size"] = 0.3
+    clone1.class_definitions[0]["components"]["background"][0]["step_size"] = 0.3
     assert (
-        original.class_definitions[0]["components"]["foundation"][0]["step_size"] == 0.2
+        original.class_definitions[0]["components"]["background"][0]["step_size"] == 0.2
     ), "Modifying clone should not affect original"
 
     # Verify current_class is properly set (pointing to cloned definitions, not original)

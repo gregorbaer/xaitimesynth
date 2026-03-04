@@ -152,10 +152,10 @@ def test_multivariate_two_classes(basic_multivariate_config):
     sample_idx = np.where(dataset["y"] == 1)[0][0]  # Get first class 1 sample
     components = dataset["components"][sample_idx]
 
-    # Check dimensions of foundation
-    assert components.foundation.shape == (n_timesteps, n_dimensions), (
-        f"Foundation should have shape ({n_timesteps}, {n_dimensions}), "
-        f"got {components.foundation.shape}"
+    # Check dimensions of background
+    assert components.background.shape == (n_timesteps, n_dimensions), (
+        f"Background should have shape ({n_timesteps}, {n_dimensions}), "
+        f"got {components.background.shape}"
     )
 
     # Check feature names for each dimension

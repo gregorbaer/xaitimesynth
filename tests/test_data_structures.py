@@ -5,31 +5,31 @@ from xaitimesynth.data_structures import TimeSeriesComponents
 
 
 @pytest.fixture
-def standard_foundation():
-    """Fixture providing a standard 1D foundation array."""
+def standard_background():
+    """Fixture providing a standard 1D background array."""
     return np.array([1.0, 2.0, 3.0])
 
 
 @pytest.fixture
-def multidim_foundation():
-    """Fixture providing a 2D foundation array."""
+def multidim_background():
+    """Fixture providing a 2D background array."""
     return np.array([[1.0, 2.0], [3.0, 4.0]])
 
 
-def test_time_series_components_initialization(standard_foundation):
+def test_time_series_components_initialization(standard_background):
     """Test TimeSeriesComponents initialization with different component combinations.
 
-    Verifies both minimal (foundation-only) and complete initialization with
+    Verifies both minimal (background-only) and complete initialization with
     all components properly stores and validates the provided values.
 
     Args:
-        standard_foundation: A 1D numpy array fixture for testing.
+        standard_background: A 1D numpy array fixture for testing.
     """
-    # Basic initialization with just foundation
-    ts_components = TimeSeriesComponents(foundation=standard_foundation)
-    assert np.array_equal(ts_components.foundation, standard_foundation), (
-        "Foundation not properly stored. "
-        f"Expected {standard_foundation}, got {ts_components.foundation}"
+    # Basic initialization with just background
+    ts_components = TimeSeriesComponents(background=standard_background)
+    assert np.array_equal(ts_components.background, standard_background), (
+        "Background not properly stored. "
+        f"Expected {standard_background}, got {ts_components.background}"
     )
     assert ts_components.features is None, "Features should be None by default"
     assert ts_components.feature_masks is None, (
@@ -40,17 +40,17 @@ def test_time_series_components_initialization(standard_foundation):
     # Complete initialization with all components
     features = {"feature1": np.array([0.4, 0.5, 0.6])}
     feature_masks = {"feature1": np.array([True, False, True])}
-    aggregated = standard_foundation + features["feature1"]
+    aggregated = standard_background + features["feature1"]
 
     ts_components = TimeSeriesComponents(
-        foundation=standard_foundation,
+        background=standard_background,
         features=features,
         feature_masks=feature_masks,
         aggregated=aggregated,
     )
 
-    assert np.array_equal(ts_components.foundation, standard_foundation), (
-        "Foundation not correctly stored with full initialization"
+    assert np.array_equal(ts_components.background, standard_background), (
+        "Background not correctly stored with full initialization"
     )
     assert "feature1" in ts_components.features, (
         "Feature key 'feature1' missing from features dictionary"
@@ -74,20 +74,20 @@ def test_edge_cases():
 
     Verifies the class can handle empty arrays and other edge cases properly.
     """
-    foundation = np.array([])
-    ts_components = TimeSeriesComponents(foundation=foundation)
-    assert np.array_equal(ts_components.foundation, foundation), (
-        "Empty array foundation not properly stored"
+    background = np.array([])
+    ts_components = TimeSeriesComponents(background=background)
+    assert np.array_equal(ts_components.background, background), (
+        "Empty array background not properly stored"
     )
-    assert ts_components.foundation.size == 0, (
-        f"Empty foundation should have size 0, got {ts_components.foundation.size}"
+    assert ts_components.background.size == 0, (
+        f"Empty background should have size 0, got {ts_components.background.size}"
     )
-    assert ts_components.foundation.shape == (0,), (
-        f"Empty foundation should have shape (0,), got {ts_components.foundation.shape}"
+    assert ts_components.background.shape == (0,), (
+        f"Empty background should have shape (0,), got {ts_components.background.shape}"
     )
 
 
-def test_shape_validation(standard_foundation, multidim_foundation):
+def test_shape_validation(standard_background, multidim_background):
     """Test shape validation across different component types and dimensions.
 
     Verifies that TimeSeriesComponents correctly validates component time dimensions
@@ -95,32 +95,32 @@ def test_shape_validation(standard_foundation, multidim_foundation):
     Works with both 1D and multi-dimensional arrays.
 
     Args:
-        standard_foundation: A 1D numpy array fixture for testing.
-        multidim_foundation: A 2D numpy array fixture for testing.
+        standard_background: A 1D numpy array fixture for testing.
+        multidim_background: A 2D numpy array fixture for testing.
     """
 
     # Test cases with standard 1D arrays
-    def test_with_foundation(foundation):
+    def test_with_background(background):
         # Test with correct shapes first
         # For features, only the time dimension (first dimension) needs to match
-        # So if foundation is 2D with shape (3, 2), features can be 1D with length 3
-        time_length = foundation.shape[0]
+        # So if background is 2D with shape (3, 2), features can be 1D with length 3
+        time_length = background.shape[0]
         features_time_match = {"feature1": np.ones(time_length)}
 
         correct_masks = {"mask1": np.ones(time_length, dtype=bool)}
-        correct_aggregated = np.ones_like(foundation)
+        correct_aggregated = np.ones_like(background)
 
         # This should not raise any errors
         ts = TimeSeriesComponents(
-            foundation=foundation,
+            background=background,
             features=features_time_match,  # Only time dimension needs to match
             feature_masks=correct_masks,  # Only time dimension needs to match
             aggregated=correct_aggregated,  # Exact shape match required
         )
 
         # Verify all components were stored correctly
-        assert np.array_equal(ts.foundation, foundation), (
-            "Foundation not correctly stored in shape validation test"
+        assert np.array_equal(ts.background, background), (
+            "Background not correctly stored in shape validation test"
         )
         assert np.array_equal(
             ts.features["feature1"], features_time_match["feature1"]
@@ -137,11 +137,11 @@ def test_shape_validation(standard_foundation, multidim_foundation):
         wrong_time_dim = np.ones(wrong_time_length)
 
         # Wrong shape for aggregated (must match exactly)
-        if len(foundation.shape) == 1:
+        if len(background.shape) == 1:
             wrong_agg_shape = np.ones((time_length, 2))  # Add a dimension
         else:
             wrong_agg_shape = np.ones(
-                (time_length, foundation.shape[1] + 1)
+                (time_length, background.shape[1] + 1)
             )  # Add to second dimension
 
         # Test each component type with wrong dimensions
@@ -149,21 +149,21 @@ def test_shape_validation(standard_foundation, multidim_foundation):
             (
                 "feature",
                 lambda: TimeSeriesComponents(
-                    foundation=foundation, features={"wrong_feature": wrong_time_dim}
+                    background=background, features={"wrong_feature": wrong_time_dim}
                 ),
                 "first dimension",
             ),
             (
                 "feature mask",
                 lambda: TimeSeriesComponents(
-                    foundation=foundation, feature_masks={"wrong_mask": wrong_time_dim}
+                    background=background, feature_masks={"wrong_mask": wrong_time_dim}
                 ),
                 "first dimension",
             ),
             (
                 "aggregated",
                 lambda: TimeSeriesComponents(
-                    foundation=foundation, aggregated=wrong_agg_shape
+                    background=background, aggregated=wrong_agg_shape
                 ),
                 "shape",  # For aggregated, the full shape must match
             ),
@@ -188,10 +188,10 @@ def test_shape_validation(standard_foundation, multidim_foundation):
                     f"Error message should include expected time dimension length {time_length}"
                 )
             else:
-                assert str(foundation.shape) in error_msg, (
-                    f"Error message should include expected shape {foundation.shape}"
+                assert str(background.shape) in error_msg, (
+                    f"Error message should include expected shape {background.shape}"
                 )
 
     # Run tests with both 1D and multi-dimensional arrays
-    test_with_foundation(standard_foundation)
-    test_with_foundation(multidim_foundation)
+    test_with_background(standard_background)
+    test_with_background(multidim_background)

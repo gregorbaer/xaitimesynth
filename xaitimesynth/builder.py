@@ -16,11 +16,11 @@ class TimeSeriesBuilder:
     known ground truth features for explainable AI (XAI) evaluation.
 
     The builder creates time series by combining multiple components:
-    - Foundation: The base structure of the time series (e.g., random walk, gaussian noise)
+    - Background: The base structure of the time series (e.g., random walk, gaussian noise)
     - Features: Discriminative patterns for class separation (e.g., peaks, level changes, ...)
 
     Terminology:
-    - "Signals" are background components added with add_signal(), stored in foundation
+    - "Signals" are background components added with add_signal(), stored in background
     - Features are components that distinguish between classes, added with add_feature()
 
     Component flexibility:
@@ -44,7 +44,7 @@ class TimeSeriesBuilder:
 
     When components are not registered, the builder uses default fill values:
     - Features: NaN where the feature doesn't exist
-    - Foundation: zeros where no foundation component exists
+    - Background: zeros where no background component exists
 
     Attributes:
         n_timesteps (int): Length of each time series.
@@ -55,7 +55,7 @@ class TimeSeriesBuilder:
         random_state (int): Random seed for reproducibility.
         rng (np.random.RandomState): Random number generator.
         feature_fill_value: Value used for non-existent features (default: np.nan).
-        foundation_fill_value: Value used for foundation when none exists (default: 0.0).
+        background_fill_value: Value used for background when none exists (default: 0.0).
         class_definitions (list): List of class definitions with components.
         current_class (dict): Current class being configured.
         data_format (str): Format of the output tensor data. Either 'channels_last'
@@ -72,7 +72,7 @@ class TimeSeriesBuilder:
         random_state: Optional[int] = None,
         normalization_kwargs: Optional[Dict[str, Any]] = {},
         feature_fill_value: Any = np.nan,
-        foundation_fill_value: Any = 0.0,
+        background_fill_value: Any = 0.0,
         data_format: str = "channels_first",
     ):
         """Initialize the time series builder.
@@ -88,8 +88,8 @@ class TimeSeriesBuilder:
                 For "minmax": can specify "feature_range" as tuple (min, max).
             feature_fill_value: Value used for non-existent features. Default is np.nan.
                 Using NaN makes features only appear where they're defined in visualizations.
-            foundation_fill_value: Value used for foundation when none exists. Default is 0.0.
-                Foundation typically affects the entire time series, so zeros represent
+            background_fill_value: Value used for background when none exists. Default is 0.0.
+                Background typically affects the entire time series, so zeros represent
                 "no contribution" rather than "doesn't exist".
             data_format (str): Format of the output tensor data.
                 'channels_last': [batch, time_steps, channels] (original XAITimeSynth format)
@@ -120,7 +120,7 @@ class TimeSeriesBuilder:
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
         self.feature_fill_value = feature_fill_value
-        self.foundation_fill_value = foundation_fill_value
+        self.background_fill_value = background_fill_value
 
         # Initialize class definitions and the current class
         self.class_definitions = []
@@ -144,7 +144,7 @@ class TimeSeriesBuilder:
         class_def = {
             "label": class_label,
             "weight": weight,
-            "components": {"foundation": [], "features": []},
+            "components": {"background": [], "features": []},
         }
 
         self.class_definitions.append(class_def)
@@ -185,7 +185,7 @@ class TimeSeriesBuilder:
         """Add a signal component to the current class.
 
         Signals form the background structure of the time series (e.g., random walks,
-        gaussian noise, trends). All signals are added to the foundation component.
+        gaussian noise, trends). All signals are added to the background component.
 
         Default behavior: When no location parameters are specified (start_pct, end_pct,
         length_pct all None and random_location=False), the signal spans the entire time
@@ -291,7 +291,7 @@ class TimeSeriesBuilder:
             component_with_params["dimensions"] = dim
             component_with_params["shared_randomness"] = shared_randomness
             component_with_params["shared_location"] = shared_location
-            self.current_class["components"]["foundation"].append(component_with_params)
+            self.current_class["components"]["background"].append(component_with_params)
         else:
             # Create separate component entries for each dimension
             for d in dim:
@@ -299,7 +299,7 @@ class TimeSeriesBuilder:
                 component_with_dim["dimensions"] = [d]
                 component_with_dim["shared_randomness"] = shared_randomness
                 component_with_dim["shared_location"] = shared_location
-                self.current_class["components"]["foundation"].append(
+                self.current_class["components"]["background"].append(
                     component_with_dim
                 )
 
@@ -637,14 +637,14 @@ class TimeSeriesBuilder:
 
             for _ in range(count):
                 # Initialize arrays for this sample with appropriate fill values per dimension
-                foundation = np.full(
-                    (self.n_timesteps, self.n_dimensions), self.foundation_fill_value
+                background = np.full(
+                    (self.n_timesteps, self.n_dimensions), self.background_fill_value
                 )
                 features_dict = {}
                 feature_masks_dict = {}
 
                 # Add base structure components
-                for base_def in class_def["components"]["foundation"]:
+                for base_def in class_def["components"]["background"]:
                     # For signals with time range parameters, generate random location once if shared
                     if "random_location" in base_def and base_def["random_location"]:
                         # Determine signal length
@@ -660,9 +660,9 @@ class TimeSeriesBuilder:
 
                         # Apply to specified dimensions with appropriate location handling
                         for i, dim_idx in enumerate(base_def["dimensions"]):
-                            # Create a full-length vector filled with the foundation fill value
+                            # Create a full-length vector filled with the background fill value
                             base_vector = np.full(
-                                self.n_timesteps, self.foundation_fill_value
+                                self.n_timesteps, self.background_fill_value
                             )
 
                             # Determine signal location - possibly unique per dimension
@@ -700,16 +700,16 @@ class TimeSeriesBuilder:
                             # Place the signal in the correct location
                             base_vector[start_idx:end_idx] = signal_values
 
-                            # Add to foundation for this dimension
-                            foundation[:, dim_idx] = self._add_vector_handling_nans(
-                                foundation[:, dim_idx], base_vector
+                            # Add to background for this dimension
+                            background[:, dim_idx] = self._add_vector_handling_nans(
+                                background[:, dim_idx], base_vector
                             )
                     else:
                         # Handle non-random location signals (the original behavior)
                         if "random_location" in base_def:
                             # Fixed location signal
                             base_vector = np.full(
-                                self.n_timesteps, self.foundation_fill_value
+                                self.n_timesteps, self.background_fill_value
                             )
 
                             start_pct = base_def["start_pct"]
@@ -745,12 +745,12 @@ class TimeSeriesBuilder:
 
                         # Apply to all specified dimensions with the same signal
                         for dim_idx in base_def["dimensions"]:
-                            foundation[:, dim_idx] = self._add_vector_handling_nans(
-                                foundation[:, dim_idx], base_vector
+                            background[:, dim_idx] = self._add_vector_handling_nans(
+                                background[:, dim_idx], base_vector
                             )
 
                 # Initialize aggregated time series
-                aggregated = foundation.copy()
+                aggregated = background.copy()
 
                 # Add features
                 for feature_idx, feature_def in enumerate(
@@ -824,7 +824,7 @@ class TimeSeriesBuilder:
                 if return_components:
                     all_components.append(
                         TimeSeriesComponents(
-                            foundation=foundation,
+                            background=background,
                             features=features_dict,
                             feature_masks=feature_masks_dict,
                             aggregated=aggregated,
@@ -900,7 +900,7 @@ class TimeSeriesBuilder:
             classes (Optional[List[int]]): List of class labels to include.
                 If None, includes all classes.
             components (Optional[List[str]]): List of component types to include.
-                Default includes all: ["aggregated", "foundation", "features"]
+                Default includes all: ["aggregated", "background", "features"]
             dimensions (Optional[List[int]]): List of dimension indices to include.
                 If None, includes all dimensions.
             format_classes (bool): If True, format class labels as "Class X".
@@ -920,7 +920,7 @@ class TimeSeriesBuilder:
             ValueError: If specified dimensions are out of range.
         """
         # Default components to include (use programming-friendly names)
-        default_components = ["aggregated", "foundation", "features"]
+        default_components = ["aggregated", "background", "features"]
         components_to_include = (
             components if components is not None else default_components
         )
@@ -1004,7 +1004,7 @@ class TimeSeriesBuilder:
 
         # Process components if available
         if "components" in dataset:
-            for component_name in ["foundation"]:
+            for component_name in ["background"]:
                 if component_name in components_to_include:
                     for dim_idx in dimensions:
                         comp_data = []
@@ -1255,7 +1255,7 @@ class TimeSeriesBuilder:
         random_state: Optional[int] = None,
         normalization_kwargs: Optional[Dict[str, Any]] = None,
         feature_fill_value: Optional[Any] = None,
-        foundation_fill_value: Optional[Any] = None,
+        background_fill_value: Optional[Any] = None,
         data_format: Optional[str] = None,
     ) -> "TimeSeriesBuilder":
         """Create a new builder with the same class definitions but different parameters.
@@ -1273,7 +1273,7 @@ class TimeSeriesBuilder:
             random_state: New random seed for reproducibility. Defaults to original value.
             normalization_kwargs: New normalization parameters. Defaults to original value.
             feature_fill_value: New value for non-existent features. Defaults to original value.
-            foundation_fill_value: New value for foundation. Defaults to original value.
+            background_fill_value: New value for background. Defaults to original value.
             data_format: New data format ('channels_first' or 'channels_last'). Defaults to original value.
 
         Returns:
@@ -1320,9 +1320,9 @@ class TimeSeriesBuilder:
             "feature_fill_value": feature_fill_value
             if feature_fill_value is not None
             else self.feature_fill_value,
-            "foundation_fill_value": foundation_fill_value
-            if foundation_fill_value is not None
-            else self.foundation_fill_value,
+            "background_fill_value": background_fill_value
+            if background_fill_value is not None
+            else self.background_fill_value,
             "data_format": data_format if data_format is not None else self.data_format,
         }
         # Create new builder with updated parameters
@@ -1453,9 +1453,9 @@ class TimeSeriesBuilder:
             if class_def.get("weight", 1.0) != 1.0:
                 class_config["weight"] = class_def["weight"]
 
-            # Convert foundation components to signals list
+            # Convert background components to signals list
             signals = []
-            for comp in class_def["components"].get("foundation", []):
+            for comp in class_def["components"].get("background", []):
                 signals.append(convert_component(comp))
 
             if signals:

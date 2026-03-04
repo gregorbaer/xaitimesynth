@@ -23,7 +23,7 @@ from .generators import GENERATOR_FUNCS, generate_component
 LetsPlot.set_theme(theme_light())
 
 # Module constants
-DEFAULT_COMPONENTS = ["aggregated", "features", "foundation"]
+DEFAULT_COMPONENTS = ["aggregated", "features", "background"]
 DEFAULT_Y_PADDING = 0.05  # 5% padding for y-axis limits
 
 
@@ -335,7 +335,7 @@ def prepare_plot_data(
             - int: Single sample index (e.g., 5)
             - None: Use first sample of each class (default)
         components_to_include (Optional[List[str]]): List of components to include. If None, include all.
-            Default components: ["aggregated", "features", "foundation"].
+            Default components: ["aggregated", "features", "background"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
 
     Returns:
@@ -507,7 +507,7 @@ def plot_components(
     """Create time series visualization with feature indicators as rectangles.
 
     This function visualizes time series data by showing its components (aggregated series,
-    foundation, features) with options to highlight feature locations.
+    background, features) with options to highlight feature locations.
 
     Args:
         dataset (Dict): Dataset containing time series data and components.
@@ -522,7 +522,7 @@ def plot_components(
               for class 1). The sample at each index must actually belong to the specified class.
             - None: Use first sample from each class (default behavior)
         components (Optional[List[str]]): List of components to include. Can be used to exclude
-            certain components. Default: ["aggregated", "features", "foundation"].
+            certain components. Default: ["aggregated", "features", "background"].
         dimensions (Optional[List[int]]): List of dimensions to include. If None, include all dimensions.
             For multivariate time series, this allows selecting specific dimensions.
         show_indicators (bool): Whether to show feature indicators.

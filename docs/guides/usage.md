@@ -120,7 +120,7 @@ The length distribution is identical; only the start-position constraint is rela
 | `normalization_kwargs` | {} | Extra args for normalization (e.g., feature_range for minmax) |
 | `data_format` | "channels_first" | Output format: "channels_first" (N,D,T) or "channels_last" (N,T,D) |
 | `feature_fill_value` | np.nan | Fill value for feature component outside feature window |
-| `foundation_fill_value` | 0.0 | Fill value for foundation component |
+| `background_fill_value` | 0.0 | Fill value for background component |
 
 ### Normalization Options
 
@@ -202,7 +202,7 @@ builder = (
 )
 ```
 
-All signals are combined additively into the foundation component.
+All signals are combined additively into the background component.
 
 ## Adding Features
 
@@ -535,7 +535,7 @@ dataset = builder.build()
 # Get the first sample's components
 sample = dataset["components"][0]
 
-print(sample.foundation.shape)    # (n_timesteps, n_dims) - foundation signals
+print(sample.background.shape)    # (n_timesteps, n_dims) - background signals
 print(sample.noise.shape)         # (n_timesteps, n_dims) - noise signals
 print(sample.aggregated.shape)    # (n_timesteps, n_dims) - final combined signal
 print(sample.features)            # Dict of feature name -> array of feature values
