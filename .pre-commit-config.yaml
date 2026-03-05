@@ -14,7 +14,7 @@ repos:
         name: Strip notebook output
         description: "Strip output from Jupyter and IPython notebooks"
         files: ".ipynb$"
-        exclude: "^docs/examples/"
+        exclude: "^docs/" # Exclude notebooks in the docs directory
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.4 # Updated to a newer version that includes ruff-format

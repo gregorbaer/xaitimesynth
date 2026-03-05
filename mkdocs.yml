@@ -55,7 +55,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Guides:
-      - Overview: guides/overview.md
+      - Overview: guides/overview.ipynb
       - Usage: guides/usage.md
       - YAML Configuration: guides/yaml_config.md
       - Metrics: guides/metrics.md

@@ -4,39 +4,11 @@ This guide explains how to evaluate XAI attribution methods using xaitimesynth's
 
 ## Table of Contents
 
-1. [Quick Start](#quick-start)
-2. [Available Metrics](#available-metrics)
-3. [Input Format](#input-format)
-4. [Aggregation Modes](#aggregation-modes)
-5. [Working with External XAI Packages](#working-with-external-xai-packages)
+1. [Available Metrics](#available-metrics)
+2. [Input Format](#input-format)
+3. [Aggregation Modes](#aggregation-modes)
+4. [Working with External XAI Packages](#working-with-external-xai-packages)
 
-## Quick Start
-
-```python
-import numpy as np
-from xaitimesynth import TimeSeriesBuilder, gaussian_noise, gaussian_pulse, seasonal
-from xaitimesynth.metrics import auc_pr_score, relevance_mass_accuracy
-
-base_builder = (
-    TimeSeriesBuilder(n_timesteps=100, normalization="zscore")
-    .for_class(0)
-    .add_signal(gaussian_noise(sigma=1.0))
-    .add_feature(gaussian_pulse(amplitude=3.0), random_location=True, length_pct=0.3)
-    .for_class(1)
-    .add_signal(gaussian_noise(sigma=1.0))
-    .add_feature(seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3)
-)
-
-train = base_builder.clone(n_samples=200, random_state=42).build()
-test  = base_builder.clone(n_samples=50,  random_state=43).build()
-
-# Replace with your XAI method; shape must be (n_samples, n_dims, n_timesteps)
-attributions = np.random.rand(*test["X"].shape)
-
-auc = auc_pr_score(attributions, test, normalize=True)
-rma = relevance_mass_accuracy(attributions, test)
-print(f"AUC-PR: {auc:.3f}, RMA: {rma:.3f}")
-```
 
 ## Available Metrics
 
