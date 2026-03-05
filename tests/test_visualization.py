@@ -19,6 +19,7 @@ from xaitimesynth import (
 from xaitimesynth.visualization import (
     plot_component,
     plot_components,
+    prepare_plot_data,
     plot_sample,
 )
 
@@ -148,6 +149,78 @@ def test_plot_components_raises_wrong_class(univariate_dataset):
     class_0_idx = np.where(univariate_dataset["y"] == 0)[0][0]
     with pytest.raises(ValueError, match="has class"):
         plot_components(univariate_dataset, sample_indices={1: class_0_idx})
+
+
+def _get_line_layer_mapping(plot_obj):
+    """Extract the mapping dict for the first geom_line layer in a plot spec."""
+    layers = plot_obj.as_dict().get("layers", [])
+    line_layers = [layer for layer in layers if layer.get("geom") == "line"]
+    assert line_layers, "Expected at least one geom_line layer in plot spec"
+    return line_layers[0].get("mapping", {})
+
+
+def test_plot_components_uses_line_group_for_multiple_features_univariate():
+    """Test univariate plots group lines explicitly when multiple features exist."""
+    dataset = (
+        TimeSeriesBuilder(n_samples=20, n_timesteps=50, random_state=42)
+        .for_class(0)
+        .add_signal(random_walk())
+        .for_class(1)
+        .add_signal(random_walk())
+        .add_feature(constant(value=1.0), start_pct=0.2, end_pct=0.4)
+        .add_feature(constant(value=-0.8), start_pct=0.6, end_pct=0.8)
+        .build()
+    )
+
+    p = plot_components(dataset)
+    mapping = _get_line_layer_mapping(p)
+    assert mapping.get("group") == "line_group"
+
+
+def test_plot_components_uses_line_group_for_multiple_features_multivariate():
+    """Test multivariate plots group lines explicitly when multiple features exist."""
+    dataset = (
+        TimeSeriesBuilder(n_samples=20, n_timesteps=50, n_dimensions=2, random_state=42)
+        .for_class(0)
+        .add_signal(random_walk(), dim=[0, 1])
+        .for_class(1)
+        .add_signal(random_walk(), dim=[0, 1])
+        .add_feature(constant(value=1.0), start_pct=0.2, end_pct=0.4, dim=[0])
+        .add_feature(constant(value=-0.8), start_pct=0.6, end_pct=0.8, dim=[0])
+        .build()
+    )
+
+    result = plot_components(dataset)
+    assert isinstance(result, list)
+    assert len(result) == 2
+    for p in result:
+        mapping = _get_line_layer_mapping(p)
+        assert mapping.get("group") == "line_group"
+
+
+def test_prepare_plot_data_keeps_multiple_features_separate():
+    """Test feature rows remain separate (not internally aggregated) in plot data."""
+    dataset = (
+        TimeSeriesBuilder(n_samples=20, n_timesteps=50, random_state=42)
+        .for_class(0)
+        .add_signal(random_walk())
+        .for_class(1)
+        .add_signal(random_walk())
+        .add_feature(constant(value=1.0), start_pct=0.2, end_pct=0.4)
+        .add_feature(constant(value=-0.8), start_pct=0.6, end_pct=0.8)
+        .build()
+    )
+
+    class_1_idx = np.where(dataset["y"] == 1)[0][0]
+    df = prepare_plot_data(
+        dataset,
+        sample_indices={1: class_1_idx},
+        components_to_include=["features"],
+        dimensions=[0],
+    )
+
+    feature_df = df[df["component"] == "features"]
+    assert feature_df["feature"].nunique() > 1
 
 
 # ============================================================================

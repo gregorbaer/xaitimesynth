@@ -119,19 +119,70 @@ def _add_geom_rect(
     return plot
 
 
-def _add_geom_line(plot: Any, line_color: str, line_size: float) -> Any:
+def _add_geom_line(
+    plot: Any,
+    line_color: str,
+    line_size: float,
+    group_col: str = "line_group",
+    data: Union[pd.DataFrame, None] = None,
+) -> Any:
     """Add line geometry to a plot.
+
+    Explicit grouping is needed when panels contain repeated x-values from multiple
+    feature rows (e.g., multiple features in the same class/component facet).
 
     Args:
         plot: The lets_plot object to add lines to.
         line_color: Color for the lines.
         line_size: Size of the lines.
+        group_col: Column name to use for explicit line grouping.
+        data: DataFrame backing the plot, used to check if group_col exists.
 
     Returns:
         The plot with lines added.
     """
-    plot = plot + geom_line(size=line_size, color=line_color)
+    if data is not None and group_col in data.columns:
+        plot = plot + geom_line(
+            mapping=aes(group=group_col), size=line_size, color=line_color
+        )
+    else:
+        plot = plot + geom_line(size=line_size, color=line_color)
     return plot
+
+
+def _add_line_group_column(df: pd.DataFrame) -> pd.DataFrame:
+    """Create a deterministic line-group key for stable line rendering.
+
+    lets-plot can connect unrelated points when repeated `time` values exist in one
+    facet (common for multiple feature rows). This key ensures each logical series
+    is rendered independently.
+    """
+    result = df.copy()
+
+    group_parts = []
+    for col, fallback in [
+        ("sample", "all"),
+        ("class", "all"),
+        ("component", "all"),
+        ("dim", "all"),
+    ]:
+        if col in result.columns:
+            group_parts.append(result[col].astype(str))
+        else:
+            group_parts.append(pd.Series(fallback, index=result.index))
+
+    if "feature" in result.columns:
+        feature_part = result["feature"].fillna("__no_feature__").astype(str)
+    else:
+        feature_part = pd.Series("__no_feature__", index=result.index)
+    group_parts.append(feature_part)
+
+    line_group = group_parts[0]
+    for part in group_parts[1:]:
+        line_group = line_group + "|" + part
+
+    result["line_group"] = line_group
+    return result
 
 
 def _capitalize_components(df: pd.DataFrame) -> pd.DataFrame:
@@ -643,6 +694,7 @@ def plot_components(
     is_multivariate = len(df["dim"].unique()) > 1
     df = _capitalize_components(df)
     df = _apply_component_facet_order(df)
+    df = _add_line_group_column(df)
 
     # Prepare rectangles for feature highlighting
     rectangles = None
@@ -699,7 +751,7 @@ def plot_components(
         rectangles["ymax"] = y_max
         p = _add_geom_rect(p, rectangles, rect_fill, rect_alpha)
 
-    p = _add_geom_line(p, line_color, line_size)
+    p = _add_geom_line(p, line_color, line_size, data=df)
 
     # Use regular facet grid with proper ordering
     p = p + facet_grid(**facet_order, scales="fixed", x_order=x_order, y_order=y_order)
@@ -740,7 +792,7 @@ def _plot_dimensions(
     Returns:
         Union[Any, List[Any]]: lets_plot visualization organized by dimensions.
     """
-    df = df.copy()
+    df = _add_line_group_column(df)
     dims = sorted(df["dim"].unique())
     plots = []
 
@@ -779,7 +831,7 @@ def _plot_dimensions(
         if dim_rects is not None:
             p = _add_geom_rect(p, dim_rects, rect_fill, rect_alpha)
 
-        p = _add_geom_line(p, line_color, line_size)
+        p = _add_geom_line(p, line_color, line_size, data=dim_df)
 
         p = p + facet_grid(y="class", x="component", scales="fixed")
         p = p + scale_y_continuous(limits=[y_min, y_max])
