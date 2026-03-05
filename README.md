@@ -30,7 +30,7 @@ from xaitimesynth import TimeSeriesBuilder, gaussian_noise, gaussian_pulse, seas
 from xaitimesynth.metrics import auc_pr_score, relevance_mass_accuracy
 import numpy as np
 
-# Define dataset structure once
+# define dataset structure once
 base_builder = (
     TimeSeriesBuilder(n_timesteps=100, normalization="zscore")
     .for_class(0)
@@ -38,12 +38,18 @@ base_builder = (
     .add_feature(gaussian_pulse(amplitude=3.0), random_location=True, length_pct=0.3)
     .for_class(1)
     .add_signal(gaussian_noise(sigma=1.0))
-    .add_feature(seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3)
+    .add_feature(
+        seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3
+    )
 )
 
-# Generate train and test sets with different seeds
+# generate train and test sets with different seeds
 train = base_builder.clone(n_samples=200, random_state=42).build()
-test  = base_builder.clone(n_samples=50,  random_state=43).build()
+test = base_builder.clone(n_samples=50, random_state=43).build()
+
+# visualise instances from created dataset (by default first observation from each class)
+plot = plot_components(train)
+plot.show()
 
 # Replace with your XAI method output; shape must be (n_samples, n_dims, n_timesteps)
 attributions = np.random.rand(*test["X"].shape)
@@ -52,6 +58,9 @@ attributions = np.random.rand(*test["X"].shape)
 auc = auc_pr_score(attributions, test, normalize=True)
 rma = relevance_mass_accuracy(attributions, test)
 ```
+
+![Example plot](docs/images/quickstart_dataset.png)
+
 
 ## Documentation
 
@@ -64,7 +73,3 @@ If you use xaitimesynth in your work, please consider citing the following paper
 ```
 TODO: Add reference
 ```
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
