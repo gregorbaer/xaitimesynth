@@ -26,7 +26,7 @@ jobs:
         # Install project in development mode first
         pip install -e .
         # Install remaining dependencies, but ignore the -e file:/// line
-        grep -v "^-e file:" requirements.txt | xargs pip install -r requirements.txt || true
+        grep -v "^-e file:" requirements.txt | pip install -r /dev/stdin
 
     - name: Test with pytest
       run: |
