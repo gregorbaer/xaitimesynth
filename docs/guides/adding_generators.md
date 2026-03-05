@@ -1,25 +1,92 @@
 # Adding Custom Generators
 
-This guide explains how to create custom time series components for use in the TimeSeriesBuilder API. There are two approaches: the `manual()` component for one-off patterns (see [Custom Components in the Usage Guide](usage.md#custom-components)), and registering a proper reusable component covered here.
+This guide explains how to create custom time series components for use in the TimeSeriesBuilder API. There are two approaches: the `manual()` component for one-off patterns (see [Custom data generation](../examples/custom_generators.ipynb)), and registering a proper reusable component covered here.
 
-## Table of Contents
+For defining new custom data generators, the **decorator approach** below or [using manual() function](../examples/custom_generators.ipynb) are easiest and quickest. For reusable generators integrated into the package, follow the two-function pattern: a generator function in `generators.py` + a component function in `components.py`, then register in `__init__.py`.
 
-1. [The Two-Function Pattern](#the-two-function-pattern)
-2. [Standard Parameters Explained](#standard-parameters-explained)
-3. [Adding a New Generator](#adding-a-new-generator)
-4. [Complete Example](#complete-example)
-5. [Alternative: Decorator Approach](#alternative-quick-extension-with-decorators)
+
+## Quick Extension with Decorators
+
+For quick custom extensions or prototyping, you can use the `@register_component_generator` decorator. This simplifies a lot of the steps below into a single decorator:
+
+```python
+# In generators.py or your own module
+from xaitimesynth.registry import register_component_generator
+
+@register_component_generator(component_type="both")
+def generate_sine_wave(
+    n_timesteps: int,
+    frequency: float = 0.1,
+    amplitude: float = 1.0,
+    phase: float = 0.0,
+    rng: Optional[np.random.RandomState] = None,
+    length: Optional[int] = None,
+    **kwargs,
+) -> np.ndarray:
+    """Generate a sine wave signal."""
+    output_length = length if length is not None else n_timesteps
+    t = np.arange(output_length)
+    return amplitude * np.sin(2 * np.pi * frequency * t / n_timesteps + phase)
+```
+
+You can then use your registered component directly in the `TimeSeriesBuilder`. Pass the component as a dictionary with the registered type name, or define a small helper function for a cleaner call site:
+
+```python
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise
+
+# Option 1: pass a dict directly
+dataset = (
+    TimeSeriesBuilder(n_timesteps=200, n_samples=50)
+    .for_class(0)
+    .add_signal({"type": "sine_wave", "frequency": 0.05, "amplitude": 1.5})
+    .add_signal(gaussian_noise(sigma=0.1))
+    .for_class(1)
+    .add_signal(gaussian_noise(sigma=0.1))
+    .add_feature({"type": "sine_wave", "frequency": 0.2, "amplitude": 2.0}, start_pct=0.3, end_pct=0.7)
+    .build()
+)
+
+# Option 2: define a helper for a cleaner API (mirrors the two-function pattern)
+def sine_wave(frequency=0.1, amplitude=1.0, phase=0.0, **kwargs):
+    return {"type": "sine_wave", "frequency": frequency, "amplitude": amplitude, "phase": phase, **kwargs}
+
+dataset = (
+    TimeSeriesBuilder(n_timesteps=200, n_samples=50)
+    .for_class(0)
+    .add_signal(sine_wave(frequency=0.05, amplitude=1.5))
+    .add_signal(gaussian_noise(sigma=0.1))
+    .for_class(1)
+    .add_signal(gaussian_noise(sigma=0.1))
+    .add_feature(sine_wave(frequency=0.2, amplitude=2.0), start_pct=0.3, end_pct=0.7)
+    .build()
+)
+```
+
+**Limitations of the decorator approach**:
+
+- Component function docstrings won't be visible to users
+- Less control over the component function API
+- Not recommended for stable package integration
+
+**Best for**:
+
+- Quick experiments
+- User-defined custom generators
+- Prototyping new components before full integration
+
 
 ## The Two-Function Pattern
 
-XAITimeSynth uses a two-function pattern: one component function and one generator function per component type.
+**⚠️Note:** You likely will only need or want to read the below if you're thinking of more permantently adding a data generating function to this package either locally, or by contributing to the package. Otherwise it's likely too much detail, and you don't need to know the internals to use the package productively.
+
+XAITimeSynth uses a two-function pattern: one component function and one generator function per component type. This is necessary internally as the `TimeSeriesBuilder` passes the dictionary definitions along and creates the data based on the generator functions from the component functions.
 
 ### Component Functions (User-Facing)
 
-**Location**: `components.py`
-**Purpose**: Provide a clean, user-friendly API for defining components
-**Signature**: Takes only user-configurable parameters (no internal stuff)
-**Returns**: A dictionary with the component specification
+- **Location**: `components.py`
+- **Purpose**: Provide a clean, user-friendly API for defining components
+- **Signature**: Takes only user-configurable parameters (no internal stuff)
+- **Returns**: A dictionary with the component specification
 
 Example:
 ```python
@@ -38,10 +105,10 @@ def random_walk(step_size: float = 0.1, **kwargs) -> Dict[str, Any]:
 
 ### Generator Functions (Internal)
 
-**Location**: `generators.py`
-**Purpose**: Actually create the numpy arrays with the time series data
-**Signature**: Always follows a standard pattern (see below)
-**Returns**: A 1D numpy array
+- **Location**: `generators.py`
+- **Purpose**: Actually create the numpy arrays with the time series data
+- **Signature**: Always follows a standard pattern (see below)
+- **Returns**: A 1D numpy array
 
 Example:
 ```python
@@ -91,9 +158,9 @@ All generator functions must follow a standardized signature. Here's why each st
 
 - **Purpose**: The total length of the time series being generated
 - **Why it's needed**:
-  - Generators may need to scale frequencies or patterns to fit the full series length
-  - Even when generating a partial feature (using `length`), knowing the full context helps maintain correct scaling
-  - Example: A sine wave with `period=10` should complete the same number of cycles whether it's a full signal or a localized feature
+    - Generators may need to scale frequencies or patterns to fit the full series length
+    - Even when generating a partial feature (using `length`), knowing the full context helps maintain correct scaling
+    - Example: A sine wave with `period=10` should complete the same number of cycles whether it's a full signal or a localized feature
 
 #### 2. Standard Generator-Specific Parameters
 
@@ -105,18 +172,18 @@ All generator functions must follow a standardized signature. Here's why each st
 
 - **Purpose**: Provides reproducible randomness
 - **Why it's in every generator**:
-  - **Uniform API**: All generators can be called the same way, making the internal dispatch simple
-  - **Reproducibility**: The builder can pass its RNG to all generators for reproducible datasets
-  - **Future-proofing**: Even deterministic generators can be extended with random variations later
-- **For deterministic generators**: Simply ignore this parameter (but still include it in the signature)
+    - Uniform API: All generators can be called the same way, making the internal dispatch simple
+    - Reproducibility: The builder can pass its RNG to all generators for reproducible datasets
+    - Future-proofing: Even deterministic generators can be extended with random variations later
+- For deterministic generators: Simply ignore this parameter (but still include it in the signature)
 
 #### 4. `length: Optional[int]`
 
 - **Purpose**: Specifies the actual output length when different from `n_timesteps`
 - **Why it's needed**:
-  - **Signals vs Features**: Signals span the full series; features are localized to a window
-  - **Builder flexibility**: The builder can request specific lengths for positioned features
-  - **Standard logic**: All generators use the same pattern:
+    - Signals vs Features: Signals span the full series; features are localized to a window
+    - Builder flexibility: The builder can request specific lengths for positioned features
+    - Standard logic: All generators use the same pattern:
     ```python
     output_length = length if length is not None else n_timesteps
     ```
@@ -125,9 +192,9 @@ All generator functions must follow a standardized signature. Here's why each st
 
 - **Purpose**: Catches any extra parameters passed by the builder
 - **Why it's needed**:
-  - **Forward compatibility**: New builder features won't break existing generators
-  - **Flexibility**: Users can pass custom parameters without breaking the API
-  - **Tolerates extras**: If a component definition has extra keys, they won't cause errors
+    - Forward compatibility: New builder features won't break existing generators
+    - Flexibility: Users can pass custom parameters without breaking the API
+    - Tolerates extras: If a component definition has extra keys, they won't cause errors
 
 ### Standard Return Type
 
@@ -380,41 +447,3 @@ dataset = (
     .build()
 )
 ```
-
-## Alternative: Quick Extension with Decorators
-
-For quick custom extensions or prototyping, you can use the `@register_component_generator` decorator. This combines steps 2-4 into a single decorator:
-
-```python
-# In generators.py or your own module
-from xaitimesynth.registry import register_component_generator
-
-@register_component_generator(component_type="both")
-def generate_sine_wave(
-    n_timesteps: int,
-    frequency: float = 0.1,
-    amplitude: float = 1.0,
-    phase: float = 0.0,
-    rng: Optional[np.random.RandomState] = None,
-    length: Optional[int] = None,
-    **kwargs,
-) -> np.ndarray:
-    """Generate a sine wave signal."""
-    output_length = length if length is not None else n_timesteps
-    t = np.arange(output_length)
-    return amplitude * np.sin(2 * np.pi * frequency * t / n_timesteps + phase)
-```
-
-**Limitations of the decorator approach**:
-- Component function docstrings won't be visible to users
-- Less control over the component function API
-- Not recommended for stable package integration
-
-**Best for**:
-- Quick experiments
-- User-defined custom generators
-- Prototyping new components before full integration
-
-## Summary
-
-For user-side custom generators, the **decorator approach** is the quickest path. For reusable generators integrated into the package, follow the two-function pattern: a generator function in `generators.py` + a component function in `components.py`, then register in `__init__.py`.

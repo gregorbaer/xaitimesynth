@@ -2,19 +2,6 @@
 
 This guide provides a detailed walkthrough of the xaitimesynth API. For a quick overview, see the [Quick Start](../index.md).
 
-## Table of Contents
-
-1. [Builder Parameters](#builder-parameters)
-2. [Discovering Available Components](#discovering-available-components)
-3. [Adding Signals](#adding-signals)
-4. [Adding Features](#adding-features)
-5. [Positioning Features and Signals](#positioning-features-and-signals)
-6. [Multivariate Time Series](#multivariate-time-series)
-7. [Creating Data Splits](#creating-data-splits)
-8. [YAML Configuration](#yaml-configuration)
-9. [Custom Components](#custom-components)
-10. [Accessing Component Data](#accessing-component-data)
-
 ## Builder Parameters
 
 `TimeSeriesBuilder` accepts these parameters:
@@ -219,7 +206,9 @@ For the full reference (config options, stochastic lengths, YAML anchors, export
 
 ### Using the `manual()` Component
 
-For one-off custom patterns, use `manual()` with either values or a generator function:
+For one-off custom patterns, use `manual()` with either values or a generator function.
+For more details on how to use custom data generator functions, see [Custom data generation](../examples/custom_generators.ipynb).
+
 
 ```python
 from xaitimesynth import TimeSeriesBuilder, manual, gaussian_noise
@@ -239,45 +228,6 @@ def damped_sine(n_timesteps, rng, frequency=0.1, decay=0.02, length=None, **kwar
 builder.add_signal(manual(generator=damped_sine, frequency=0.05, decay=0.01))
 ```
 
-### Generator Function Signature
-
-Custom generators must follow this signature:
-
-```python
-def my_generator(
-    n_timesteps: int,           # Total time series length (context)
-    # Your custom parameters here
-    param1: float = default,
-    param2: float = default,
-    # Standard parameters (required)
-    rng: np.random.RandomState = None,  # Random state for reproducibility
-    length: int = None,         # Actual output length (may differ from n_timesteps)
-    **kwargs,                   # Catch extra parameters
-) -> np.ndarray:
-    output_length = length if length is not None else n_timesteps
-    # ... your implementation ...
-    return result  # 1D array of shape (output_length,)
-```
-
-### Registering Custom Components
-
-For reusable components, register them with the package:
-
-```python
-from xaitimesynth.registry import register_component
-
-def my_custom_component(param1=1.0, param2=0.5, **kwargs):
-    return {"type": "my_custom", "param1": param1, "param2": param2, **kwargs}
-
-# Register as a signal, feature, or both
-register_component(my_custom_component, "both")
-
-# Now you can use it like built-in components
-builder.add_signal(my_custom_component(param1=2.0))
-```
-
-See [Adding Generators](adding_generators.md) for the complete guide on creating new components.
-
 ## Accessing Component Data
 
 `builder.build()` returns a dictionary with these top-level keys:
@@ -291,15 +241,3 @@ dataset["metadata"]        # Dict — configuration info
 ```
 
 See the [Data Structure Reference](data_structure.md) for shapes, key naming conventions, and access patterns.
-
-### Visualization
-
-```python
-from xaitimesynth import plot_components
-
-# Plot background, features, and aggregated signal for a sample
-plot_components(dataset).show()
-
-# For multivariate data, specify dimensions
-plot_components(dataset, dimensions=[0, 1]).show()
-```

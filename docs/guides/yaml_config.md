@@ -1,12 +1,45 @@
 # YAML Configuration Reference
 
-This page is the format reference for YAML dataset definitions. For a how-to introduction, see the [YAML Configuration section in the Usage Guide](usage.md#yaml-configuration).
+This page is the format reference for YAML dataset definitions. This can be helpful when you want to:
 
-Reasons to use YAML:
-- Share exact dataset configurations with collaborators
-- Define multiple dataset variants in one file
-- Track configuration changes in git
+- Share dataset configurations more easily
 - Keep data generation settings separate from analysis code
+- Define multiple dataset variants in one file
+- Track dataset configuration changes in git
+
+## Quick start
+
+You can load yaml data configs with:
+
+```python
+from xaitimesynth.parser import load_builders_from_config
+
+builders = load_builders_from_config(config_path="config.yaml")
+
+for name, builder in builders.items():
+    dataset = builder.build()
+```
+
+You can also store dataset configurations from code to yaml:
+
+```python
+import yaml
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, peak
+
+# Define dataset in Python
+builder = (
+    TimeSeriesBuilder(n_timesteps=100, n_samples=200)
+    # your dataset definition goes here...
+)
+
+# Export to dictionary
+config = builder.to_config()
+
+# Save to YAML file
+with open("config.yaml", "w") as f:
+    yaml.dump({"my_dataset": config}, f)
+```
+
 
 ## Basic Structure
 
