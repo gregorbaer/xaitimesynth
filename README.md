@@ -1,101 +1,75 @@
-# ds-project-template
+# xaitimesynth
 
-## Developer Set-up
+A Python package for benchmarking explainable AI (XAI) algorithms (mostly feature attributions) on time series classification tasks using synthetic data with known ground truth feature locations.
 
-To activate pre-commit hooks in this project, run:
-```
-pre-commit install
-```
+## Why xaitimesynth?
 
-To run the pre-commit hooks without committing for all files, you can run:
-```
-pre-commit run --all-files
-```
+Evaluating XAI methods for time series is challenging because we rarely know which time points truly matter for classification. xaitimesynth solves this by generating synthetic data where **you control exactly where the class-discriminating features are located**.
 
-## Setting up the project
+Each synthetic time series follows a simple additive model: `x = background + feature`, where the feature is placed at a known window. This lets you directly measure whether attribution methods correctly identify the important time points.
 
-Requirements: Have `uv`, `pyenv`, and `direnv` installed.
+## Key Features
 
-To set up the project as a whole with python environment and initial package installation in one command, run:
+- **Known ground truth**: Feature locations are tracked internally, enabling direct evaluation of attribution correctness
+- **Flexible data generation**: Combine signals (random walks, seasonal patterns, noise) with localized features (peaks, level shifts, pulses)
+- **Univariate and multivariate**: Generate single-channel or multi-channel time series
+- **Fluent builder API**: Chain methods to define complex datasets concisely
+- **YAML configuration**: Define datasets in config files for reproducibility
+- **Built-in metrics**: AUC-PR, AUC-ROC, Relevance Mass Accuracy, Relevance Rank Accuracy, and more
 
-```bash
-make setup
-```
-
-This will install the required python version if necessary and a list of default packages.
-To change the default python version and packages, adjust the `config.mk` file.
-
-Otherwise, or if it does not work, follow the steps below.
-
-### Manual steps
-
-1. **Create a new Python version with pyenv**: Download the necessary python version if it is not already installed on your system. Let’s say you want to install Python 3.12. You can do so with the following command:
-
-    ```bash
-    pyenv install 3.12
-    ```
-    - Set the local python environment with `pyenv local 3.12` to use a specific python version for your project. `uv` should use your local python version to figure out which python to use for installing packages.
-
-2. **Create a new virtual environment with uv**: Navigate to your project root directory and create a new virtual environment using `uv`:
-
-    ```bash
-	uv venv
-    ```
-
-3. **Activate the environment automatically with direnv**: Create a `.envrc` file in your project directory with the following content:
-
-    ```bash
-    echo "source .venv/bin/activate" > .envrc
-    ```
-
-    Then allow it with `direnv`:
-
-    ```bash
-    direnv allow .
-    ```
-
-4. **Install necessary packages**: Now, whenever you enter your project directory, the virtual environment `myenv` will be activated automatically. You can packages with the following command:
-
-    ```bash
-    uv pip install pandas numpy
-    ```
-
-5. **Generate a "lock file" with dependences:** Use UV to generate a `requirements.txt` with all the dependencies and their versions.
-
-    ```bash
-    uv pip install pandas numpyuv pip freeze | uv pip compile - -o requirements.txt
-    ```
-
-
-## Useful UV commands
-
-For commonds, see [UV documentation](https://github.com/astral-sh/uv).
-
-Install a package:
+## Installation
 
 ```bash
-uv pip install flask # Install Flask.
+pip install xaitimesynth
 ```
 
-Generate new "lock file" (poetry equivalent), `requirements.txt` from installed dependencies
+## Quick Start
 
-```bash
-uv pip freeze | uv pip compile - -o requirements.txt  # Lock the current environment.
+```python
+from xaitimesynth import TimeSeriesBuilder, gaussian_noise, gaussian_pulse, seasonal
+from xaitimesynth.metrics import auc_pr_score, relevance_mass_accuracy
+import numpy as np
+
+# define dataset structure once
+base_builder = (
+    TimeSeriesBuilder(n_timesteps=100, normalization="zscore")
+    .for_class(0)
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(gaussian_pulse(amplitude=3.0), random_location=True, length_pct=0.3)
+    .for_class(1)
+    .add_signal(gaussian_noise(sigma=1.0))
+    .add_feature(
+        seasonal(period=10, amplitude=3.0), random_location=True, length_pct=0.3
+    )
+)
+
+# generate train and test sets with different seeds
+train = base_builder.clone(n_samples=200, random_state=42).build()
+test = base_builder.clone(n_samples=50, random_state=43).build()
+
+# visualise instances from created dataset (by default first observation from each class)
+plot = plot_components(train)
+plot.show()
+
+# Replace with your XAI method output; shape must be (n_samples, n_dims, n_timesteps)
+attributions = np.random.rand(*test["X"].shape)
+
+# Evaluate against ground truth feature locations
+auc = auc_pr_score(attributions, test, normalize=True)
+rma = relevance_mass_accuracy(attributions, test)
 ```
 
-To sync a set of locked dependencies with the virtual environment:
-This also uninstalls installed packages if they are not in `requirements.txt`.
+![Example plot](docs/images/quickstart_dataset.png)
 
-```bash
-uv pip sync requirements.txt  # Install from a requirements.txt file.
+
+## Documentation
+
+Full documentation is available at **[LINK: TODO]**.
+
+## Citation
+
+If you use xaitimesynth in your work, please consider citing the following paper. It also contains more context about the motivation for this package and some related work.
+
 ```
-
-# Clean commiting
-
-To rid all notebooks of their output before committing, you can use `nbstripout`. On bash/linux/WSL, use the following command:
-
+TODO: Add reference
 ```
-find . -name '*.ipynb' -exec nbstripout --strip {} +
-```
-
-You can also use `nbdime` to properly be able to see the git diffs with notebook outputs.

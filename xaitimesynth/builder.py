@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -16,13 +16,11 @@ class TimeSeriesBuilder:
     known ground truth features for explainable AI (XAI) evaluation.
 
     The builder creates time series by combining multiple components:
-    - Foundation: The base structure of the time series (e.g., random walk, gaussian noise)
-    - Noise: Random noise added to the time series
+    - Background: The base structure of the time series (e.g., random walk, gaussian noise)
     - Features: Discriminative patterns for class separation (e.g., peaks, level changes, ...)
 
     Terminology:
-    - "Signals" refer to either foundation or noise components, added with add_signal()
-    - Foundation and noise components differ mainly for visualization purposes
+    - "Signals" are background components added with add_signal(), stored in background
     - Features are components that distinguish between classes, added with add_feature()
 
     Component flexibility:
@@ -38,11 +36,6 @@ class TimeSeriesBuilder:
     - Training/test splits with consistent class distributions
     - Built-in visualization and conversion utilities
 
-    Example usage (univariate):
-        ```python
-        TODO: Add example usage here once API is stable.
-        ```
-
     Advanced usage:
     - Components can be configured with various parameters
     - Features can be positioned at fixed or random locations
@@ -51,8 +44,7 @@ class TimeSeriesBuilder:
 
     When components are not registered, the builder uses default fill values:
     - Features: NaN where the feature doesn't exist
-    - Foundation: zeros where no foundation component exists
-    - Noise: zeros where no noise component exists
+    - Background: zeros where no background component exists
 
     Attributes:
         n_timesteps (int): Length of each time series.
@@ -63,8 +55,7 @@ class TimeSeriesBuilder:
         random_state (int): Random seed for reproducibility.
         rng (np.random.RandomState): Random number generator.
         feature_fill_value: Value used for non-existent features (default: np.nan).
-        foundation_fill_value: Value used for foundation when none exists (default: 0.0).
-        noise_fill_value: Value used for noise when none exists (default: np.nan).
+        background_fill_value: Value used for background when none exists (default: 0.0).
         class_definitions (list): List of class definitions with components.
         current_class (dict): Current class being configured.
         data_format (str): Format of the output tensor data. Either 'channels_last'
@@ -81,8 +72,7 @@ class TimeSeriesBuilder:
         random_state: Optional[int] = None,
         normalization_kwargs: Optional[Dict[str, Any]] = {},
         feature_fill_value: Any = np.nan,
-        foundation_fill_value: Any = 0.0,
-        noise_fill_value: Any = np.nan,
+        background_fill_value: Any = 0.0,
         data_format: str = "channels_first",
     ):
         """Initialize the time series builder.
@@ -98,10 +88,9 @@ class TimeSeriesBuilder:
                 For "minmax": can specify "feature_range" as tuple (min, max).
             feature_fill_value: Value used for non-existent features. Default is np.nan.
                 Using NaN makes features only appear where they're defined in visualizations.
-            foundation_fill_value: Value used for foundation when none exists. Default is 0.0.
-                Foundation typically affects the entire time series, so zeros represent
+            background_fill_value: Value used for background when none exists. Default is 0.0.
+                Background typically affects the entire time series, so zeros represent
                 "no contribution" rather than "doesn't exist".
-            noise_fill_value: Value used for noise when none exists. Default is np.nan.
             data_format (str): Format of the output tensor data.
                 'channels_last': [batch, time_steps, channels] (original XAITimeSynth format)
                 'channels_first': [batch, channels, time_steps] (PyTorch/tsai format)
@@ -131,8 +120,7 @@ class TimeSeriesBuilder:
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
         self.feature_fill_value = feature_fill_value
-        self.foundation_fill_value = foundation_fill_value
-        self.noise_fill_value = noise_fill_value
+        self.background_fill_value = background_fill_value
 
         # Initialize class definitions and the current class
         self.class_definitions = []
@@ -156,7 +144,7 @@ class TimeSeriesBuilder:
         class_def = {
             "label": class_label,
             "weight": weight,
-            "components": {"foundation": [], "noise": [], "features": []},
+            "components": {"background": [], "features": []},
         }
 
         self.class_definitions.append(class_def)
@@ -183,67 +171,9 @@ class TimeSeriesBuilder:
                     f"Valid dimensions are 0 to {self.n_dimensions - 1}."
                 )
 
-    # TODO: add random time shift parameter over multiple channels
     def add_signal(
         self,
         component: Dict[str, Any],
-        role: str = "foundation",
-        dim: Optional[List[int]] = None,
-        shared_randomness: bool = False,
-    ) -> "TimeSeriesBuilder":
-        """Add a signal component to the current class.
-
-        Signal components can be either foundation or noise. Foundation components form the
-        base structure of the time series, while noise components add random variations.
-
-        Args:
-            component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
-            role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
-            dim (List[int]): List of dimension indices where this signal should be applied.
-                If None, the signal will be added to all dimensions. Default is None.
-            shared_randomness (bool): If True, the same random pattern will be used across all
-                specified dimensions. If False, each dimension gets its own random pattern
-                (for stochastic components). Default is False.
-
-        Returns:
-            TimeSeriesBuilder: Self for method chaining.
-
-        Raises:
-            ValueError: If no class is selected or if the role is invalid.
-        """
-        if self.current_class is None:
-            raise ValueError("No class selected. Call for_class() first.")
-
-        if role not in ("foundation", "noise"):
-            raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
-
-        if dim is None:
-            dim = list(range(self.n_dimensions))
-        self._validate_dimensions(dim)
-
-        # If shared_randomness is True or only one dimension, store a single component
-        if shared_randomness or len(dim) == 1:
-            component_with_dim = component.copy()
-            component_with_dim["dimensions"] = dim
-            component_with_dim["shared_randomness"] = shared_randomness
-            self.current_class["components"][role].append(component_with_dim)
-
-        # For multiple dimensions with different randomness,
-        # create separate component entries for each dimension
-        else:
-            for d in dim:
-                component_with_dim = component.copy()
-                component_with_dim["dimensions"] = [d]  # Single dimension
-                component_with_dim["shared_randomness"] = shared_randomness
-                self.current_class["components"][role].append(component_with_dim)
-
-        return self
-
-    # TODO: add random time shift parameter over multiple channels
-    def add_signal_segment(
-        self,
-        component: Dict[str, Any],
-        role: str = "foundation",
         dim: Optional[List[int]] = None,
         shared_randomness: bool = False,
         start_pct: Optional[float] = None,
@@ -252,26 +182,34 @@ class TimeSeriesBuilder:
         random_location: bool = False,
         shared_location: bool = True,
     ) -> "TimeSeriesBuilder":
-        """Add a signal component to the current class for a segment of the time series.
+        """Add a signal component to the current class.
 
-        Use this instead of add_signal() when you want to specify a time range for the signal.
+        Signals form the background structure of the time series (e.g., random walks,
+        gaussian noise, trends). All signals are added to the background component.
 
-        Signal components can be either foundation or noise. Foundation components form the
-        base structure of the time series, while noise components add random variations.
+        Default behavior: When no location parameters are specified (start_pct, end_pct,
+        length_pct all None and random_location=False), the signal spans the entire time
+        series length.
+
+        Segment mode: To apply a signal to only part of the time series, either:
+        - Specify start_pct and end_pct for a fixed segment, or
+        - Set random_location=True with length_pct for a randomly positioned segment.
 
         Args:
             component (Dict[str, Any]): Component definition dictionary with 'type' and parameters.
-            role (str): Role of the component, either 'foundation' or 'noise'. Default is 'foundation'.
             dim (List[int]): List of dimension indices where this signal should be applied.
                 If None, the signal will be added to all dimensions. Default is None.
             shared_randomness (bool): If True, the same random pattern will be used across all
                 specified dimensions. If False, each dimension gets its own random pattern
                 (for stochastic components). Default is False.
             start_pct (float, optional): Start position as percentage of time series length (0-1).
+                Required together with end_pct for a fixed segment.
             end_pct (float, optional): End position as percentage of time series length (0-1).
+                Required together with start_pct for a fixed segment.
             length_pct (float, optional): Length of signal as percentage of time series length (0-1).
+                Required when random_location is True.
             random_location (bool): Whether to place the signal at a random location.
-                Default is False (applied to entire time series).
+                Requires length_pct. Default is False.
             shared_location (bool): If True and random_location is True, the same random
                 location will be used across all dimensions. If False, each dimension gets
                 its own random location. Default is True.
@@ -280,41 +218,26 @@ class TimeSeriesBuilder:
             TimeSeriesBuilder: Self for method chaining.
 
         Raises:
-            ValueError: If no class is selected or if the role is invalid.
+            ValueError: If no class is selected or if location parameters are inconsistent.
+
+        Examples:
+            # Full time series (default - no location params)
+            builder.add_signal(gaussian_noise(sigma=0.1))
+
+            # Fixed segment from 20% to 50% of the series
+            builder.add_signal(constant(value=1.0), start_pct=0.2, end_pct=0.5)
+
+            # Random segment of 30% length
+            builder.add_signal(constant(value=1.0), random_location=True, length_pct=0.3)
         """
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")
-
-        if role not in ("foundation", "noise"):
-            raise ValueError(f"Invalid role: {role}. Must be 'foundation' or 'noise'.")
 
         if dim is None:
             dim = list(range(self.n_dimensions))
         self._validate_dimensions(dim)
 
-        # Explicitly validate location parameters based on random_location setting
-        # This ensures validation happens even if has_time_range would be False
-        if random_location:
-            if length_pct is None:
-                raise ValueError(
-                    "length_pct must be provided when random_location is True"
-                )
-            if not (0 < length_pct <= 1):
-                raise ValueError("length_pct must be between 0 and 1")
-        else:
-            if start_pct is None or end_pct is None:
-                raise ValueError(
-                    "start_pct and end_pct must be provided when random_location is False"
-                )
-            if start_pct is not None and end_pct is not None:
-                if not (
-                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
-                ):
-                    raise ValueError(
-                        "Invalid start_pct or end_pct. Must be between 0 and 1, with start_pct < end_pct"
-                    )
-
-        # If we have time range parameters, apply them
+        # Determine if this is a segment or full-series signal
         has_time_range = (
             start_pct is not None
             or end_pct is not None
@@ -322,47 +245,72 @@ class TimeSeriesBuilder:
             or random_location
         )
 
+        # Validate location parameters based on mode
         if has_time_range:
-            # Add time range parameters to component
-            component_with_time = component.copy()
-
             if random_location:
-                component_with_time["random_location"] = True
-                component_with_time["length_pct"] = length_pct
-                component_with_time["shared_location"] = shared_location
+                if length_pct is None:
+                    raise ValueError(
+                        "length_pct must be provided when random_location is True"
+                    )
+                if not (0 < length_pct <= 1):
+                    raise ValueError("length_pct must be between 0 and 1")
             else:
-                component_with_time["random_location"] = False
-                component_with_time["start_pct"] = start_pct
-                component_with_time["end_pct"] = end_pct
-        else:
-            component_with_time = component.copy()
+                # Fixed segment mode - requires both start_pct and end_pct
+                if start_pct is None or end_pct is None:
+                    raise ValueError(
+                        "Both start_pct and end_pct must be provided for a fixed segment"
+                    )
+                if not (
+                    0 <= start_pct < 1 and 0 < end_pct <= 1 and start_pct < end_pct
+                ):
+                    raise ValueError(
+                        "Invalid start_pct or end_pct. Must be between 0 and 1, "
+                        "with start_pct < end_pct"
+                    )
 
-        # Add dimensions and randomness settings to a single component
-        # when using shared location/randomness
-        if shared_location and random_location or shared_randomness or len(dim) == 1:
-            component_with_time["dimensions"] = dim
-            component_with_time["shared_randomness"] = shared_randomness
-            component_with_time["shared_location"] = shared_location
-            self.current_class["components"][role].append(component_with_time)
+        # Build the component definition
+        component_with_params = component.copy()
+
+        if has_time_range:
+            if random_location:
+                component_with_params["random_location"] = True
+                component_with_params["length_pct"] = length_pct
+                component_with_params["shared_location"] = shared_location
+            else:
+                component_with_params["random_location"] = False
+                component_with_params["start_pct"] = start_pct
+                component_with_params["end_pct"] = end_pct
+
+        # Add dimensions and randomness settings
+        # Use single component when sharing location/randomness or single dimension
+        if (
+            (has_time_range and shared_location and random_location)
+            or shared_randomness
+            or len(dim) == 1
+        ):
+            component_with_params["dimensions"] = dim
+            component_with_params["shared_randomness"] = shared_randomness
+            component_with_params["shared_location"] = shared_location
+            self.current_class["components"]["background"].append(component_with_params)
         else:
-            # For multiple dimensions without shared location/randomness,
-            # create separate component entries for each dimension
+            # Create separate component entries for each dimension
             for d in dim:
-                component_with_dim = component_with_time.copy()
-                component_with_dim["dimensions"] = [d]  # Single dimension
+                component_with_dim = component_with_params.copy()
+                component_with_dim["dimensions"] = [d]
                 component_with_dim["shared_randomness"] = shared_randomness
                 component_with_dim["shared_location"] = shared_location
-                self.current_class["components"][role].append(component_with_dim)
+                self.current_class["components"]["background"].append(
+                    component_with_dim
+                )
 
         return self
 
-    # TODO: add random time shift parameter over multiple channels
     def add_feature(
         self,
         component: Dict[str, Any],
         start_pct: Optional[float] = None,
         end_pct: Optional[float] = None,
-        length_pct: Optional[float] = None,
+        length_pct: Optional[Union[float, Tuple[float, float], List[float]]] = None,
         random_location: bool = False,
         dim: Optional[List[int]] = None,
         shared_location: bool = True,
@@ -379,8 +327,11 @@ class TimeSeriesBuilder:
                 Required when random_location is False.
             end_pct (float, optional): End position as percentage of time series length (0-1).
                 Required when random_location is False.
-            length_pct (float, optional): Length of feature as percentage of time series length (0-1).
-                Required when random_location is True.
+            length_pct (float | tuple | list, optional): Length of feature as percentage of time
+                series length. Required when random_location is True. Three forms accepted:
+                - float: fixed length, e.g. ``0.5``
+                - tuple (min, max): sample uniformly per sample in range, e.g. ``(0.25, 0.75)``
+                - list of floats: sample from discrete choices per sample, e.g. ``[0.25, 0.5]``
             random_location (bool): Whether to place the feature at a random location.
                 Default is False (fixed position).
             dim (List[int]): List of dimension indices where this feature should be applied.
@@ -414,8 +365,19 @@ class TimeSeriesBuilder:
                 raise ValueError(
                     "length_pct must be provided when random_location is True"
                 )
-            if not (0 < length_pct <= 1):
-                raise ValueError("length_pct must be between 0 and 1")
+            if isinstance(length_pct, tuple):
+                if len(length_pct) != 2 or not (0 < length_pct[0] < length_pct[1] <= 1):
+                    raise ValueError(
+                        "length_pct tuple must be (min, max) with 0 < min < max <= 1"
+                    )
+            elif isinstance(length_pct, list):
+                if not length_pct or not all(0 < v <= 1 for v in length_pct):
+                    raise ValueError(
+                        "length_pct list must be non-empty with all values in (0, 1]"
+                    )
+            else:
+                if not (0 < length_pct <= 1):
+                    raise ValueError("length_pct must be between 0 and 1")
 
             feature_def["random_location"] = True
             feature_def["length_pct"] = length_pct
@@ -484,6 +446,27 @@ class TimeSeriesBuilder:
             component_type, self.n_timesteps, self.rng, **component_params
         )
 
+    def _resolve_length_pct(
+        self,
+        raw: Union[float, Tuple[float, float], List[float]],
+        rng: np.random.RandomState,
+    ) -> float:
+        """Resolve a length_pct specification to a concrete float for one sample.
+
+        Args:
+            raw: Either a fixed float, a (min, max) tuple for uniform sampling, or a list
+                of floats for discrete choice sampling.
+            rng: Random number generator used for sampling.
+
+        Returns:
+            float: Resolved length as a fraction of the series length.
+        """
+        if isinstance(raw, tuple):
+            return rng.uniform(raw[0], raw[1])
+        elif isinstance(raw, list):
+            return raw[rng.randint(0, len(raw))]
+        return raw
+
     def _generate_feature_vector(
         self,
         feature_def: Dict[str, Any],
@@ -518,7 +501,9 @@ class TimeSeriesBuilder:
                 # Use the cached shared location
                 start_idx, end_idx = shared_location_cache
             else:
-                length_pct = feature_def["length_pct"]
+                length_pct = self._resolve_length_pct(
+                    feature_def["length_pct"], self.rng
+                )
                 feature_length = max(1, int(length_pct * self.n_timesteps))
 
                 # Generate random start position
@@ -652,17 +637,14 @@ class TimeSeriesBuilder:
 
             for _ in range(count):
                 # Initialize arrays for this sample with appropriate fill values per dimension
-                foundation = np.full(
-                    (self.n_timesteps, self.n_dimensions), self.foundation_fill_value
-                )
-                noise = np.full(
-                    (self.n_timesteps, self.n_dimensions), self.noise_fill_value
+                background = np.full(
+                    (self.n_timesteps, self.n_dimensions), self.background_fill_value
                 )
                 features_dict = {}
                 feature_masks_dict = {}
 
                 # Add base structure components
-                for base_def in class_def["components"]["foundation"]:
+                for base_def in class_def["components"]["background"]:
                     # For signals with time range parameters, generate random location once if shared
                     if "random_location" in base_def and base_def["random_location"]:
                         # Determine signal length
@@ -678,9 +660,9 @@ class TimeSeriesBuilder:
 
                         # Apply to specified dimensions with appropriate location handling
                         for i, dim_idx in enumerate(base_def["dimensions"]):
-                            # Create a full-length vector filled with the foundation fill value
+                            # Create a full-length vector filled with the background fill value
                             base_vector = np.full(
-                                self.n_timesteps, self.foundation_fill_value
+                                self.n_timesteps, self.background_fill_value
                             )
 
                             # Determine signal location - possibly unique per dimension
@@ -718,16 +700,16 @@ class TimeSeriesBuilder:
                             # Place the signal in the correct location
                             base_vector[start_idx:end_idx] = signal_values
 
-                            # Add to foundation for this dimension
-                            foundation[:, dim_idx] = self._add_vector_handling_nans(
-                                foundation[:, dim_idx], base_vector
+                            # Add to background for this dimension
+                            background[:, dim_idx] = self._add_vector_handling_nans(
+                                background[:, dim_idx], base_vector
                             )
                     else:
                         # Handle non-random location signals (the original behavior)
                         if "random_location" in base_def:
                             # Fixed location signal
                             base_vector = np.full(
-                                self.n_timesteps, self.foundation_fill_value
+                                self.n_timesteps, self.background_fill_value
                             )
 
                             start_pct = base_def["start_pct"]
@@ -763,118 +745,12 @@ class TimeSeriesBuilder:
 
                         # Apply to all specified dimensions with the same signal
                         for dim_idx in base_def["dimensions"]:
-                            foundation[:, dim_idx] = self._add_vector_handling_nans(
-                                foundation[:, dim_idx], base_vector
-                            )
-
-                # Add noise components - use the same approach as foundation components
-                for noise_def in class_def["components"]["noise"]:
-                    # For noise with random location parameters, generate random location once if shared
-                    if "random_location" in noise_def and noise_def["random_location"]:
-                        # Determine noise length
-                        length_pct = noise_def["length_pct"]
-                        noise_length = max(1, int(length_pct * self.n_timesteps))
-                        max_start = self.n_timesteps - noise_length
-
-                        # If shared_location is True, generate the location once for all dimensions
-                        shared_location = noise_def.get("shared_location", True)
-                        if shared_location:
-                            shared_start_idx = self.rng.randint(0, max_start + 1)
-                            shared_end_idx = shared_start_idx + noise_length
-
-                        # Apply to specified dimensions with appropriate location handling
-                        for i, dim_idx in enumerate(noise_def["dimensions"]):
-                            # Create a full-length vector filled with the noise fill value
-                            noise_vector = np.full(
-                                self.n_timesteps, self.noise_fill_value
-                            )
-
-                            # Determine noise location - possibly unique per dimension
-                            if shared_location:
-                                # Use the shared location for all dimensions
-                                start_idx = shared_start_idx
-                                end_idx = shared_end_idx
-                            else:
-                                # Create a unique location for each dimension
-                                dim_rng = np.random.RandomState(
-                                    self.rng.randint(0, 2**32 - 1)
-                                )
-                                start_idx = dim_rng.randint(0, max_start + 1)
-                                end_idx = start_idx + noise_length
-
-                            # Calculate the actual length of the noise segment
-                            noise_length = end_idx - start_idx
-
-                            # Prepare parameters for component generation
-                            noise_params = noise_def.copy()
-                            noise_type = noise_params.pop("type")
-
-                            # Remove location and dimension parameters
-                            noise_params.pop("random_location", None)
-                            noise_params.pop("length_pct", None)
-                            noise_params.pop("shared_location", None)
-                            noise_params.pop("dimensions", None)
-                            noise_params.pop("shared_randomness", None)
-
-                            # Generate the component only for the specified length
-                            noise_values = generate_component(
-                                noise_type, noise_length, self.rng, **noise_params
-                            )
-
-                            # Place the noise in the correct location
-                            noise_vector[start_idx:end_idx] = noise_values
-
-                            # Add to noise for this dimension
-                            noise[:, dim_idx] = self._add_vector_handling_nans(
-                                noise[:, dim_idx], noise_vector
-                            )
-                    else:
-                        # Handle non-random location noise (the original behavior)
-                        if "random_location" in noise_def:
-                            # Fixed location noise
-                            noise_vector = np.full(
-                                self.n_timesteps, self.noise_fill_value
-                            )
-
-                            start_pct = noise_def["start_pct"]
-                            end_pct = noise_def["end_pct"]
-                            start_idx = int(start_pct * self.n_timesteps)
-                            end_idx = int(end_pct * self.n_timesteps)
-
-                            # Ensure at least one timestep is selected
-                            if start_idx == end_idx:
-                                end_idx = start_idx + 1
-
-                            noise_length = end_idx - start_idx
-
-                            # Generate the component only for the specified length
-                            noise_params = noise_def.copy()
-                            noise_type = noise_params.pop("type")
-
-                            # Remove location parameters
-                            noise_params.pop("random_location", None)
-                            noise_params.pop("start_pct", None)
-                            noise_params.pop("end_pct", None)
-                            noise_params.pop("dimensions", None)
-                            noise_params.pop("shared_randomness", None)
-
-                            noise_values = generate_component(
-                                noise_type, noise_length, self.rng, **noise_params
-                            )
-
-                            noise_vector[start_idx:end_idx] = noise_values
-                        else:
-                            # Full-length noise (original behavior)
-                            noise_vector = self._generate_component_vector(noise_def)
-
-                        # Apply to all specified dimensions with the same noise
-                        for dim_idx in noise_def["dimensions"]:
-                            noise[:, dim_idx] = self._add_vector_handling_nans(
-                                noise[:, dim_idx], noise_vector
+                            background[:, dim_idx] = self._add_vector_handling_nans(
+                                background[:, dim_idx], base_vector
                             )
 
                 # Initialize aggregated time series
-                aggregated = foundation.copy()
+                aggregated = background.copy()
 
                 # Add features
                 for feature_idx, feature_def in enumerate(
@@ -889,7 +765,9 @@ class TimeSeriesBuilder:
                         "shared_location", True
                     ):
                         # Pre-calculate the shared location to ensure it's the same across dimensions
-                        length_pct = feature_def["length_pct"]
+                        length_pct = self._resolve_length_pct(
+                            feature_def["length_pct"], self.rng
+                        )
                         feature_length = max(1, int(length_pct * self.n_timesteps))
                         max_start = self.n_timesteps - feature_length
                         shared_start_idx = self.rng.randint(0, max_start + 1)
@@ -930,14 +808,7 @@ class TimeSeriesBuilder:
 
                         feature_masks[feature_key][sample_idx] = mask
 
-                # Add noise to aggregated series (each dimension separately)
-                for dim_idx in range(self.n_dimensions):
-                    aggregated[:, dim_idx] = self._add_vector_handling_nans(
-                        aggregated[:, dim_idx], noise[:, dim_idx]
-                    )
-
                 # Normalize if required (apply to each dimension separately)
-                # #TODO: check whether normalisation works as intended
                 for dim_idx in range(self.n_dimensions):
                     aggregated[:, dim_idx] = normalize(
                         aggregated[:, dim_idx],
@@ -953,8 +824,7 @@ class TimeSeriesBuilder:
                 if return_components:
                     all_components.append(
                         TimeSeriesComponents(
-                            foundation=foundation,
-                            noise=noise,
+                            background=background,
                             features=features_dict,
                             feature_masks=feature_masks_dict,
                             aggregated=aggregated,
@@ -1030,7 +900,7 @@ class TimeSeriesBuilder:
             classes (Optional[List[int]]): List of class labels to include.
                 If None, includes all classes.
             components (Optional[List[str]]): List of component types to include.
-                Default includes all: ["aggregated", "foundation", "noise", "features"]
+                Default includes all: ["aggregated", "background", "features"]
             dimensions (Optional[List[int]]): List of dimension indices to include.
                 If None, includes all dimensions.
             format_classes (bool): If True, format class labels as "Class X".
@@ -1050,7 +920,7 @@ class TimeSeriesBuilder:
             ValueError: If specified dimensions are out of range.
         """
         # Default components to include (use programming-friendly names)
-        default_components = ["aggregated", "foundation", "noise", "features"]
+        default_components = ["aggregated", "background", "features"]
         components_to_include = (
             components if components is not None else default_components
         )
@@ -1134,7 +1004,7 @@ class TimeSeriesBuilder:
 
         # Process components if available
         if "components" in dataset:
-            for component_name in ["foundation", "noise"]:
+            for component_name in ["background"]:
                 if component_name in components_to_include:
                     for dim_idx in dimensions:
                         comp_data = []
@@ -1385,8 +1255,7 @@ class TimeSeriesBuilder:
         random_state: Optional[int] = None,
         normalization_kwargs: Optional[Dict[str, Any]] = None,
         feature_fill_value: Optional[Any] = None,
-        foundation_fill_value: Optional[Any] = None,
-        noise_fill_value: Optional[Any] = None,
+        background_fill_value: Optional[Any] = None,
         data_format: Optional[str] = None,
     ) -> "TimeSeriesBuilder":
         """Create a new builder with the same class definitions but different parameters.
@@ -1404,8 +1273,7 @@ class TimeSeriesBuilder:
             random_state: New random seed for reproducibility. Defaults to original value.
             normalization_kwargs: New normalization parameters. Defaults to original value.
             feature_fill_value: New value for non-existent features. Defaults to original value.
-            foundation_fill_value: New value for foundation. Defaults to original value.
-            noise_fill_value: New value for noise. Defaults to original value.
+            background_fill_value: New value for background. Defaults to original value.
             data_format: New data format ('channels_first' or 'channels_last'). Defaults to original value.
 
         Returns:
@@ -1452,12 +1320,9 @@ class TimeSeriesBuilder:
             "feature_fill_value": feature_fill_value
             if feature_fill_value is not None
             else self.feature_fill_value,
-            "foundation_fill_value": foundation_fill_value
-            if foundation_fill_value is not None
-            else self.foundation_fill_value,
-            "noise_fill_value": noise_fill_value
-            if noise_fill_value is not None
-            else self.noise_fill_value,
+            "background_fill_value": background_fill_value
+            if background_fill_value is not None
+            else self.background_fill_value,
             "data_format": data_format if data_format is not None else self.data_format,
         }
         # Create new builder with updated parameters
@@ -1475,3 +1340,137 @@ class TimeSeriesBuilder:
                     break
 
         return new_builder
+
+    def to_config(self) -> Dict[str, Any]:
+        """Export the builder configuration as a dictionary.
+
+        Converts the builder's internal state to a configuration dictionary
+        that can be used with `load_builders_from_config()` or serialized to YAML.
+
+        The output format matches what the parser expects, enabling round-trip
+        conversion between Python code and configuration files.
+
+        Returns:
+            Dict[str, Any]: Configuration dictionary with builder parameters
+            and class definitions.
+
+        Example:
+            ```python
+            import yaml
+
+            # Build a dataset programmatically
+            builder = (
+                TimeSeriesBuilder(n_timesteps=100, n_samples=200)
+                .for_class(0)
+                .add_signal(gaussian_noise(sigma=0.1))
+                .for_class(1)
+                .add_signal(gaussian_noise(sigma=0.1))
+                .add_feature(peak(amplitude=1.0), start_pct=0.3, end_pct=0.6)
+            )
+
+            # Export to config dict
+            config = builder.to_config()
+
+            # Save to YAML file
+            with open("config.yaml", "w") as f:
+                yaml.dump({"my_dataset": config}, f)
+
+            # Later, reload from YAML
+            builders = load_builders_from_config(config_path="config.yaml")
+            dataset = builders["my_dataset"].build()
+            ```
+        """
+        # Keys that should stay at the component level, not in params
+        COMPONENT_KEYS = {
+            "type",
+            "dimensions",
+            "shared_randomness",
+            "shared_location",
+            "start_pct",
+            "end_pct",
+            "length_pct",
+            "random_location",
+        }
+
+        def convert_component(comp: Dict[str, Any]) -> Dict[str, Any]:
+            """Convert internal component format to config format."""
+            result = {}
+
+            # Map 'type' to 'function'
+            if "type" in comp:
+                result["function"] = comp["type"]
+
+            # Extract params (everything except special keys)
+            params = {k: v for k, v in comp.items() if k not in COMPONENT_KEYS}
+            if params:
+                result["params"] = params
+
+            # Copy over special keys
+            if "dimensions" in comp:
+                result["dimensions"] = comp["dimensions"]
+            if comp.get("shared_randomness"):
+                result["shared_randomness"] = True
+            if "shared_location" in comp and not comp.get("shared_location", True):
+                result["shared_location"] = False
+
+            # Location parameters
+            if comp.get("random_location"):
+                result["random_location"] = True
+                if "length_pct" in comp:
+                    lp = comp["length_pct"]
+                    # Serialize tuples as {range: [min, max]} for YAML roundtrip fidelity
+                    result["length_pct"] = (
+                        {"range": list(lp)} if isinstance(lp, tuple) else lp
+                    )
+            elif "start_pct" in comp or "end_pct" in comp:
+                if "start_pct" in comp:
+                    result["start_pct"] = comp["start_pct"]
+                if "end_pct" in comp:
+                    result["end_pct"] = comp["end_pct"]
+
+            return result
+
+        # Build the config dictionary
+        config: Dict[str, Any] = {
+            "n_timesteps": self.n_timesteps,
+            "n_samples": self.n_samples,
+            "n_dimensions": self.n_dimensions,
+            "normalization": self.normalization,
+            "data_format": self.data_format,
+        }
+
+        # Only include optional parameters if they have non-default values
+        if self.random_state is not None:
+            config["random_state"] = self.random_state
+        if self.normalization_kwargs:
+            config["normalization_kwargs"] = self.normalization_kwargs
+
+        # Convert class definitions
+        classes = []
+        for class_def in self.class_definitions:
+            class_config: Dict[str, Any] = {"id": class_def["label"]}
+
+            if class_def.get("weight", 1.0) != 1.0:
+                class_config["weight"] = class_def["weight"]
+
+            # Convert background components to signals list
+            signals = []
+            for comp in class_def["components"].get("background", []):
+                signals.append(convert_component(comp))
+
+            if signals:
+                class_config["signals"] = signals
+
+            # Convert features
+            features = []
+            for comp in class_def["components"].get("features", []):
+                features.append(convert_component(comp))
+
+            if features:
+                class_config["features"] = features
+
+            classes.append(class_config)
+
+        config["classes"] = classes
+
+        return config

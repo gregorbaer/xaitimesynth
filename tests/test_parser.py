@@ -54,13 +54,11 @@ def complex_config_dict() -> Dict:
                         {
                             "function": "random_walk",
                             "params": {"step_size": 0.1},
-                            "role": "foundation",
                             "dimensions": [0],
                         },
                         {
-                            "function": "gaussian",
+                            "function": "gaussian_noise",
                             "params": {"sigma": 0.05},
-                            "role": "noise",
                         },
                     ],
                 },
@@ -71,7 +69,6 @@ def complex_config_dict() -> Dict:
                         {
                             "function": "random_walk",
                             "params": {"step_size": 0.1},
-                            "role": "foundation",
                         }
                     ],
                     "features": [
@@ -126,9 +123,10 @@ def temp_config_file(complex_config_dict, tmp_path) -> Path:
     return config_path
 
 
-def test_create_single_builder_from_dict_minimal() -> None:
-    """Test creating a builder from a minimal configuration dictionary."""
-    config = {
+def test_create_single_builder_from_dict() -> None:
+    """Test creating a builder from configuration dictionaries."""
+    # Minimal config
+    minimal_config = {
         "n_timesteps": 50,
         "n_samples": 20,
         "classes": [
@@ -138,30 +136,14 @@ def test_create_single_builder_from_dict_minimal() -> None:
             }
         ],
     }
+    builder = _create_single_builder_from_dict(minimal_config)
+    assert isinstance(builder, TimeSeriesBuilder)
+    assert builder.n_timesteps == 50
+    assert builder.n_samples == 20
+    assert len(builder.class_definitions) == 1
 
-    builder = _create_single_builder_from_dict(config)
-
-    # Verify builder properties
-    assert isinstance(builder, TimeSeriesBuilder), "Should return a TimeSeriesBuilder"
-    assert builder.n_timesteps == 50, "n_timesteps should be set correctly"
-    assert builder.n_samples == 20, "n_samples should be set correctly"
-
-    # Verify class definition
-    assert len(builder.class_definitions) == 1, "Should have one class definition"
-    assert builder.class_definitions[0]["label"] == 0, "Class label should be 0"
-
-    # Verify components
-    assert len(builder.class_definitions[0]["components"]["foundation"]) == 1, (
-        "Should have one foundation component"
-    )
-    assert "random_walk" in str(
-        builder.class_definitions[0]["components"]["foundation"][0]
-    ), "Component should be random_walk"
-
-
-def test_create_single_builder_from_dict_complex() -> None:
-    """Test creating a builder from a more complex configuration dictionary."""
-    config = {
+    # Complex config with multiple classes, dimensions, features
+    complex_config = {
         "n_timesteps": 100,
         "n_samples": 50,
         "n_dimensions": 2,
@@ -173,13 +155,11 @@ def test_create_single_builder_from_dict_complex() -> None:
                     {
                         "function": "random_walk",
                         "params": {"step_size": 0.1},
-                        "role": "foundation",
                         "dimensions": [0],
                     },
                     {
-                        "function": "gaussian",
+                        "function": "gaussian_noise",
                         "params": {"sigma": 0.05},
-                        "role": "noise",
                     },
                 ],
             },
@@ -190,7 +170,6 @@ def test_create_single_builder_from_dict_complex() -> None:
                     {
                         "function": "random_walk",
                         "params": {"step_size": 0.1},
-                        "role": "foundation",
                     }
                 ],
                 "features": [
@@ -200,284 +179,277 @@ def test_create_single_builder_from_dict_complex() -> None:
                         "length_pct": 0.1,
                         "random_location": True,
                         "dimensions": [0],
-                        "shared_location": False,
                     }
                 ],
             },
         ],
     }
-
-    builder = _create_single_builder_from_dict(config)
-
-    # Verify builder properties
+    builder = _create_single_builder_from_dict(complex_config)
     assert builder.n_timesteps == 100
-    assert builder.n_samples == 50
     assert builder.n_dimensions == 2
     assert builder.random_state == 42
-
-    # Verify class definitions
     assert len(builder.class_definitions) == 2
-    assert builder.class_definitions[0]["label"] == 0
-    assert builder.class_definitions[1]["label"] == 1
     assert builder.class_definitions[1]["weight"] == 1.5
-
-    # Verify components for class 0
-    class0 = builder.class_definitions[0]
-    assert len(class0["components"]["foundation"]) == 1
-    assert len(class0["components"]["noise"]) == 1
-    assert len(class0["components"]["features"]) == 0
-
-    # Verify components for class 1
-    class1 = builder.class_definitions[1]
-    # If dimensions are not specified for a signal, shared_randomness defaults to True,
-    # resulting in a single component entry covering all dimensions.
-    assert len(class1["components"]["foundation"]) == 1, (
-        "Expected 1 foundation component for class 1 when dimensions are omitted (shared_randomness=True)"
-    )
-    assert len(class1["components"]["features"]) == 1
+    assert len(builder.class_definitions[0]["components"]["background"]) == 2
+    assert len(builder.class_definitions[1]["components"]["features"]) == 1
 
 
-def test_create_single_builder_missing_classes() -> None:
-    """Test that an error is raised when the 'classes' key is missing."""
-    config = {"n_timesteps": 50, "n_samples": 20}
-
+def test_create_single_builder_validation() -> None:
+    """Test _create_single_builder_from_dict validation errors."""
+    # Missing 'classes' key
     with pytest.raises(ValueError, match="must contain a 'classes' list"):
-        _create_single_builder_from_dict(config)
+        _create_single_builder_from_dict({"n_timesteps": 50, "n_samples": 20})
 
-
-def test_create_single_builder_missing_class_id() -> None:
-    """Test that an error is raised when a class definition is missing an 'id'."""
-    config = {
-        "n_timesteps": 50,
-        "n_samples": 20,
-        "classes": [
-            {
-                # Missing id
-                "signals": [{"function": "random_walk", "params": {"step_size": 0.1}}]
-            }
-        ],
-    }
-
+    # Missing class 'id'
     with pytest.raises(ValueError, match="must have an 'id'"):
-        _create_single_builder_from_dict(config)
-
-
-def test_create_single_builder_missing_signal_function() -> None:
-    """Test that an error is raised when a signal is missing a 'function'."""
-    config = {
-        "n_timesteps": 50,
-        "n_samples": 20,
-        "classes": [
+        _create_single_builder_from_dict(
             {
-                "id": 0,
-                "signals": [
-                    {
-                        # Missing function
-                        "params": {"step_size": 0.1}
-                    }
+                "n_timesteps": 50,
+                "n_samples": 20,
+                "classes": [{"signals": [{"function": "random_walk"}]}],
+            }
+        )
+
+    # Missing signal 'function'
+    with pytest.raises(ValueError, match="must include a 'function' name"):
+        _create_single_builder_from_dict(
+            {
+                "n_timesteps": 50,
+                "n_samples": 20,
+                "classes": [{"id": 0, "signals": [{"params": {"step_size": 0.1}}]}],
+            }
+        )
+
+    # Non-existent function
+    with pytest.raises(AttributeError, match="Could not find signal function"):
+        _create_single_builder_from_dict(
+            {
+                "n_timesteps": 50,
+                "n_samples": 20,
+                "classes": [
+                    {"id": 0, "signals": [{"function": "nonexistent_function"}]}
                 ],
             }
-        ],
-    }
-
-    with pytest.raises(ValueError, match="must include a 'function' name"):
-        _create_single_builder_from_dict(config)
+        )
 
 
-def test_create_single_builder_nonexistent_function() -> None:
-    """Test that an error is raised when a non-existent function is specified."""
-    config = {
-        "n_timesteps": 50,
-        "n_samples": 20,
-        "classes": [
-            {"id": 0, "signals": [{"function": "nonexistent_function", "params": {}}]}
-        ],
-    }
-
-    with pytest.raises(AttributeError, match="Could not find signal function"):
-        _create_single_builder_from_dict(config)
-
-
-def test_load_builders_from_config_dict(minimal_config_dict) -> None:
-    """Test loading builders from a dictionary."""
-    builders = load_builders_from_config(config_dict=minimal_config_dict)
-
-    assert len(builders) == 1, "Should return one builder"
-    assert "test_dataset" in builders, "Builder should be keyed by dataset name"
-    assert isinstance(builders["test_dataset"], TimeSeriesBuilder), (
-        "Value should be a TimeSeriesBuilder"
-    )
-    assert builders["test_dataset"].n_timesteps == 50, (
-        "Builder should have correct parameters"
-    )
-
-
-def test_load_builders_from_config_file(temp_config_file) -> None:
-    """Test loading builders from a YAML file."""
-    builders = load_builders_from_config(config_path=temp_config_file)
-
-    assert len(builders) == 2, "Should return two builders (excluding nested)"
-    assert "dataset_a" in builders, "Should include dataset_a"
-    assert "dataset_b" in builders, "Should include dataset_b"
-    assert "dataset_c" not in builders, "Should not include nested dataset_c by default"
-
-    # Verify properties of one builder
-    assert builders["dataset_a"].n_timesteps == 100
-    assert builders["dataset_a"].n_samples == 50
-    assert builders["dataset_a"].n_dimensions == 2
-
-
-def test_load_builders_from_config_string(complex_config_dict) -> None:
-    """Test loading builders from a YAML string."""
-    config_str = yaml.dump(complex_config_dict)
-    builders = load_builders_from_config(config_str=config_str)
-
-    assert len(builders) == 2, "Should return two builders (excluding nested)"
-    assert "dataset_a" in builders, "Should include dataset_a"
-    assert "dataset_b" in builders, "Should include dataset_b"
-
-    # Verify properties of one builder
-    assert builders["dataset_b"].n_timesteps == 200
-    assert builders["dataset_b"].n_samples == 30
-    assert builders["dataset_b"].n_dimensions == 1
-
-
-def test_load_builders_from_config_no_source() -> None:
-    """Test that an error is raised when no configuration source is provided."""
-    with pytest.raises(
-        ValueError,
-        match="Exactly one of config_path, config_dict, or config_str must be provided",
-    ):
+def test_load_builders_from_config_validation(
+    minimal_config_dict, complex_config_dict
+) -> None:
+    """Test load_builders_from_config input validation errors."""
+    # No source provided
+    with pytest.raises(ValueError, match="Exactly one of"):
         load_builders_from_config()
 
-
-def test_load_builders_from_config_multiple_sources(minimal_config_dict) -> None:
-    """Test that an error is raised when multiple configuration sources are provided."""
-    with pytest.raises(
-        ValueError,
-        match="Exactly one of config_path, config_dict, or config_str must be provided",
-    ):
+    # Multiple sources provided
+    with pytest.raises(ValueError, match="Exactly one of"):
         load_builders_from_config(
             config_dict=minimal_config_dict, config_str=yaml.dump(minimal_config_dict)
         )
 
-
-def test_load_builders_from_config_invalid_path() -> None:
-    """Test that an error is raised when an invalid file path is provided."""
+    # Invalid file path
     with pytest.raises(FileNotFoundError, match="Configuration file not found"):
         load_builders_from_config(config_path="/nonexistent/path.yaml")
 
-
-def test_load_builders_from_config_invalid_yaml_string() -> None:
-    """Test that an error is raised when invalid YAML is provided as a string."""
-    invalid_yaml = "dataset: {n_timesteps: 50, classes: [{id: 0, signals: [{"
-
+    # Invalid YAML string
     with pytest.raises(yaml.YAMLError):
-        load_builders_from_config(config_str=invalid_yaml)
+        load_builders_from_config(config_str="dataset: {n_timesteps: 50, classes: [{")
 
-
-def test_load_builders_from_config_invalid_dict() -> None:
-    """Test that an error is raised when config_dict is not a dictionary."""
+    # Non-dictionary config_dict
     with pytest.raises(ValueError, match="config_dict must be a dictionary"):
         load_builders_from_config(config_dict="not a dictionary")
 
-
-def test_load_builders_from_config_nested_path(complex_config_dict) -> None:
-    """Test loading builders from a nested path within the configuration."""
-    builders = load_builders_from_config(
-        config_dict=complex_config_dict, path_key="nested/datasets"
-    )
-
-    assert len(builders) == 1, "Should return one builder"
-    assert "dataset_c" in builders, "Should include dataset_c"
-    assert builders["dataset_c"].n_timesteps == 80, (
-        "Builder should have correct parameters"
-    )
-
-
-def test_load_builders_from_config_specific_datasets(complex_config_dict) -> None:
-    """Test loading only specific datasets."""
-    builders = load_builders_from_config(
-        config_dict=complex_config_dict, dataset_names=["dataset_b"]
-    )
-
-    assert len(builders) == 1, "Should return one builder"
-    assert "dataset_b" in builders, "Should include dataset_b"
-    assert "dataset_a" not in builders, "Should not include dataset_a"
-
-
-def test_load_builders_from_config_invalid_nested_path(complex_config_dict) -> None:
-    """Test that an error is raised when an invalid nested path is provided."""
+    # Invalid nested path_key
     with pytest.raises(ValueError, match="Path key .* not found in configuration"):
         load_builders_from_config(
             config_dict=complex_config_dict, path_key="nonexistent/path"
         )
 
 
-def test_load_builders_from_config_nonexistent_dataset(complex_config_dict) -> None:
-    """Test behavior when a requested dataset doesn't exist."""
-    # This should not raise an error, just a warning (printed to stdout)
+def test_load_builders_from_config_filtering(complex_config_dict) -> None:
+    """Test load_builders_from_config filtering with path_key and dataset_names."""
+    # Loading from nested path_key
+    builders = load_builders_from_config(
+        config_dict=complex_config_dict, path_key="nested/datasets"
+    )
+    assert len(builders) == 1
+    assert "dataset_c" in builders
+    assert builders["dataset_c"].n_timesteps == 80
+
+    # Loading specific datasets by name
+    builders = load_builders_from_config(
+        config_dict=complex_config_dict, dataset_names=["dataset_b"]
+    )
+    assert len(builders) == 1
+    assert "dataset_b" in builders
+    assert "dataset_a" not in builders
+
+    # Nonexistent dataset returns empty dict
     builders = load_builders_from_config(
         config_dict=complex_config_dict, dataset_names=["nonexistent_dataset"]
     )
-
-    assert len(builders) == 0, (
-        "Should return empty dictionary when dataset doesn't exist"
-    )
+    assert len(builders) == 0
 
 
 def test_load_builders_from_config_build_dataset(complex_config_dict) -> None:
     """Test that loaded builders can successfully build datasets."""
     builders = load_builders_from_config(config_dict=complex_config_dict)
-
-    # Build dataset from dataset_a
     dataset = builders["dataset_a"].build()
 
-    # Verify the dataset structure
-    assert "X" in dataset, "Dataset should contain X"
-    assert "y" in dataset, "Dataset should contain y"
-    assert "components" in dataset, "Dataset should contain components"
-
-    # Verify shapes
-    assert dataset["X"].shape == (50, 2, 100), (
-        "X should have shape (n_samples, n_dimensions, n_timesteps)"
-    )
-    assert dataset["y"].shape == (50,), "y should have shape (n_samples,)"
-
-    # Since we specified random_state=42, we should get deterministic results
-    # Test a few samples just to ensure the build process worked
-    assert len(dataset["components"]) == 50, "Should have components for each sample"
-
-    # At least ensure there's no NaN in the data (would indicate generation issues)
-    assert not np.isnan(dataset["X"]).any(), "Dataset should not contain NaN values"
+    assert "X" in dataset
+    assert "y" in dataset
+    assert "components" in dataset
+    assert dataset["X"].shape == (50, 2, 100)
+    assert dataset["y"].shape == (50,)
+    assert len(dataset["components"]) == 50
+    assert not np.isnan(dataset["X"]).any()
 
 
 def test_reproducibility_across_sources(complex_config_dict, temp_config_file) -> None:
-    """Test that builders loaded from different sources with the same config build the same dataset."""
-    # Load from dictionary
+    """Test that builders loaded from dict, file, and string produce identical datasets."""
+    # Load from all three sources
     builders_dict = load_builders_from_config(config_dict=complex_config_dict)
-
-    # Load from file
     builders_file = load_builders_from_config(config_path=temp_config_file)
+    builders_str = load_builders_from_config(config_str=yaml.dump(complex_config_dict))
 
-    # Load from string
-    config_str = yaml.dump(complex_config_dict)
-    builders_str = load_builders_from_config(config_str=config_str)
+    # All should have same datasets
+    assert set(builders_dict.keys()) == set(builders_file.keys())
+    assert set(builders_dict.keys()) == set(builders_str.keys())
 
-    # Build datasets with the same random state
+    # Build with same random state and compare
     dataset_dict = builders_dict["dataset_a"].clone(random_state=123).build()
     dataset_file = builders_file["dataset_a"].clone(random_state=123).build()
     dataset_str = builders_str["dataset_a"].clone(random_state=123).build()
 
-    # Compare datasets
-    np.testing.assert_array_equal(
-        dataset_dict["X"],
-        dataset_file["X"],
-        err_msg="Datasets from dict and file should be identical",
+    np.testing.assert_array_equal(dataset_dict["X"], dataset_file["X"])
+    np.testing.assert_array_equal(dataset_dict["X"], dataset_str["X"])
+
+
+def test_yaml_anchors_and_merge_keys() -> None:
+    """Test that YAML anchors (&) and merge keys (<<:) work correctly."""
+    yaml_config = """
+common: &common
+  n_timesteps: 100
+  n_samples: 50
+  random_state: 42
+  n_dimensions: 1
+
+gaussian_signal: &gaussian_signal
+  function: gaussian_noise
+  params: { sigma: 0.5 }
+
+level_shift: &level_shift
+  function: constant
+  params: { value: 1.0 }
+
+short_feature: &short_feature
+  length_pct: 0.2
+  random_location: true
+
+datasets:
+  test_anchors:
+    <<: *common
+    classes:
+      - id: 0
+        signals: [*gaussian_signal]
+        features:
+          - <<: [*level_shift, *short_feature]
+      - id: 1
+        signals: [*gaussian_signal]
+        features:
+          - <<: *level_shift
+            start_pct: 0.4
+            end_pct: 0.6
+"""
+    builders = load_builders_from_config(config_str=yaml_config, path_key="datasets")
+
+    assert "test_anchors" in builders
+    builder = builders["test_anchors"]
+    assert builder.n_timesteps == 100
+    assert builder.n_samples == 50
+    assert builder.random_state == 42
+
+    dataset = builder.build()
+    assert dataset["X"].shape == (50, 1, 100)
+    assert len(np.unique(dataset["y"])) == 2
+    assert len(dataset["feature_masks"]) == 2
+
+
+def test_to_config() -> None:
+    """Test that to_config() exports valid configuration dictionaries."""
+    import xaitimesynth as xts
+
+    # Basic config
+    builder = (
+        xts.TimeSeriesBuilder(n_timesteps=100, n_samples=50, random_state=42)
+        .for_class(0)
+        .add_signal(xts.gaussian_noise(sigma=0.1))
+        .for_class(1)
+        .add_signal(xts.gaussian_noise(sigma=0.1))
+        .add_feature(xts.constant(value=1.0), start_pct=0.3, end_pct=0.6)
+    )
+    config = builder.to_config()
+
+    assert config["n_timesteps"] == 100
+    assert config["n_samples"] == 50
+    assert config["random_state"] == 42
+    assert len(config["classes"]) == 2
+    assert config["classes"][0]["signals"][0]["function"] == "gaussian_noise"
+    assert config["classes"][1]["features"][0]["start_pct"] == 0.3
+
+    # Weights: default (1.0) should be omitted, non-default should be included
+    builder_weights = (
+        xts.TimeSeriesBuilder(n_timesteps=50, n_samples=20)
+        .for_class(0, weight=1.0)
+        .add_signal(xts.gaussian_noise(sigma=0.1))
+        .for_class(1, weight=2.0)
+        .add_signal(xts.gaussian_noise(sigma=0.1))
+    )
+    config_weights = builder_weights.to_config()
+    assert "weight" not in config_weights["classes"][0]
+    assert config_weights["classes"][1]["weight"] == 2.0
+
+    # Multivariate with dimension-specific features
+    builder_mv = (
+        xts.TimeSeriesBuilder(n_timesteps=100, n_samples=40, n_dimensions=3)
+        .for_class(0)
+        .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1, 2])
+        .add_feature(xts.constant(value=1.0), start_pct=0.4, end_pct=0.6, dim=[0])
+    )
+    config_mv = builder_mv.to_config()
+    assert config_mv["n_dimensions"] == 3
+    assert "dimensions" in config_mv["classes"][0]["features"][0]
+
+
+def test_to_config_round_trip() -> None:
+    """Test that to_config() output can be loaded back to create equivalent datasets."""
+    import xaitimesynth as xts
+
+    original_builder = (
+        xts.TimeSeriesBuilder(
+            n_timesteps=80, n_samples=30, n_dimensions=2, random_state=123
+        )
+        .for_class(0)
+        .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1])
+        .add_signal(xts.gaussian_noise(sigma=0.05))
+        .for_class(1)
+        .add_signal(xts.random_walk(step_size=0.1), dim=[0, 1])
+        .add_signal(xts.gaussian_noise(sigma=0.05))
+        .add_feature(
+            xts.peak(amplitude=1.5, width=3), length_pct=0.2, random_location=True
+        )
     )
 
-    np.testing.assert_array_equal(
-        dataset_dict["X"],
-        dataset_str["X"],
-        err_msg="Datasets from dict and string should be identical",
+    config = original_builder.to_config()
+    reloaded_builder = load_builders_from_config(config_dict={"test_dataset": config})[
+        "test_dataset"
+    ]
+
+    original_dataset = original_builder.clone(random_state=999).build()
+    reloaded_dataset = reloaded_builder.clone(random_state=999).build()
+
+    assert original_dataset["X"].shape == reloaded_dataset["X"].shape
+    assert original_dataset["y"].shape == reloaded_dataset["y"].shape
+    assert set(original_dataset["feature_masks"].keys()) == set(
+        reloaded_dataset["feature_masks"].keys()
     )

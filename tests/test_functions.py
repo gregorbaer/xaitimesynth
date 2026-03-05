@@ -28,20 +28,17 @@ class TestAdders:
         # Test default values
         adder = SignalAdder(component)
         assert adder.component == component, "Component not correctly stored"
-        assert adder.role == "foundation", "Default role should be 'foundation'"
         assert adder.start_pct is None, "Default start_pct should be None"
         assert adder.shared_location is True, "Default shared_location should be True"
 
         # Test custom values
         adder = SignalAdder(
             component,
-            role="noise",
             start_pct=0.2,
             end_pct=0.8,
             random_location=True,
             shared_location=False,
         )
-        assert adder.role == "noise", "Custom role not correctly set"
         assert adder.start_pct == 0.2, "Custom start_pct not correctly set"
         assert adder.end_pct == 0.8, "Custom end_pct not correctly set"
         assert adder.random_location is True, "Custom random_location not correctly set"
@@ -55,12 +52,12 @@ class TestAdders:
         adder = SignalAdder(component, length_pct=None, start_pct=None, end_pct=None)
 
         mock_builder = MagicMock()
-        mock_builder.add_signal_segment.return_value = mock_builder
+        mock_builder.add_signal.return_value = mock_builder
         adder(mock_builder)
 
         # Verify None values are passed through correctly
-        mock_builder.add_signal_segment.assert_called_once()
-        call_kwargs = mock_builder.add_signal_segment.call_args[1]
+        mock_builder.add_signal.assert_called_once()
+        call_kwargs = mock_builder.add_signal.call_args[1]
         assert call_kwargs["start_pct"] is None, "None start_pct should be preserved"
         assert call_kwargs["end_pct"] is None, "None end_pct should be preserved"
         assert call_kwargs["length_pct"] is None, "None length_pct should be preserved"
@@ -89,16 +86,15 @@ class TestAdders:
         component = {"type": "test_component"}
         mock_builder = MagicMock()
         # Make these methods return the mock builder for chaining
-        mock_builder.add_signal_segment.return_value = mock_builder
+        mock_builder.add_signal.return_value = mock_builder
         mock_builder.add_feature_component.return_value = mock_builder
 
         # Test SignalAdder call
         signal_adder = SignalAdder(component, start_pct=0.1, end_pct=0.9)
         result = signal_adder(mock_builder)
 
-        mock_builder.add_signal_segment.assert_called_once_with(
+        mock_builder.add_signal.assert_called_once_with(
             component,
-            role="foundation",
             start_pct=0.1,
             end_pct=0.9,
             length_pct=None,
@@ -133,19 +129,16 @@ class TestAdderFactoryFunctions:
         adder = add_signal(component)
         assert isinstance(adder, SignalAdder), "Should return a SignalAdder instance"
         assert adder.component == component, "Component not correctly passed"
-        assert adder.role == "foundation", "Default role should be 'foundation'"
 
         # Test with custom parameters
         adder = add_signal(
             component,
-            role="noise",
             start_pct=0.2,
             end_pct=0.7,
             length_pct=0.5,
             random_location=True,
             shared_location=False,
         )
-        assert adder.role == "noise", "Custom role not correctly passed"
         assert adder.start_pct == 0.2, "Custom start_pct not correctly passed"
         assert adder.end_pct == 0.7, "Custom end_pct not correctly passed"
         assert adder.length_pct == 0.5, "Custom length_pct not correctly passed"

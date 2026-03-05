@@ -1,31 +1,32 @@
 repos:
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v5.0.0
-  hooks:
-    - id: trailing-whitespace
-      stages: [pre-commit]
-    - id: end-of-file-fixer
-      stages: [pre-commit]
-
-- repo: https://github.com/kynan/nbstripout
-  rev: 0.8.1
-  hooks:
-    - id: nbstripout
-      name: Strip notebook output
-      description: "Strip output from Jupyter and IPython notebooks"
-      files: ".ipynb$"
-
--   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.4  # Updated to a newer version that includes ruff-format
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
     hooks:
-    -   id: ruff
+      - id: trailing-whitespace
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+        name: Strip notebook output
+        description: "Strip output from Jupyter and IPython notebooks"
+        files: ".ipynb$"
+        exclude: "^docs/" # Exclude notebooks in the docs directory
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.4 # Updated to a newer version that includes ruff-format
+    hooks:
+      - id: ruff
         args: [--fix, --exit-non-zero-on-fix, --line-length=88] # Set line length to 88
-    -   id: ruff-format
+      - id: ruff-format
         args: [--line-length=88]
 
--   repo: local
+  - repo: local
     hooks:
-    -   id: pytest
+      - id: pytest
         name: pytest
         entry: pytest
         language: system

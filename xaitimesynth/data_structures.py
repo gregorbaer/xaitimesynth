@@ -14,37 +14,20 @@ class TimeSeriesComponents:
     understanding of how each component contributes to the final time series.
 
     Attributes:
-        foundation (np.ndarray): Foundational signal, or base structure component (e.g., constant, random walk).
-        noise (Optional[np.ndarray]): Noise component added to the series. Defaults to None.
+        background (np.ndarray): Background signal, the base structure component (e.g., constant, random walk).
         features (Optional[Dict[str, np.ndarray]]): Dictionary mapping feature names to their vector representations. Defaults to None.
         feature_masks (Optional[Dict[str, np.ndarray]]): Dictionary of boolean masks indicating feature locations. Defaults to None.
         aggregated (Optional[np.ndarray]): The final aggregated time series after combining components. Defaults to None.
     """
 
-    foundation: np.ndarray
-    noise: Optional[np.ndarray] = None
+    background: np.ndarray
     features: Optional[Dict[str, np.ndarray]] = None
     feature_masks: Optional[Dict[str, np.ndarray]] = None
     aggregated: Optional[np.ndarray] = None
 
     def __post_init__(self):
-        """Validate that components have compatible shapes with the foundation."""
-        expected_length = self.foundation.shape[0]  # Time dimension length
-
-        # Check noise component
-        if self.noise is not None:
-            if self.noise.shape[0] != expected_length:
-                raise ValueError(
-                    f"The 'noise' component first dimension {self.noise.shape[0]} doesn't match "
-                    f"foundation first dimension {expected_length}."
-                )
-            # For multivariate case, ensure other dimensions match if present
-            if len(self.noise.shape) > 1 and len(self.foundation.shape) > 1:
-                if self.noise.shape[1] != self.foundation.shape[1]:
-                    raise ValueError(
-                        f"The 'noise' component shape {self.noise.shape} doesn't match "
-                        f"foundation shape {self.foundation.shape} in the second dimension."
-                    )
+        """Validate that components have compatible shapes with the background."""
+        expected_length = self.background.shape[0]  # Time dimension length
 
         # Check features components
         if self.features is not None:
@@ -54,7 +37,7 @@ class TimeSeriesComponents:
                 if feature_data.shape[0] != expected_length:
                     raise ValueError(
                         f"The feature '{feature_name}' first dimension {feature_data.shape[0]} doesn't match "
-                        f"foundation first dimension {expected_length}."
+                        f"background first dimension {expected_length}."
                     )
 
         # Check feature masks components
@@ -64,13 +47,13 @@ class TimeSeriesComponents:
                 if mask_data.shape[0] != expected_length:
                     raise ValueError(
                         f"The feature mask '{mask_name}' first dimension {mask_data.shape[0]} doesn't match "
-                        f"foundation first dimension {expected_length}."
+                        f"background first dimension {expected_length}."
                     )
 
         # Check aggregated component
         if self.aggregated is not None:
-            if self.aggregated.shape != self.foundation.shape:
+            if self.aggregated.shape != self.background.shape:
                 raise ValueError(
                     f"The 'aggregated' component shape {self.aggregated.shape} doesn't match "
-                    f"foundation shape {self.foundation.shape}."
+                    f"background shape {self.background.shape}."
                 )
