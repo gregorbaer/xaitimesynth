@@ -7,6 +7,7 @@ repo_name: xaitimesynth
 theme:
   name: material
   logo: assets/logo/xaitimesynth_logo.svg
+  favicon: assets/logo/favicon.svg
   palette:
     - scheme: default
       primary: black
