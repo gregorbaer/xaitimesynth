@@ -1,57 +1,32 @@
-# Simple Makefile for python project set-ups
+.PHONY: setup test test-cov lint format docs-serve docs-build build clean
 
-include config.mk  # Include the configuration file
+setup:
+	uv sync --all-extras
+	uv run pre-commit install
+	uv run nbstripout --install
+	uv run nbdime config-git --enable
 
-# Target to set up the entire project environment
-setup: install-python  create-venv configure-direnv install-packages generate-requirements init-pre-commit init-nbstripout init-nbdime
+test:
+	uv run pytest
 
-# Target to install the specified Python version (only if not installed)
-install-python:
-	@if ! (pyenv versions | grep -q "$(PYTHON_VERSION)"); then \
-		echo "*** Installing Python $(PYTHON_VERSION)"; \
-		pyenv install $(PYTHON_VERSION); \
-	else \
-		echo "*** Python $(PYTHON_VERSION) already installed"; \
-	fi
-	pyenv local $(PYTHON_VERSION)
+test-cov:
+	uv run pytest --cov=xaitimesynth --cov-report=term-missing
 
-# Target to create a virtual environment with uv
-create-venv:
-	@echo "*** Creating virtual environment"
-	uv venv 
+lint:
+	uv run ruff check xaitimesynth/ tests/
 
-# Target to configure direnv for automatic activation
-configure-direnv:
-	@echo "*** Configuring direnv"
-	echo "source .venv/bin/activate" > .envrc
-	direnv allow .
+format:
+	uv run ruff format xaitimesynth/ tests/
 
-# Target to install packages
-install-packages:
-	@if [ -f requirements.txt ]; then \
-		echo "*** Installing packages from requirements.txt"; \
-		uv pip install -r requirements.txt; \
-	else \
-		echo "*** Installing packages from config.mk: $(PACKAGES)"; \
-		uv pip install $(foreach pkg,$(PACKAGES),$(pkg)); \
-	fi
+docs-serve:
+	JUPYTER_PLATFORM_DIRS=1 uv run mkdocs serve
 
-# Target to generate requirements.txt file
-generate-requirements:
-	@echo "*** Generating requirements.txt"
-	uv pip freeze | uv pip compile - -o requirements.txt
+docs-build:
+	JUPYTER_PLATFORM_DIRS=1 uv run mkdocs build
 
-# initialise pre-commit hook
-init-pre-commit:
-	@echo "*** Installing pre-commit hooks"
-	pre-commit install
+build:
+	uv build
 
-# initialise nbstripout
-init-nbstripout:
-	@echo "*** Installing nbstripout"
-	nbstripout --install
-
-init-nbdime:
-	@echo "*** Installing nbdime"
-	nbdime config-git --enable
-
+clean:
+	rm -rf dist/ build/ site/ .coverage htmlcov/
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

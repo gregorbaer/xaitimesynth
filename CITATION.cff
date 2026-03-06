@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying paper below."
+title: "xaitimesynth"
+type: software
+authors:
+  - family-names: "Baer"
+    given-names: "Gregor"
+    affiliation: "Eindhoven University of Technology"
+version: "0.1.0"
+date-released: "2026-03-05"
+license: MIT
+repository-code: "https://github.com/gregorbaer/xaitimesynth"
+keywords:
+  - explainable AI
+  - XAI
+  - time series
+  - synthetic data
+  - benchmarking
+
+# TODO: add arXiv preprint once published
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Baer"
+      given-names: "Gregor"
+      affiliation: "Eindhoven University of Technology"
+  title: "TODO: add paper title"
+  year: 2026
+  url: "TODO: add arXiv URL"
+  # doi: "TODO: add arXiv DOI (e.g. 10.48550/arXiv.XXXX.XXXXX)"
