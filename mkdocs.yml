@@ -1,21 +1,22 @@
-site_name: XAITimeSynth
+site_name: xaitimesynth
 site_description: A Python package for generating synthetic time series with ground truth for XAI evaluation
-site_url: https://github.com/your-username/xaitimesynth # Update with your actual URL
-repo_url: https://github.com/your-username/xaitimesynth # Update with your actual URL
+site_url: https://gregorbaer.github.io/xaitimesynth/
+repo_url: https://github.com/gregorbaer/xaitimesynth
 repo_name: xaitimesynth
 
 theme:
   name: material
+  logo: assets/logo/xaitimesynth_logo.svg
   palette:
     - scheme: default
-      primary: indigo
-      accent: indigo
+      primary: black
+      accent: amber
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: black
+      accent: amber
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -72,5 +73,6 @@ nav:
       - Registry: api/registry.md
       - Datasets: api/datasets.md
   - Contributing:
+      - Development Setup: contributing/development-setup.md
       - Commit Guidelines: contributing/commit-guidelines.md
       - Documentation: contributing/documentation.md
