@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="docs/assets/logo/xaitimesynth_logo.svg" width="500">
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/xaitimesynth/"><img src="https://img.shields.io/pypi/v/xaitimesynth"></a>
+  <a href="https://pypi.org/project/xaitimesynth/"><img src="https://img.shields.io/pypi/pyversions/xaitimesynth"></a>
+  <a href="https://github.com/gregorbaer/xaitimesynth/actions/workflows/pytest.yml"><img src="https://github.com/gregorbaer/xaitimesynth/actions/workflows/pytest.yml/badge.svg"></a>
+  <a href="https://gregorbaer.github.io/xaitimesynth/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue"></a>
+</p>
+
 # xaitimesynth
 
 A Python package for benchmarking explainable AI (XAI) algorithms (mostly feature attributions) on time series classification tasks using synthetic data with known ground truth feature locations.
@@ -59,17 +70,25 @@ auc = auc_pr_score(attributions, test, normalize=True)
 rma = relevance_mass_accuracy(attributions, test)
 ```
 
-![Example plot](docs/images/quickstart_dataset.png)
+![Example plot](docs/assets/images/quickstart_dataset.png)
 
 
 ## Documentation
 
-Full documentation is available at **[LINK: TODO]**.
+Full documentation is available at **[gregorbaer.github.io/xaitimesynth](https://gregorbaer.github.io/xaitimesynth/)**.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Citation
 
-If you use xaitimesynth in your work, please consider citing the following paper. It also contains more context about the motivation for this package and some related work.
+If you use xaitimesynth in your work, please consider citing:
 
+```bibtex
+TODO: Add reference after DOI is issued
 ```
-TODO: Add reference
-```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

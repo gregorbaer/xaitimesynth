@@ -1,3 +1,11 @@
+  <img src="./assets/logo/xaitimesynth_logo.svg" width="500">
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/xaitimesynth/"><img src="https://img.shields.io/pypi/v/xaitimesynth"></a>
+  <a href="https://pypi.org/project/xaitimesynth/"><img src="https://img.shields.io/pypi/pyversions/xaitimesynth"></a>
+</p>
+
 # xaitimesynth
 
 A Python package for benchmarking explainable AI (XAI) algorithms (mostly feature attributions) on time series classification tasks using synthetic data with known ground truth feature locations.
@@ -40,8 +48,12 @@ rma = relevance_mass_accuracy(attributions, test)
 
 ## Citation
 
-If you use xaitimesynth in your work, please consider citing the following paper. It also contains more context about the motivation for this package and some related work.
+If you use xaitimesynth in your work, please consider citing:
 
+```bibtex
+TODO: Add reference after DOI is issued
 ```
-TODO: Add reference
-```
+
+## License
+
+This project is licensed under the [MIT License](https://github.com/gregorbaer/xaitimesynth/blob/main/LICENSE).

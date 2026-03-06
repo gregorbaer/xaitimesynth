@@ -2,128 +2,101 @@
 
 This guide explains how to evaluate XAI attribution methods using xaitimesynth's metrics module. The metrics compare attribution values against ground truth feature masks to quantify how well an explainer identifies the true discriminative regions.
 
-## Table of Contents
-
-1. [Available Metrics](#available-metrics)
-2. [Input Format](#input-format)
-3. [Aggregation Modes](#aggregation-modes)
-4. [Working with External XAI Packages](#working-with-external-xai-packages)
-
-
 ## Available Metrics
 
 ### Relevance Mass Accuracy (RMA)
 
-**What it measures:** Fraction of total attribution "mass" that falls inside the ground truth region.
-
-**Formula:** `sum(attr[mask]) / sum(attr)`
-
-**Range:** [0, 1], higher is better
-
-**Use when:** You want to know if high attributions concentrate on the true features.
+- **What it measures:** Fraction of total attribution "mass" that falls inside the ground truth region.
+- **Formula:** `sum(attr[mask]) / sum(attr)`
+- **Range:** [0, 1], higher is better
+- **Use when:** You want to know if high attributions concentrate on the true features.
 
 ```python
-score = relevance_mass_accuracy(attributions, dataset, sample_indices=class1_indices)
+score = relevance_mass_accuracy(attributions, dataset)
 ```
 
 ### Relevance Rank Accuracy (RRA)
 
-**What it measures:** Fraction of the top-K attributed timesteps that fall inside the ground truth (where K = size of ground truth region).
-
-**Range:** [0, 1], higher is better
-
-**Use when:** You care about whether the highest-ranked attributions are correct.
+- **What it measures:** Fraction of the top-K attributed timesteps that fall inside the ground truth (where K = size of ground truth region).
+- **Range:** [0, 1], higher is better
+- **Use when:** You care about whether the highest-ranked attributions are correct.
 
 ```python
-score = relevance_rank_accuracy(attributions, dataset, sample_indices=class1_indices)
+score = relevance_rank_accuracy(attributions, dataset)
 ```
 
 ### Pointing Game
 
-**What it measures:** Whether the single highest attribution falls inside the ground truth.
-
-**Range:** 0 or 1 per sample (aggregated score in [0, 1])
-
-**Use when:** You want a simple binary check of the maximum attribution location.
+- **What it measures:** Whether the single highest attribution falls inside the ground truth.
+- **Range:** 0 or 1 per sample (aggregated score in [0, 1])
+- **Use when:** You want a simple binary check of the maximum attribution location.
 
 ```python
-score = pointing_game(attributions, dataset, sample_indices=class1_indices)
+score = pointing_game(attributions, dataset)
 ```
 
 ### AUC-ROC
 
-**What it measures:** Area under the ROC curve, treating attribution values as predictions and the mask as ground truth.
-
-**Range:** [0, 1], 0.5 = random, 1.0 = perfect
-
-**Use when:** You want a threshold-independent ranking metric.
+- **What it measures:** Area under the ROC curve, treating attribution values as predictions and the mask as ground truth.
+- **Range:** [0, 1], 0.5 = random, 1.0 = perfect
+- **Use when:** You want a threshold-independent ranking metric.
 
 ```python
 # Standard AUC-ROC
-score = auc_roc_score(attributions, dataset, sample_indices=class1_indices)
+score = auc_roc_score(attributions, dataset)
 
 # Normalized to [-1, 1] where 0 = random
-score = auc_roc_score(attributions, dataset, sample_indices=class1_indices, normalize=True)
+score = auc_roc_score(attributions, dataset, normalize=True)
 ```
 
 ### AUC-PR
 
-**What it measures:** Area under the Precision-Recall curve.
-
-**Range:** [0, 1], baseline = prevalence (feature proportion)
-
-**Use when:** Ground truth is sparse (small features relative to series length). More sensitive than AUC-ROC for imbalanced cases.
+- **What it measures:** Area under the Precision-Recall curve.
+- **Range:** [0, 1], baseline = prevalence (feature proportion)
+- **Use when:** Ground truth is sparse (small features relative to series length). More sensitive than AUC-ROC for imbalanced cases.
 
 ```python
 # Standard AUC-PR
-score = auc_pr_score(attributions, dataset, sample_indices=class1_indices)
+score = auc_pr_score(attributions, dataset)
 
 # Normalized: (AUC - prevalence) / (1 - prevalence)
-score = auc_pr_score(attributions, dataset, sample_indices=class1_indices, normalize=True)
+score = auc_pr_score(attributions, dataset, normalize=True)
 ```
 
 ### Normalized Attribution Correspondence (NAC)
 
-**What it measures:** Mean z-scored attribution at ground truth locations. Positive = attributions elevated at features.
-
-**Range:** Unbounded (typically -3 to +3 for reasonable attributions)
-
-**Use when:** You want to measure relative elevation of attributions at features compared to background.
+- **What it measures:** Mean z-scored attribution at ground truth locations. Positive = attributions elevated at features.
+- **Range:** Unbounded (typically -3 to +3 for reasonable attributions)
+- **Use when:** You want to measure relative elevation of attributions at features compared to background.
 
 ```python
 # Evaluate at feature locations (default)
-score = nac_score(attributions, dataset, sample_indices=class1_indices)
+score = nac_score(attributions, dataset)
 
 # Evaluate at non-feature locations (should be negative for good attributions)
-score = nac_score(attributions, dataset, sample_indices=class1_indices, ground_truth_only=False)
+score = nac_score(attributions, dataset, ground_truth_only=False)
 ```
 
 ### Mean Absolute Error (MAE)
 
-**What it measures:** Average absolute difference between attributions and binary mask.
-
-**Range:** [0, inf), lower is better (0 = perfect)
-
-**Use when:** You want attributions to match the mask exactly (1 at features, 0 elsewhere).
-
-**Note:** Attributions should be normalized to [0, 1] for meaningful results.
+- **What it measures:** Average absolute difference between attributions and binary mask.
+- **Range:** [0, inf), lower is better (0 = perfect)
+- **Use when:** You want attributions to match the mask exactly (1 at features, 0 elsewhere).
+- **Note:** Attributions should be normalized to [0, 1] for meaningful results.
 
 ```python
-score = mean_absolute_error(attributions, dataset, sample_indices=class1_indices)
+score = mean_absolute_error(attributions, dataset)
 ```
 
 ### Mean Squared Error (MSE)
 
-**What it measures:** Average squared difference between attributions and binary mask.
-
-**Range:** [0, inf), lower is better (0 = perfect)
-
-**Use when:** You want to penalize large deviations more heavily than MAE.
-
-**Note:** Attributions should be normalized to [0, 1] for meaningful results.
+- **What it measures:** Average squared difference between attributions and binary mask.
+- **Range:** [0, inf), lower is better (0 = perfect)
+- **Use when:** You want to penalize large deviations more heavily than MAE.
+- **Note:** Attributions should be normalized to [0, 1] for meaningful results.
 
 ```python
-score = mean_squared_error(attributions, dataset, sample_indices=class1_indices)
+score = mean_squared_error(attributions, dataset)
 ```
 
 ## Input Format
@@ -145,15 +118,15 @@ from xaitimesynth.metrics import relevance_mass_accuracy
 
 # 1D: single sample, single dimension
 attr_1d = np.random.rand(100)
-score = relevance_mass_accuracy(attr_1d, dataset, sample_indices=[class1_indices[0]])
+score = relevance_mass_accuracy(attr_1d, dataset)
 
 # 2D: single sample, 3 dimensions
 attr_2d = np.random.rand(100, 3)
-score = relevance_mass_accuracy(attr_2d, dataset, sample_indices=[class1_indices[0]])
+score = relevance_mass_accuracy(attr_2d, dataset)
 
 # 3D: 5 samples, 100 timesteps, 3 dimensions
 attr_3d = np.random.rand(5, 100, 3)
-score = relevance_mass_accuracy(attr_3d, dataset, sample_indices=class1_indices[:5])
+score = relevance_mass_accuracy(attr_3d, dataset[:5])
 ```
 
 ## Aggregation Modes
@@ -217,8 +190,8 @@ attributions = np.transpose(attributions_raw, (0, 2, 1))
 
 # Evaluate (optionally filter to specific class)
 class1_indices = np.where(test_dataset["y"] == 1)[0].tolist()
-rma = relevance_mass_accuracy(attributions, test_dataset, sample_indices=class1_indices)
-auc = auc_pr_score(attributions, test_dataset, sample_indices=class1_indices, normalize=True)
+rma = relevance_mass_accuracy(attributions, test_dataset)
+auc = auc_pr_score(attributions, test_dataset, normalize=True)
 ```
 
 **Tips:**
