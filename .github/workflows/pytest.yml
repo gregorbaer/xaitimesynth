@@ -1,33 +1,57 @@
-name: Run Python Tests
+name: Tests
 
 on:
   push:
-    branches: [ '*' ]
+    branches: ["*"]
   pull_request:
-    branches: [ '*' ]
+    branches: ["*"]
 
 jobs:
   test:
-    name: Run pytest
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.14"
+            experimental: true
+
+    continue-on-error: ${{ matrix.experimental || false }}
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest pytest-cov
-        # Install project in development mode first
-        pip install -e .
-        # Install remaining dependencies, but ignore the -e file:/// line
-        grep -v "^-e file:" requirements.txt | pip install -r /dev/stdin
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
-    - name: Test with pytest
-      run: |
-        pytest --cov=./
+      - name: Install dependencies
+        run: uv sync --extra test
+
+      - name: Run tests
+        run: uv run pytest --cov=xaitimesynth --cov-report=term-missing
+
+  build:
+    name: Build validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build package
+        run: uv build
+
+      - name: Check distributions
+        run: uvx twine check dist/*
+
+      - name: Smoke test install
+        run: |
+          uv venv /tmp/smoke-test --python 3.12
+          uv pip install dist/*.whl --python /tmp/smoke-test/bin/python
+          /tmp/smoke-test/bin/python -c "import xaitimesynth; print(xaitimesynth.__version__)"
