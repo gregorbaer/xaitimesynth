@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo/xaitimesynth_logo.svg" width="500">
+  <img src="https://raw.githubusercontent.com/gregorbaer/xaitimesynth/main/docs/assets/logo/xaitimesynth_logo.svg" width="500">
 </p>
 
 <p align="center">
