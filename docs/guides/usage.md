@@ -240,4 +240,4 @@ dataset["components"]      # List[TimeSeriesComponents] — per-sample breakdown
 dataset["metadata"]        # Dict — configuration info
 ```
 
-See the [Data Structure Reference](data_structure.md) for shapes, key naming conventions, and access patterns.
+See the [Data Structure Reference](../examples/data_structure.ipynb) for shapes, key naming conventions, and access patterns.
