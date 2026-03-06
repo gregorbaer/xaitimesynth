@@ -1,0 +1,23 @@
+{
+    "title": "xaitimesynth: Synthetic Time Series with Ground Truth for XAI Evaluation",
+    "creators": [
+        {
+            "name": "Baer, Gregor",
+            "affiliation": "Eindhoven University of Technology"
+        }
+    ],
+    "description": "A Python package for generating synthetic time series datasets with known ground truth feature locations, enabling direct evaluation of explainable AI (XAI) attribution methods for time series classification.",
+    "license": {
+        "id": "MIT"
+    },
+    "keywords": [
+        "explainable AI",
+        "XAI",
+        "time series",
+        "synthetic data",
+        "benchmarking",
+        "feature attribution"
+    ],
+    "upload_type": "software",
+    "access_right": "open"
+}
