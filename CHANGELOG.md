@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-03-10
+
+### Changed
+
+- Added arXiv preprint citation (arXiv:2603.06781) to README, docs, and CITATION.cff
+- Aligned `.zenodo.json` title with preprint title
+- Minor documentation fixes (favicon, badges, logo link, docstring reference)
+
 ## [0.1.0] - 2026-03-06
 
 ### Added
