@@ -6,8 +6,8 @@ authors:
   - family-names: "Baer"
     given-names: "Gregor"
     affiliation: "Eindhoven University of Technology"
-version: "0.1.0"
-date-released: "2026-03-05"
+version: "0.1.1"
+date-released: "2026-03-06"
 license: MIT
 repository-code: "https://github.com/gregorbaer/xaitimesynth"
 keywords:
@@ -17,14 +17,13 @@ keywords:
   - synthetic data
   - benchmarking
 
-# TODO: add arXiv preprint once published
 preferred-citation:
   type: article
   authors:
     - family-names: "Baer"
       given-names: "Gregor"
       affiliation: "Eindhoven University of Technology"
-  title: "TODO: add paper title"
+  title: "xaitimesynth: A Python Package for Evaluating Attribution Methods for Time Series with Synthetic Ground Truth"
   year: 2026
-  url: "TODO: add arXiv URL"
-  # doi: "TODO: add arXiv DOI (e.g. 10.48550/arXiv.XXXX.XXXXX)"
+  url: "https://arxiv.org/abs/2603.06781"
+  doi: "10.48550/arXiv.2603.06781"
