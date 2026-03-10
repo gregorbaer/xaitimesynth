@@ -1,5 +1,6 @@
 """
-XAITimeSynth - A package for generating synthetic time series with ground truth for XAI evaluation.
+XAITimeSynth
+A package for generating synthetic time series with ground truth for XAI evaluation.
 
 This package provides a fluent, composable API for creating time series datasets
 with precise control over signal components, noise, and discriminative features.
@@ -96,4 +97,4 @@ register_component(gaussian_pulse, "feature")
 
 
 # Version
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -42,12 +42,12 @@ Example::
     attributions = np.random.rand(5, 100, 2)
 
     # Evaluate first 5 class-1 samples
-    class1_indices = np.where(dataset["y"] == 1)[0][:5].tolist()
-    score = relevance_mass_accuracy(attributions, dataset, sample_indices=class1_indices)
+    c1_indices = np.where(dataset["y"] == 1)[0][:5].tolist()
+    score = relevance_mass_accuracy(attributions, dataset, sample_indices=c1_indices)
 
     # Single sample, single dimension
     attr_1d = np.random.rand(100)  # auto-reshaped to (1, 100, 1)
-    score = relevance_mass_accuracy(attr_1d, dataset, sample_indices=[class1_indices[0]])
+    score = relevance_mass_accuracy(attr_1d, dataset, sample_indices=[c1_indices[0]])
 
 Note: External XAI packages (Captum, SHAP, etc.) may return attributions in different
 shapes. Check their documentation and reshape to (n_samples, n_timesteps, n_dims)
@@ -113,7 +113,8 @@ def _prepare_inputs(
     if attr.ndim == 1:
         if attr.shape[0] != n_timesteps:
             raise ValueError(
-                f"1D attribution length {attr.shape[0]} != dataset timesteps {n_timesteps}"
+                f"1D attribution length {attr.shape[0]}"
+                + f" != dataset timesteps {n_timesteps}"
             )
         attr = attr.reshape(1, n_timesteps, 1)
     elif attr.ndim == 2:
@@ -414,6 +415,10 @@ def auc_roc_score(
 
     Returns:
         Score(s) in range [0, 1] (or [-1, 1] if normalized). Higher is better.
+
+    References:
+        Fawcett, T. (2006). An introduction to ROC analysis. Pattern recognition
+        letters, 27(8), 861-874.
     """
     attr, masks, sample_indices, dim_indices = _prepare_inputs(
         attributions, dataset, sample_indices, dim_indices

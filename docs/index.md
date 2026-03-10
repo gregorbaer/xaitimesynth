@@ -4,6 +4,8 @@
 <p align="center">
   <a href="https://pypi.org/project/xaitimesynth/"><img src="https://img.shields.io/pypi/v/xaitimesynth"></a>
   <a href="https://pypi.org/project/xaitimesynth/"><img src="https://img.shields.io/pypi/pyversions/xaitimesynth"></a>
+  <a href="https://github.com/gregorbaer/xaitimesynth/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="https://doi.org/10.5281/zenodo.18888778"><img src="https://zenodo.org/badge/954013569.svg" alt="DOI"></a>
 </p>
 
 # xaitimesynth
@@ -50,9 +52,7 @@ rma = relevance_mass_accuracy(attributions, test)
 
 If you use xaitimesynth in your work, please consider citing:
 
-```bibtex
-TODO: Add reference after DOI is issued
-```
+Baer, G. (2026). xaitimesynth: A Python Package for Evaluating Attribution Methods for Time Series with Synthetic Ground Truth (arXiv:2603.06781). arXiv. https://doi.org/10.48550/arXiv.2603.06781
 
 ## License
 

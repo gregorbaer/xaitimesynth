@@ -1,5 +1,5 @@
 {
-    "title": "xaitimesynth: Synthetic Time Series with Ground Truth for XAI Evaluation",
+    "title": "xaitimesynth: A Python Package for Evaluating Attribution Methods for Time Series with Synthetic Ground Truth",
     "creators": [
         {
             "name": "Baer, Gregor",
