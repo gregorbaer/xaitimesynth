@@ -45,6 +45,15 @@ make docs-build
 make build
 ```
 
+## Releasing a New Package Version
+
+1. Update `__version__` in `xaitimesynth/__init__.py` (single source of truth; `pyproject.toml` reads it automatically via hatchling)
+2. Update `version` in `CITATION.cff`
+3. Add a new section to `CHANGELOG.md`
+4. Create a PR and merge into `main`
+5. Tag the merge commit: `git tag vX.Y.Z && git push --tags`
+6. Create a GitHub release from the tag (this triggers CI to build and publish to PyPI)
+
 ## Project Structure
 
 ```
