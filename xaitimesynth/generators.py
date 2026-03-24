@@ -27,10 +27,13 @@ def generate_constant(
         np.ndarray: A 1D numpy array of the specified length filled with the constant value.
 
     Example:
-        >>> generate_constant(n_timesteps=10, value=5.0)
-        array([5., 5., 5., 5., 5., 5., 5., 5., 5., 5.])
-        >>> generate_constant(n_timesteps=10, value=5.0, length=3)
-        array([5., 5., 5.])
+        ```python
+        generate_constant(n_timesteps=10, value=5.0)
+        # array([5., 5., 5., 5., 5., 5., 5., 5., 5., 5.])
+
+        generate_constant(n_timesteps=10, value=5.0, length=3)
+        # array([5., 5., 5.])
+        ```
     """
     output_length = length if length is not None else n_timesteps
     return np.full(output_length, value)
@@ -64,9 +67,11 @@ def generate_random_walk(
         np.ndarray: A 1D numpy array of the specified length representing a random walk.
 
     Example:
-        >>> rng = np.random.RandomState(0)
-        >>> generate_random_walk(n_timesteps=5, step_size=0.5, rng=rng)
-        array([0.88202616, 1.0821086 , 1.3734961 , 2.49384918, 2.98797618])
+        ```python
+        rng = np.random.RandomState(0)
+        generate_random_walk(n_timesteps=5, step_size=0.5, rng=rng)
+        # array([0.88202616, 1.0821086 , 1.3734961 , 2.49384918, 2.98797618])
+        ```
     """
     if rng is None:
         rng = np.random.RandomState()
@@ -102,9 +107,11 @@ def generate_gaussian_noise(
         np.ndarray: A 1D numpy array of the specified length with values drawn from N(mu, sigma^2).
 
     Example:
-        >>> rng = np.random.RandomState(1)
-        >>> generate_gaussian_noise(n_timesteps=5, mu=0, sigma=1, rng=rng)
-        array([ 1.62434536, -0.61175641, -0.52817175, -1.07296862,  0.86540763])
+        ```python
+        rng = np.random.RandomState(1)
+        generate_gaussian_noise(n_timesteps=5, mu=0, sigma=1, rng=rng)
+        # array([ 1.62434536, -0.61175641, -0.52817175, -1.07296862,  0.86540763])
+        ```
     """
     if rng is None:
         rng = np.random.RandomState()
@@ -139,9 +146,11 @@ def generate_uniform(
         np.ndarray: A 1D numpy array of the specified length with values drawn from U(low, high).
 
     Example:
-        >>> rng = np.random.RandomState(2)
-        >>> generate_uniform(n_timesteps=5, low=0, high=1, rng=rng)
-        array([0.43758721, 0.891773  , 0.96366276, 0.38344152, 0.79172504])
+        ```python
+        rng = np.random.RandomState(2)
+        generate_uniform(n_timesteps=5, low=0, high=1, rng=rng)
+        # array([0.43758721, 0.891773  , 0.96366276, 0.38344152, 0.79172504])
+        ```
     """
     if rng is None:
         rng = np.random.RandomState()
@@ -188,9 +197,11 @@ def generate_red_noise(
         ValueError: If phi is not strictly between -1 and 1.
 
     Example:
-        >>> rng = np.random.RandomState(3)
-        >>> generate_red_noise(n_timesteps=5, std=1, phi=0.8, rng=rng)
-        array([-0.4891934 , -0.58890917, -0.4100916 , -0.08162811,  0.10116969])
+        ```python
+        rng = np.random.RandomState(3)
+        generate_red_noise(n_timesteps=5, std=1, phi=0.8, rng=rng)
+        # array([-0.4891934 , -0.58890917, -0.4100916 , -0.08162811,  0.10116969])
+        ```
     """
     if not -1 < phi < 1:
         raise ValueError("phi must be strictly between -1 and 1")
@@ -260,12 +271,15 @@ def generate_seasonal(
         applies amplitude correction to ensure the specified amplitude is achieved.
 
     Example:
-        >>> generate_seasonal(n_timesteps=5, period=4, amplitude=2)
-        array([ 0.        ,  2.        ,  0.        , -2.        ,  0.        ])
-        >>> # Short period example where scaling ensures exact amplitude
-        >>> signal = generate_seasonal(n_timesteps=10, period=3, amplitude=1.0)
-        >>> np.max(np.abs(signal))  # Will be exactly 1.0
-        1.0
+        ```python
+        generate_seasonal(n_timesteps=5, period=4, amplitude=2)
+        # array([ 0.        ,  2.        ,  0.        , -2.        ,  0.        ])
+
+        # Short period example where scaling ensures exact amplitude
+        signal = generate_seasonal(n_timesteps=10, period=3, amplitude=1.0)
+        np.max(np.abs(signal))  # Will be exactly 1.0
+        # 1.0
+        ```
     """
     # rng is unused here
     output_length = length if length is not None else n_timesteps
@@ -319,12 +333,16 @@ def generate_trend(
         np.ndarray: A 1D numpy array of the specified length representing a linear trend.
 
     Example:
-        >>> generate_trend(n_timesteps=5, slope=0.5)
-        array([0. , 0.5, 1. , 1.5, 2. ])
-        >>> generate_trend(n_timesteps=5, endpoints=[10, 12])
-        array([10. , 10.5, 11. , 11.5, 12. ])
-        >>> generate_trend(n_timesteps=5, endpoints=[10, 12], length=3)
-        array([10., 11., 12.])
+        ```python
+        generate_trend(n_timesteps=5, slope=0.5)
+        # array([0. , 0.5, 1. , 1.5, 2. ])
+
+        generate_trend(n_timesteps=5, endpoints=[10, 12])
+        # array([10. , 10.5, 11. , 11.5, 12. ])
+
+        generate_trend(n_timesteps=5, endpoints=[10, 12], length=3)
+        # array([10., 11., 12.])
+        ```
     """
     # rng is unused here
     output_length = length if length is not None else n_timesteps
@@ -374,10 +392,13 @@ def generate_peak(
         np.ndarray: A 1D numpy array of the specified length containing a centered peak.
 
     Example:
-        >>> generate_peak(n_timesteps=7, amplitude=1, width=5)
-        array([0. , 0. , 0.5, 1. , 0.5, 0. , 0. ])
-        >>> generate_peak(n_timesteps=7, amplitude=2, width=3, length=5)
-        array([0. , 1. , 2. , 1. , 0. ])
+        ```python
+        generate_peak(n_timesteps=7, amplitude=1, width=5)
+        # array([0. , 0. , 0.5, 1. , 0.5, 0. , 0. ])
+
+        generate_peak(n_timesteps=7, amplitude=2, width=3, length=5)
+        # array([0. , 1. , 2. , 1. , 0. ])
+        ```
     """
     # rng is unused here
     output_length = length if length is not None else n_timesteps
@@ -453,8 +474,10 @@ def generate_trough(
         np.ndarray: A 1D numpy array of the specified length containing a centered trough.
 
     Example:
-        >>> generate_trough(n_timesteps=7, amplitude=1, width=5)
-        array([-0. , -0. , -0.5, -1. , -0.5, -0. , -0. ])
+        ```python
+        generate_trough(n_timesteps=7, amplitude=1, width=5)
+        # array([-0. , -0. , -0.5, -1. , -0.5, -0. , -0. ])
+        ```
     """
     # Generate a peak and negate it. Pass rng along in case generate_peak changes.
     return -generate_peak(
@@ -507,14 +530,18 @@ def generate_manual(
         ValueError: If provided `values` do not match the required output length.
 
     Example:
-        >>> manual_vals = np.array([1, 1, 0, 0, 1])
-        >>> generate_manual(n_timesteps=5, values=manual_vals)
-        array([1, 1, 0, 0, 1])
-        >>> def custom_gen(n_timesteps, rng, length, **kwargs):
-        ...     return np.linspace(0, kwargs.get('max_val', 1), length)
-        >>> rng_ = np.random.RandomState(4)
-        >>> generate_manual(n_timesteps=10, generator=custom_gen, rng=rng_, length=4, max_val=3)
-        array([0., 1., 2., 3.])
+        ```python
+        manual_vals = np.array([1, 1, 0, 0, 1])
+        generate_manual(n_timesteps=5, values=manual_vals)
+        # array([1, 1, 0, 0, 1])
+
+        def custom_gen(n_timesteps, rng, length, **kwargs):
+            return np.linspace(0, kwargs.get('max_val', 1), length)
+
+        rng_ = np.random.RandomState(4)
+        generate_manual(n_timesteps=10, generator=custom_gen, rng=rng_, length=4, max_val=3)
+        # array([0., 1., 2., 3.])
+        ```
     """
     output_length = length if length is not None else n_timesteps
 
@@ -603,11 +630,13 @@ def generate_ecg_like(
         ValueError: If heart_rate or sampling_rate result in a non-positive period.
 
     Example:
-        >>> rng_ecg = np.random.RandomState(5)
-        >>> # Generate 4 seconds of ECG data
-        >>> ecg_signal = generate_ecg_like(n_timesteps=1000, sampling_rate=250, rng=rng_ecg, length=1000)
-        >>> print(ecg_signal.shape)
-        (1000,)
+        ```python
+        rng_ecg = np.random.RandomState(5)
+        # Generate 4 seconds of ECG data
+        ecg_signal = generate_ecg_like(n_timesteps=1000, sampling_rate=250, rng=rng_ecg, length=1000)
+        print(ecg_signal.shape)
+        # (1000,)
+        ```
     """
     if rng is None:
         rng = np.random.RandomState()
@@ -780,11 +809,13 @@ def generate_gaussian_pulse(
             0.0 and 1.0.
 
     Example:
-        >>> pulse = generate_gaussian_pulse(n_timesteps=100, amplitude=2.0, center=0.7)
-        >>> np.max(pulse)  # Exactly 2.0
-        2.0
-        >>> np.argmax(pulse)  # At position 70 (nearest to 0.7 * 99 = 69.3)
-        70
+        ```python
+        pulse = generate_gaussian_pulse(n_timesteps=100, amplitude=2.0, center=0.7)
+        np.max(pulse)  # Exactly 2.0
+        # 2.0
+        np.argmax(pulse)  # At position 70 (nearest to 0.7 * 99 = 69.3)
+        # 70
+        ```
     """
     # Validate parameters
     if not 0.0 <= width_ratio <= 1.0:
@@ -863,10 +894,12 @@ def generate_pseudo_periodic(
         np.ndarray: A 1D numpy array of the specified length.
 
     Example:
-        >>> rng = np.random.RandomState(0)
-        >>> sig = generate_pseudo_periodic(n_timesteps=100, period=20, rng=rng)
-        >>> len(sig)
-        100
+        ```python
+        rng = np.random.RandomState(0)
+        sig = generate_pseudo_periodic(n_timesteps=100, period=20, rng=rng)
+        len(sig)
+        # 100
+        ```
     """
     output_length = length if length is not None else n_timesteps
     if rng is None:

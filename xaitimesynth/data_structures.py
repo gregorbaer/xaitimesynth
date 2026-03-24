@@ -36,7 +36,8 @@ class TimeSeriesComponents:
                 # This allows dimension-specific features to be 1D arrays
                 if feature_data.shape[0] != expected_length:
                     raise ValueError(
-                        f"The feature '{feature_name}' first dimension {feature_data.shape[0]} doesn't match "
+                        f"The feature '{feature_name}' first dimension "
+                        f"{feature_data.shape[0]} doesn't match "
                         f"background first dimension {expected_length}."
                     )
 
@@ -46,7 +47,8 @@ class TimeSeriesComponents:
                 # Feature masks should also match at least in the time dimension
                 if mask_data.shape[0] != expected_length:
                     raise ValueError(
-                        f"The feature mask '{mask_name}' first dimension {mask_data.shape[0]} doesn't match "
+                        f"The feature mask '{mask_name}' first dimension "
+                        f"{mask_data.shape[0]} doesn't match "
                         f"background first dimension {expected_length}."
                     )
 
@@ -54,6 +56,6 @@ class TimeSeriesComponents:
         if self.aggregated is not None:
             if self.aggregated.shape != self.background.shape:
                 raise ValueError(
-                    f"The 'aggregated' component shape {self.aggregated.shape} doesn't match "
-                    f"background shape {self.background.shape}."
+                    f"The 'aggregated' component shape {self.aggregated.shape} "
+                    f"doesn't match background shape {self.background.shape}."
                 )

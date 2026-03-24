@@ -66,21 +66,23 @@ def register_component_generator(
     Returns:
         Callable: Decorator function that processes the generator function.
 
-    Examples:
+    Example:
+        ```python
         # Basic usage - creates component named "sine_wave"
         @register_component_generator()
         def generate_sine_wave(n_timesteps, rng, length=None, frequency=0.1):
-            # Implementation...
+            ...  # Implementation
 
         # Explicit naming - creates component named "my_sine"
         @register_component_generator(name="my_sine")
         def generate_wave(n_timesteps, rng, length=None, frequency=0.1):
-            # Implementation...
+            ...  # Implementation
 
         # Override default values - component default amplitude will be 2.0
         @register_component_generator(amplitude=2.0)
         def generate_sine_wave(n_timesteps, rng, length=None, amplitude=1.0):
-            # Implementation...
+            ...  # Implementation
+        ```
     """
 
     def decorator(generator_func: Callable) -> Callable:

@@ -57,9 +57,11 @@ exclude = ["tests/", "docs/", "notebooks/", "scripts/", "site/"]
 
 [tool.ruff]
 target-version = "py310"
+line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

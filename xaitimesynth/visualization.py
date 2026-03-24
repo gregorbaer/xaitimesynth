@@ -627,7 +627,8 @@ def plot_components(
     Raises:
         IndexError: If a sample index is out of range.
 
-    Examples:
+    Example:
+        ```python
         # Show first sample of each class (default)
         plot_components(dataset)
 
@@ -635,13 +636,14 @@ def plot_components(
         plot_components(dataset, sample_indices=5)
 
         # Show samples from different classes (grouped by class, one sample per class)
-        # If indices 0, 10, 20 are from classes 0, 1, 0 respectively, only samples 10 and 20
-        # will be shown (last sample for class 0, and sample 10 for class 1)
+        # If indices 0, 10, 20 are from classes 0, 1, 0 respectively, only samples 10
+        # and 20 will be shown (last sample for class 0, and sample 10 for class 1)
         plot_components(dataset, sample_indices=[0, 10, 20])
 
         # Explicit mapping: show sample 5 for class 0, sample 10 for class 1
-        # (the sample at index 5 must belong to class 0, and sample at index 10 to class 1)
+        # (sample at index 5 must belong to class 0, sample at index 10 to class 1)
         plot_components(dataset, sample_indices={0: 5, 1: 10})
+        ```
     """
     # Ensure dataset is in channels_last format for visualization
     dataset = _ensure_visualization_format(dataset)
@@ -809,8 +811,10 @@ def _plot_dimensions(
                 # Try to extract dimension from feature names
                 dim_rects = rectangles[
                     rectangles["feature"].apply(
-                        lambda f: f"_dim{dim}" in str(f)
-                        or not any(f"_dim{d}" in str(f) for d in dims)
+                        lambda f: (
+                            f"_dim{dim}" in str(f)
+                            or not any(f"_dim{d}" in str(f) for d in dims)
+                        )
                     )
                 ].copy()
 
