@@ -53,7 +53,9 @@ rma = relevance_mass_accuracy(attributions, test)
 
 If you use xaitimesynth in your work, please consider citing:
 
+```
 Baer, G. (2026). xaitimesynth: A Python Package for Evaluating Attribution Methods for Time Series with Synthetic Ground Truth (arXiv:2603.06781). arXiv. https://doi.org/10.48550/arXiv.2603.06781
+```
 
 ## License
 
