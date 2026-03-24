@@ -15,3 +15,7 @@ Functions for evaluating XAI attribution methods against ground truth feature ma
 ::: xaitimesynth.metrics.relevance_rank_accuracy
 
 ::: xaitimesynth.metrics.pointing_game
+
+::: xaitimesynth.metrics.mean_absolute_error
+
+::: xaitimesynth.metrics.mean_squared_error

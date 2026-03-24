@@ -16,4 +16,3 @@ The `TimeSeriesBuilder` class provides a fluent API for constructing synthetic t
         - to_df
         - convert_data_format
       show_root_heading: true
-      heading_level: 3

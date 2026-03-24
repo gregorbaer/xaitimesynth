@@ -40,7 +40,7 @@ plugins:
             show_source: true
             show_root_heading: true
             show_root_full_path: false
-            heading_level: 2
+            heading_level: 3
             members_order: source
             show_signature_annotations: true
 
@@ -72,7 +72,9 @@ nav:
       - Visualization: api/visualization.md
       - Metrics: api/metrics.md
       - Registry: api/registry.md
+      - Generators: api/generators.md
       - Datasets: api/datasets.md
+      - Utilities: api/utilities.md
   - Contributing:
       - Development Setup: contributing/development-setup.md
       - Commit Guidelines: contributing/commit-guidelines.md
