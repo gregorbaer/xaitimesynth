@@ -220,7 +220,8 @@ class TimeSeriesBuilder:
         Raises:
             ValueError: If no class is selected or if location parameters are inconsistent.
 
-        Examples:
+        Example:
+            ```python
             # Full time series (default - no location params)
             builder.add_signal(gaussian_noise(sigma=0.1))
 
@@ -229,6 +230,7 @@ class TimeSeriesBuilder:
 
             # Random segment of 30% length
             builder.add_signal(constant(value=1.0), random_location=True, length_pct=0.3)
+            ```
         """
         if self.current_class is None:
             raise ValueError("No class selected. Call for_class() first.")

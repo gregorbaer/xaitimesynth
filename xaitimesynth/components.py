@@ -253,11 +253,13 @@ def gaussian_pulse(
         Dict[str, Any]: A dictionary defining the 'gaussian_pulse' component with its parameters.
 
     Example:
-        >>> pulse_def = gaussian_pulse(amplitude=2.0, width_ratio=0.4, center=0.3)
-        >>> pulse_def['type']
-        'gaussian_pulse'
-        >>> pulse_def['amplitude']
-        2.0
+        ```python
+        pulse_def = gaussian_pulse(amplitude=2.0, width_ratio=0.4, center=0.3)
+        pulse_def['type']
+        # 'gaussian_pulse'
+        pulse_def['amplitude']
+        # 2.0
+        ```
     """
     return {
         "type": "gaussian_pulse",

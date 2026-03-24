@@ -27,9 +27,7 @@ def generate_cylinder_bell_funnel(
     xaitimesynth's builder, so each sample comes with a boolean ``feature_mask``
     that marks the exact window where the class-discriminating pattern lives.
 
-    The three classes differ only inside a randomly placed window [a, b]:
-
-    .. code-block:: text
+    The three classes differ only inside a randomly placed window [a, b]::
 
         Cylinder (0):  constant plateau of amplitude (6 + η)
         Bell     (1):  linearly increasing ramp  0  → (6 + η)
@@ -86,14 +84,15 @@ def generate_cylinder_bell_funnel(
         Theses*, 269–451. World Scientific.
 
     Example:
-        >>> dataset = generate_cylinder_bell_funnel(n_samples=90, random_state=42)
-        >>> X, y = dataset["X"], dataset["y"]
-        >>> X.shape
-        (90, 1, 128)
-        >>> import numpy as np
-        >>> np.bincount(y)
-        array([30, 30, 30])
-        >>> masks = dataset["feature_masks"]
+        ```python
+        dataset = generate_cylinder_bell_funnel(n_samples=90, random_state=42)
+        X, y = dataset["X"], dataset["y"]
+        X.shape
+        # (90, 1, 128)
+        np.bincount(y)
+        # array([30, 30, 30])
+        masks = dataset["feature_masks"]
+        ```
     """
     # --- Validate and normalise weights -------------------------------------
     if weights is None:
@@ -102,7 +101,7 @@ def generate_cylinder_bell_funnel(
         weights = list(weights)
         if len(weights) != 3:
             raise ValueError(
-                f"weights must have exactly 3 elements (one per class), got {len(weights)}"
+                f"weights must have 3 elements (one per class), got {len(weights)}"
             )
         if any(w <= 0 for w in weights):
             raise ValueError("All weights must be positive")
